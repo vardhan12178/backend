@@ -3,7 +3,8 @@ const mongoose = require('mongoose');
 const cookieParser = require('cookie-parser');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
-const User = require('./models/User'); // Import the User model
+const User = require('./models/User'); 
+const bcrypt = require('bcryptjs'); 
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -18,17 +19,14 @@ app.use(cors({
 
 const JWT_SECRET = process.env.JWT_SECRET || 'my_secret_key'; 
 
-// Connect to MongoDB Atlas
-mongoose.connect('mongodb+srv://balavardhan12178:itUwOI4YXYvZh2Qs@vkart.ixjzyfj.mongodb.net/vkart?retryWrites=true&w=majority', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-}).then(() => {
-  console.log('Connected to MongoDB Atlas');
-}).catch(err => {
-  console.error('Failed to connect to MongoDB Atlas', err);
-});
+mongoose.connect('mongodb+srv://balavardhan12178:itUwOI4YXYvZh2Qs@vkart.ixjzyfj.mongodb.net/vkart?retryWrites=true&w=majority')
+  .then(() => {
+    console.log('Connected to MongoDB Atlas');
+  })
+  .catch(err => {
+    console.error('Failed to connect to MongoDB Atlas', err);
+  });
 
-// Registration Endpoint
 app.post('/api/register', async (req, res) => {
   const { username, email, password, confirmPassword } = req.body;
 
@@ -43,23 +41,32 @@ app.post('/api/register', async (req, res) => {
       return res.status(409).json({ message: 'Username already exists' });
     }
 
-    const newUser = new User({ username, email, password });
+    const hashedPassword = await bcrypt.hash(password, 10); 
+
+    const newUser = new User({ username, email, password: hashedPassword });
     await newUser.save();
 
     res.status(201).json({ message: 'User registered successfully' });
   } catch (error) {
+    console.error('Registration error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
 
-// Login Endpoint
+
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
 
   try {
-    const user = await User.findOne({ username, password });
+    const user = await User.findOne({ username });
 
     if (!user) {
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+
+    if (!isPasswordValid) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
@@ -74,11 +81,12 @@ app.post('/api/login', async (req, res) => {
 
     res.json({ token });
   } catch (error) {
+    console.error('Login error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
 
-// Verify Endpoint
+
 app.get('/api/verify', (req, res) => {
   const token = req.cookies.jwt_token;
 
@@ -90,6 +98,7 @@ app.get('/api/verify', (req, res) => {
     const decoded = jwt.verify(token, JWT_SECRET);
     res.json({ userId: decoded.userId });
   } catch (error) {
+    console.error('Token verification error:', error);
     res.status(401).json({ message: 'Invalid token' });
   }
 });
