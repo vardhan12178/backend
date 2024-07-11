@@ -14,7 +14,7 @@ app.use(cors({
     credentials: true
 }));
 
-const users = [
+let users = [
     { id: 1, username: 'vardhan975', password: 'vardhan2181' },
     { id: 2, username: 'testuser', password: 'test@2024' }
 ];
@@ -40,6 +40,27 @@ app.post('/api/login', (req, res) => {
     });
 
     res.json({ token });
+});
+
+app.post('/api/register', (req, res) => {
+    const { username, email, password } = req.body;
+
+    const userExists = users.some(u => u.username === username);
+
+    if (userExists) {
+        return res.status(400).json({ message: 'User already exists' });
+    }
+
+    const newUser = {
+        id: users.length + 1,
+        username,
+        email,
+        password
+    };
+
+    users.push(newUser);
+
+    res.status(201).json({ message: 'User registered successfully' });
 });
 
 app.get('/api/verify', (req, res) => {
