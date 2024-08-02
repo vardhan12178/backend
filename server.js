@@ -104,11 +104,15 @@ app.get('/api/profile', async (req, res) => {
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    const user = await User.findById(decoded.userId).populate('orders');
+    const user = await User.findById(decoded.userId);
+
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
-    res.json(user);
+
+
+    const { password, ...userWithoutPassword } = user.toObject();
+    res.json(userWithoutPassword);
   } catch (error) {
     console.error('Error fetching profile:', error);
     res.status(500).json({ message: 'Internal server error' });
