@@ -37,7 +37,9 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 app.post('/api/register', upload.single('profileImage'), async (req, res) => {
+
   const { name,username, email, password, confirmPassword } = req.body;
+  
   const profileImage = req.file ? req.file.path : '';
 
   if (password !== confirmPassword) {
