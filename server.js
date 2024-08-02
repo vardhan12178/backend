@@ -36,9 +36,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 app.post('/api/register', upload.single('profileImage'), async (req, res) => {
-
-  const { name,username, email, password, confirmPassword } = req.body;
-  
+  const { name, username, email, password, confirmPassword } = req.body;
   const profileImage = req.file ? req.file.path : '';
 
   if (password !== confirmPassword) {
@@ -47,14 +45,12 @@ app.post('/api/register', upload.single('profileImage'), async (req, res) => {
 
   try {
     const existingUser = await User.findOne({ username });
-
     if (existingUser) {
       return res.status(409).json({ message: 'Username already exists' });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-
-    const newUser = new User({name, username, email, password: hashedPassword, profileImage });
+    const newUser = new User({ name, username, email, password: hashedPassword, profileImage });
     await newUser.save();
 
     res.status(201).json({ message: 'User registered successfully' });
@@ -69,19 +65,16 @@ app.post('/api/login', async (req, res) => {
 
   try {
     const user = await User.findOne({ username });
-
     if (!user) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.password);
-
     if (!isPasswordValid) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
     const token = jwt.sign({ userId: user._id }, JWT_SECRET, { expiresIn: '30d' });
-
     res.cookie('jwt_token', token, {
       httpOnly: true,
       maxAge: 30 * 24 * 60 * 60 * 1000,
@@ -111,7 +104,6 @@ app.get('/api/profile', async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-
     const { password, ...userWithoutPassword } = user.toObject();
     res.json(userWithoutPassword);
   } catch (error) {
@@ -119,7 +111,6 @@ app.get('/api/profile', async (req, res) => {
     res.status(500).json({ message: 'Internal server error' });
   }
 });
-
 
 app.post('/api/profile/upload', upload.single('profileImage'), async (req, res) => {
   const token = req.cookies.jwt_token;
@@ -146,7 +137,6 @@ app.post('/api/profile/upload', upload.single('profileImage'), async (req, res) 
     res.status(500).json({ message: 'Internal server error' });
   }
 });
-
 
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
