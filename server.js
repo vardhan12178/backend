@@ -5,6 +5,8 @@ const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const User = require('./models/User');
 const bcrypt = require('bcryptjs');
+const multer = require('multer');
+const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -22,8 +24,21 @@ mongoose.connect('mongodb+srv://balavardhan12178:itUwOI4YXYvZh2Qs@vkart.ixjzyfj.
   .then(() => console.log('Connected to MongoDB Atlas'))
   .catch(err => console.error('Failed to connect to MongoDB Atlas', err));
 
-app.post('/api/register', async (req, res) => {
-  const { username, email, password, confirmPassword, profileImage } = req.body;
+// Setup multer for file uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, 'uploads/');
+  },
+  filename: (req, file, cb) => {
+    cb(null, Date.now() + path.extname(file.originalname));
+  },
+});
+
+const upload = multer({ storage });
+
+app.post('/api/register', upload.single('profileImage'), async (req, res) => {
+  const { username, email, password, confirmPassword } = req.body;
+  const profileImage = req.file ? req.file.path : '';
 
   if (password !== confirmPassword) {
     return res.status(400).json({ message: 'Passwords do not match' });
