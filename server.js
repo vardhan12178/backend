@@ -37,7 +37,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 app.post('/api/register', upload.single('profileImage'), async (req, res) => {
-  const { username, email, password, confirmPassword } = req.body;
+  const { name,username, email, password, confirmPassword } = req.body;
   const profileImage = req.file ? req.file.path : '';
 
   if (password !== confirmPassword) {
@@ -53,7 +53,7 @@ app.post('/api/register', upload.single('profileImage'), async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const newUser = new User({ username, email, password: hashedPassword, profileImage });
+    const newUser = new User({name, username, email, password: hashedPassword, profileImage });
     await newUser.save();
 
     res.status(201).json({ message: 'User registered successfully' });
