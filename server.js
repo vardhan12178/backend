@@ -3,32 +3,27 @@ const mongoose = require('mongoose');
 const cookieParser = require('cookie-parser');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
-const User = require('./models/User'); 
-const bcrypt = require('bcryptjs'); 
+const User = require('./models/User');
+const bcrypt = require('bcryptjs');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 app.use(express.json());
 app.use(cookieParser());
-
 app.use(cors({
-    origin: ['http://localhost:3000', 'https://vkartshop.netlify.app'],
-    credentials: true,
+  origin: ['http://localhost:3000', 'https://vkartshop.netlify.app'],
+  credentials: true,
 }));
 
-const JWT_SECRET = process.env.JWT_SECRET || 'my_secret_key'; 
+const JWT_SECRET = process.env.JWT_SECRET || 'my_secret_key';
 
 mongoose.connect('mongodb+srv://balavardhan12178:itUwOI4YXYvZh2Qs@vkart.ixjzyfj.mongodb.net/vkart?retryWrites=true&w=majority')
-  .then(() => {
-    console.log('Connected to MongoDB Atlas');
-  })
-  .catch(err => {
-    console.error('Failed to connect to MongoDB Atlas', err);
-  });
+  .then(() => console.log('Connected to MongoDB Atlas'))
+  .catch(err => console.error('Failed to connect to MongoDB Atlas', err));
 
 app.post('/api/register', async (req, res) => {
-  const { username, email, password, confirmPassword } = req.body;
+  const { username, email, password, confirmPassword, profileImage } = req.body;
 
   if (password !== confirmPassword) {
     return res.status(400).json({ message: 'Passwords do not match' });
@@ -41,9 +36,9 @@ app.post('/api/register', async (req, res) => {
       return res.status(409).json({ message: 'Username already exists' });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10); 
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-    const newUser = new User({ username, email, password: hashedPassword });
+    const newUser = new User({ username, email, password: hashedPassword, profileImage });
     await newUser.save();
 
     res.status(201).json({ message: 'User registered successfully' });
@@ -52,7 +47,6 @@ app.post('/api/register', async (req, res) => {
     res.status(500).json({ message: 'Internal server error' });
   }
 });
-
 
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
@@ -74,8 +68,8 @@ app.post('/api/login', async (req, res) => {
 
     res.cookie('jwt_token', token, {
       httpOnly: true,
-      maxAge: 30 * 24 * 60 * 60 * 1000, 
-      secure: process.env.NODE_ENV === 'production', 
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+      secure: process.env.NODE_ENV === 'production',
       sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax',
     });
 
@@ -86,8 +80,7 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-
-app.get('/api/verify', (req, res) => {
+app.get('/api/profile', async (req, res) => {
   const token = req.cookies.jwt_token;
 
   if (!token) {
@@ -96,10 +89,14 @@ app.get('/api/verify', (req, res) => {
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    res.json({ userId: decoded.userId });
+    const user = await User.findById(decoded.userId).populate('orders');
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    res.json(user);
   } catch (error) {
-    console.error('Token verification error:', error);
-    res.status(401).json({ message: 'Invalid token' });
+    console.error('Error fetching profile:', error);
+    res.status(500).json({ message: 'Internal server error' });
   }
 });
 
