@@ -27,6 +27,8 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
+app.use('/uploads', express.static(uploadDir)); // Serve the uploads directory statically
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, uploadDir);
@@ -42,31 +44,30 @@ mongoose.connect('mongodb+srv://balavardhan12178:itUwOI4YXYvZh2Qs@vkart.ixjzyfj.
   .then(() => console.log('Connected to MongoDB Atlas'))
   .catch(err => console.error('Failed to connect to MongoDB Atlas', err));
 
+// Registration route
 app.post('/api/register', upload.single('profileImage'), async (req, res) => {
-  const { name, username, email, password, confirmPassword } = req.body;
-  const profileImage = req.file ? req.file.path : '';
-
-  if (password !== confirmPassword) {
-    return res.status(400).json({ message: 'Passwords do not match' });
-  }
+  const { name, username, email, password } = req.body;
+  const profileImage = req.file ? `/uploads/${req.file.filename}` : null;
 
   try {
-    const existingUser = await User.findOne({ username });
-    if (existingUser) {
-      return res.status(409).json({ message: 'Username already exists' });
-    }
-
     const hashedPassword = await bcrypt.hash(password, 10);
-    const newUser = new User({ name, username, email, password: hashedPassword, profileImage });
-    await newUser.save();
+    const newUser = new User({
+      name,
+      username,
+      email,
+      password: hashedPassword,
+      profileImage,
+    });
 
-    res.status(201).json({ message: 'User registered successfully' });
+    await newUser.save();
+    res.status(201).json(newUser);
   } catch (error) {
-    console.error('Registration error:', error);
+    console.error('Error registering user:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
 
+// Login route
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
 
@@ -86,7 +87,7 @@ app.post('/api/login', async (req, res) => {
       httpOnly: true,
       maxAge: 30 * 24 * 60 * 60 * 1000,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax',
+      sameSite: 'None',
     });
 
     res.json({ token });
@@ -98,48 +99,42 @@ app.post('/api/login', async (req, res) => {
 
 app.get('/api/profile', async (req, res) => {
   const token = req.cookies.jwt_token;
+  if (!token) {
+    return res.status(401).json({ message: 'Unauthorized' });
+  }
 
   try {
-    if (!token) {
-      return res.status(401).json({ message: 'Unauthorized' });
-    }
-
     const decoded = jwt.verify(token, JWT_SECRET);
     const user = await User.findById(decoded.userId);
     if (!user) {
-      return res.status(401).json({ message: 'Unauthorized' });
+      return res.status(404).json({ message: 'User not found' });
     }
 
     res.json(user);
   } catch (error) {
-    console.error('Profile error:', error);
+    console.error('Profile fetch error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
 
 app.post('/api/profile/upload', upload.single('profileImage'), async (req, res) => {
   const token = req.cookies.jwt_token;
+  if (!token) {
+    return res.status(401).json({ message: 'Unauthorized' });
+  }
 
   try {
-    if (!token) {
-      return res.status(401).json({ message: 'Unauthorized' });
-    }
-
     const decoded = jwt.verify(token, JWT_SECRET);
     const user = await User.findById(decoded.userId);
     if (!user) {
-      return res.status(401).json({ message: 'Unauthorized' });
+      return res.status(404).json({ message: 'User not found' });
     }
 
-    if (req.file) {
-      user.profileImage = req.file.path;
-      await user.save();
-      res.json(user);
-    } else {
-      res.status(400).json({ message: 'No file uploaded' });
-    }
+    user.profileImage = `/uploads/${req.file.filename}`;
+    await user.save();
+    res.json(user);
   } catch (error) {
-    console.error('Image upload error:', error);
+    console.error('Profile image upload error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
