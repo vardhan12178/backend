@@ -19,10 +19,13 @@ app.use(cors({
   credentials: true,
 }));
 
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 
 mongoose.connect('mongodb+srv://balavardhan12178:itUwOI4YXYvZh2Qs@vkart.ixjzyfj.mongodb.net/vkart?retryWrites=true&w=majority')
   .then(() => console.log('Connected to MongoDB Atlas'))
   .catch(err => console.error('Failed to connect to MongoDB Atlas', err));
+
 
 const JWT_SECRET = process.env.JWT_SECRET || 'my_secret_key';
 
@@ -37,7 +40,6 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-
 const authenticateJWT = (req, res, next) => {
   const token = req.cookies.jwt_token;
   if (!token) return res.status(401).json({ message: 'Unauthorized' });
@@ -48,7 +50,6 @@ const authenticateJWT = (req, res, next) => {
     next();
   });
 };
-
 
 app.post('/api/register', upload.single('profileImage'), async (req, res) => {
   const { name, username, email, password, confirmPassword } = req.body;
@@ -125,7 +126,7 @@ app.post('/api/profile/upload', authenticateJWT, upload.single('profileImage'), 
       return res.status(404).json({ message: 'User not found' });
     }
 
-    user.profileImage = req.file.path;
+    user.profileImage = req.file ? `/uploads/${req.file.filename}` : user.profileImage;
     await user.save();
 
     res.json(user);
