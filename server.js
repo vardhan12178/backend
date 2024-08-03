@@ -6,6 +6,7 @@ const jwt = require('jsonwebtoken');
 const User = require('./models/User');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
+const fs = require('fs');
 const path = require('path');
 
 const app = express();
@@ -20,13 +21,15 @@ app.use(cors({
 
 const JWT_SECRET = process.env.JWT_SECRET || 'my_secret_key';
 
-mongoose.connect('mongodb+srv://balavardhan12178:itUwOI4YXYvZh2Qs@vkart.ixjzyfj.mongodb.net/vkart?retryWrites=true&w=majority')
-  .then(() => console.log('Connected to MongoDB Atlas'))
-  .catch(err => console.error('Failed to connect to MongoDB Atlas', err));
+
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, 'uploads/');
+    cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
     cb(null, Date.now() + path.extname(file.originalname));
@@ -34,6 +37,10 @@ const storage = multer.diskStorage({
 });
 
 const upload = multer({ storage });
+
+mongoose.connect('mongodb+srv://balavardhan12178:itUwOI4YXYvZh2Qs@vkart.ixjzyfj.mongodb.net/vkart?retryWrites=true&w=majority')
+  .then(() => console.log('Connected to MongoDB Atlas'))
+  .catch(err => console.error('Failed to connect to MongoDB Atlas', err));
 
 app.post('/api/register', upload.single('profileImage'), async (req, res) => {
   const { name, username, email, password, confirmPassword } = req.body;
@@ -92,22 +99,20 @@ app.post('/api/login', async (req, res) => {
 app.get('/api/profile', async (req, res) => {
   const token = req.cookies.jwt_token;
 
-  if (!token) {
-    return res.status(401).json({ message: 'Unauthorized' });
-  }
-
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    const user = await User.findById(decoded.userId);
-
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+    if (!token) {
+      return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const { password, ...userWithoutPassword } = user.toObject();
-    res.json(userWithoutPassword);
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const user = await User.findById(decoded.userId);
+    if (!user) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    res.json(user);
   } catch (error) {
-    console.error('Error fetching profile:', error);
+    console.error('Profile error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
@@ -115,29 +120,30 @@ app.get('/api/profile', async (req, res) => {
 app.post('/api/profile/upload', upload.single('profileImage'), async (req, res) => {
   const token = req.cookies.jwt_token;
 
-  if (!token) {
-    return res.status(401).json({ message: 'Unauthorized' });
-  }
-
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    const user = await User.findById(decoded.userId);
-
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+    if (!token) {
+      return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    user.profileImage = req.file.path;
-    await user.save();
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const user = await User.findById(decoded.userId);
+    if (!user) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
 
-    const { password, ...userWithoutPassword } = user.toObject();
-    res.json(userWithoutPassword);
+    if (req.file) {
+      user.profileImage = req.file.path;
+      await user.save();
+      res.json(user);
+    } else {
+      res.status(400).json({ message: 'No file uploaded' });
+    }
   } catch (error) {
-    console.error('Error uploading profile image:', error);
+    console.error('Image upload error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
 
 app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
+  console.log(`Server is running on port ${PORT}`);
 });
