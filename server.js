@@ -6,10 +6,13 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const path = require('path');
-const User = require('./models/User');
+const User = require('./models/User'); 
+
+require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+
 
 app.use(express.json());
 app.use(cookieParser());
@@ -18,11 +21,21 @@ app.use(cors({
   credentials: true,
 }));
 
-mongoose.connect(process.env.MONGODB_URI || 'mongodb+srv://balavardhan12178:itUwOI4YXYvZh2Qs@vkart.ixjzyfj.mongodb.net/vkart?retryWrites=true&w=majority')
-  .then(() => console.log('Connected to MongoDB Atlas'))
-  .catch(err => console.error('Failed to connect to MongoDB Atlas', err));
+const connectDB = async () => {
+  try {
+    await mongoose.connect(process.env.MONGODB_URI);
+    console.log('Connected to MongoDB');
+  } catch (err) {
+    console.error('Failed to connect to MongoDB', err);
+    process.exit(1);
+  }
+};
+
+connectDB();
+
 
 const JWT_SECRET = process.env.JWT_SECRET || 'my_secret_key';
+
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -34,6 +47,7 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
+
 const authenticateJWT = (req, res, next) => {
   const token = req.cookies.jwt_token;
   if (!token) return res.status(401).json({ message: 'Unauthorized' });
@@ -44,6 +58,7 @@ const authenticateJWT = (req, res, next) => {
     next();
   });
 };
+
 
 app.post('/api/register', upload.single('profileImage'), async (req, res) => {
   const { name, username, email, password, confirmPassword } = req.body;
