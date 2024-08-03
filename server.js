@@ -13,7 +13,6 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-
 app.use(express.json());
 app.use(cookieParser());
 app.use(cors({
@@ -33,9 +32,7 @@ const connectDB = async () => {
 
 connectDB();
 
-
 const JWT_SECRET = process.env.JWT_SECRET || 'my_secret_key';
-
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -47,7 +44,6 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-
 const authenticateJWT = (req, res, next) => {
   const token = req.cookies.jwt_token;
   if (!token) return res.status(401).json({ message: 'Unauthorized' });
@@ -58,7 +54,6 @@ const authenticateJWT = (req, res, next) => {
     next();
   });
 };
-
 
 app.post('/api/register', upload.single('profileImage'), async (req, res) => {
   const { name, username, email, password, confirmPassword } = req.body;
@@ -135,10 +130,13 @@ app.post('/api/profile/upload', authenticateJWT, upload.single('profileImage'), 
       return res.status(404).json({ message: 'User not found' });
     }
 
-    user.profileImage = req.file.path;
-    await user.save();
-
-    res.json(user);
+    if (req.file) {
+      user.profileImage = req.file.path;
+      await user.save();
+      res.json(user);
+    } else {
+      res.status(400).json({ message: 'No file uploaded' });
+    }
   } catch (error) {
     console.error('Error uploading profile image:', error);
     res.status(500).json({ message: 'Internal server error' });
