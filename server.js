@@ -8,7 +8,7 @@ const jwt = require('jsonwebtoken');
 const User = require('./models/User');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
-const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client } = require('@aws-sdk/client-s3');
 const multerS3 = require('multer-s3');
 const path = require('path');
 
@@ -27,7 +27,6 @@ const upload = multer({
   storage: multerS3({
     s3: s3,
     bucket: 'vkart-container',
-    acl: 'public-read',
     metadata: (req, file, cb) => {
       cb(null, { fieldName: file.fieldname });
     },
