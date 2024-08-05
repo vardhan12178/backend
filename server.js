@@ -1,3 +1,5 @@
+require('dotenv').config();  // Load environment variables from .env file
+
 const express = require('express');
 const mongoose = require('mongoose');
 const cookieParser = require('cookie-parser');
@@ -6,10 +8,34 @@ const jwt = require('jsonwebtoken');
 const User = require('./models/User');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
+const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const multerS3 = require('multer-s3');
 const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+const s3 = new S3Client({
+  region: 'us-east-1',
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  }
+});
+
+const upload = multer({
+  storage: multerS3({
+    s3: s3,
+    bucket: 'vkart-container',
+    acl: 'public-read',
+    metadata: (req, file, cb) => {
+      cb(null, { fieldName: file.fieldname });
+    },
+    key: (req, file, cb) => {
+      cb(null, `profile-images/${Date.now()}${path.extname(file.originalname)}`);
+    }
+  })
+});
 
 app.use(express.json());
 app.use(cookieParser());
@@ -18,21 +44,11 @@ app.use(cors({
   credentials: true,
 }));
 
-mongoose.connect('mongodb+srv://balavardhan12178:itUwOI4YXYvZh2Qs@vkart.ixjzyfj.mongodb.net/vkart?retryWrites=true&w=majority')
+mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('Connected to MongoDB Atlas'))
   .catch(err => console.error('Failed to connect to MongoDB Atlas', err));
 
-const JWT_SECRET = process.env.JWT_SECRET || 'my_secret_key';
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, 'uploads/');
-  },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + path.extname(file.originalname));
-  },
-});
-const upload = multer({ storage });
+const JWT_SECRET = process.env.JWT_SECRET;
 
 const authenticateJWT = (req, res, next) => {
   const token = req.cookies.jwt_token;
@@ -47,7 +63,8 @@ const authenticateJWT = (req, res, next) => {
 
 app.post('/api/register', upload.single('profileImage'), async (req, res) => {
   const { name, username, email, password, confirmPassword } = req.body;
-  const profileImage = req.file ? req.file.filename : ''; 
+  const profileImage = req.file ? req.file.location : ''; // Get the S3 URL of the uploaded image
+
   if (password !== confirmPassword) {
     return res.status(400).json({ message: 'Passwords do not match' });
   }
@@ -119,7 +136,7 @@ app.post('/api/profile/upload', authenticateJWT, upload.single('profileImage'), 
       return res.status(404).json({ message: 'User not found' });
     }
 
-    user.profileImage = req.file.filename; 
+    user.profileImage = req.file.location; 
     await user.save();
 
     res.json(user);
@@ -128,8 +145,6 @@ app.post('/api/profile/upload', authenticateJWT, upload.single('profileImage'), 
     res.status(500).json({ message: 'Internal server error' });
   }
 });
-
-app.use('/uploads', express.static('uploads'));
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
