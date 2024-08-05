@@ -1,16 +1,18 @@
-require('dotenv').config();  // Load environment variables from .env file
+require('dotenv').config();
 
 const express = require('express');
 const mongoose = require('mongoose');
 const cookieParser = require('cookie-parser');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
-const User = require('./models/User');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const { S3Client } = require('@aws-sdk/client-s3');
 const multerS3 = require('multer-s3');
 const path = require('path');
+
+const User = require('./models/User');
+const Order = require('./models/Order');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -62,7 +64,7 @@ const authenticateJWT = (req, res, next) => {
 
 app.post('/api/register', upload.single('profileImage'), async (req, res) => {
   const { name, username, email, password, confirmPassword } = req.body;
-  const profileImage = req.file ? req.file.location : ''; // Get the S3 URL of the uploaded image
+  const profileImage = req.file ? req.file.location : '';
 
   if (password !== confirmPassword) {
     return res.status(400).json({ message: 'Passwords do not match' });
@@ -145,16 +147,53 @@ app.post('/api/profile/upload', authenticateJWT, upload.single('profileImage'), 
   }
 });
 
-app.get('/api/profile/orders', async (req, res) => {
+app.post('/api/orders', authenticateJWT, async (req, res) => {
+  const { products, totalPrice, stage, shippingAddress, paymentMethod, upiId } = req.body;
+
   try {
-    const userId = req.user._id; // assuming user ID is in req.user
-    const user = await User.findById(userId).populate('orders');
-    res.json(user.orders);
-  } catch (err) {
-    res.status(500).json({ message: 'Failed to fetch orders' });
+    const user = await User.findById(req.user.userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const newOrder = new Order({
+      userId: user._id,
+      products,
+      totalPrice,
+      stage,
+      shippingAddress,
+      paymentMethod,
+      upiId
+    });
+
+    await newOrder.save();
+
+    user.orders.push(newOrder._id);
+    await user.save();
+
+    res.status(201).json(newOrder);
+  } catch (error) {
+    console.error('Order creation error:', error);
+    res.status(500).json({ message: 'Internal server error' });
   }
 });
 
+app.get('/api/profile/orders', authenticateJWT, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    if (!userId) return res.status(400).json({ message: 'User ID missing' });
+
+    const user = await User.findById(userId).populate('orders');
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    res.json(user.orders);
+  } catch (error) {
+    console.error('Failed to fetch orders:', error);
+    res.status(500).json({ message: 'Failed to fetch orders' });
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
