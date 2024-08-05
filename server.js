@@ -145,6 +145,17 @@ app.post('/api/profile/upload', authenticateJWT, upload.single('profileImage'), 
   }
 });
 
+app.get('/api/profile/orders', async (req, res) => {
+  try {
+    const userId = req.user._id; // assuming user ID is in req.user
+    const user = await User.findById(userId).populate('orders');
+    res.json(user.orders);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to fetch orders' });
+  }
+});
+
+
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
