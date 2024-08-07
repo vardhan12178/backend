@@ -174,8 +174,7 @@ app.post('/api/orders', authenticateJWT, validateOrder, async (req, res) => {
       products,
       totalPrice,
       stage,
-      shippingAddress,
-     
+      shippingAddress
     });
 
     await newOrder.save();
