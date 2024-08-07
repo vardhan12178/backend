@@ -10,9 +10,7 @@ const orderSchema = new mongoose.Schema({
     price: Number
   }],
   totalPrice: Number,
-  stage: String,
-  shippingAddress: String,
-  
+  stage: String
 });
 
 module.exports = mongoose.model('Order', orderSchema);
