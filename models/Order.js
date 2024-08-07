@@ -12,8 +12,7 @@ const orderSchema = new mongoose.Schema({
   totalPrice: Number,
   stage: String,
   shippingAddress: String,
-  paymentMethod: String,
-  upiId: String
+  
 });
 
 module.exports = mongoose.model('Order', orderSchema);
