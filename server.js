@@ -161,7 +161,7 @@ app.post('/api/orders', authenticateJWT, validateOrder, async (req, res) => {
     return res.status(400).json({ errors: errors.array() });
   }
 
-  const { products, totalPrice, stage} = req.body;
+  const { products, totalPrice,shippingAddress, stage} = req.body;
 
   try {
     const user = await User.findById(req.user.userId);
@@ -175,8 +175,7 @@ app.post('/api/orders', authenticateJWT, validateOrder, async (req, res) => {
       totalPrice,
       stage,
       shippingAddress,
-      paymentMethod,
-      upiId
+     
     });
 
     await newOrder.save();
