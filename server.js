@@ -9,6 +9,7 @@ const multer = require('multer');
 const { S3Client } = require('@aws-sdk/client-s3');
 const multerS3 = require('multer-s3');
 const path = require('path');
+const { body, validationResult } = require('express-validator');
 
 const User = require('./models/User');
 const Order = require('./models/Order');
@@ -146,7 +147,21 @@ app.post('/api/profile/upload', authenticateJWT, upload.single('profileImage'), 
   }
 });
 
-app.post('/api/orders', authenticateJWT, async (req, res) => {
+const validateOrder = [
+  body('products').isArray().withMessage('Products must be an array'),
+  body('totalPrice').isFloat({ gt: 0 }).withMessage('Total price must be a positive number'),
+  body('stage').isString().withMessage('Order stage must be a string'),
+  body('shippingAddress').isString().withMessage('Shipping address must be a string'),
+  body('paymentMethod').isString().withMessage('Payment method must be a string'),
+  body('upiId').optional().isString().withMessage('UPI ID must be a string')
+];
+
+app.post('/api/orders', authenticateJWT, validateOrder, async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
+  }
+
   const { products, totalPrice, stage, shippingAddress, paymentMethod, upiId } = req.body;
 
   try {
@@ -176,6 +191,7 @@ app.post('/api/orders', authenticateJWT, async (req, res) => {
     res.status(500).json({ message: 'Internal server error' });
   }
 });
+
 
 app.get('/api/profile/orders', authenticateJWT, async (req, res) => {
   try {
