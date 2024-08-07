@@ -151,9 +151,8 @@ const validateOrder = [
   body('products').isArray().withMessage('Products must be an array'),
   body('totalPrice').isFloat({ gt: 0 }).withMessage('Total price must be a positive number'),
   body('stage').isString().withMessage('Order stage must be a string'),
-  body('shippingAddress').isString().withMessage('Shipping address must be a string'),
-  body('paymentMethod').isString().withMessage('Payment method must be a string'),
-  body('upiId').optional().isString().withMessage('UPI ID must be a string')
+  body('shippingAddress').isString().withMessage('Shipping address must be a string')
+  
 ];
 
 app.post('/api/orders', authenticateJWT, validateOrder, async (req, res) => {
@@ -162,7 +161,7 @@ app.post('/api/orders', authenticateJWT, validateOrder, async (req, res) => {
     return res.status(400).json({ errors: errors.array() });
   }
 
-  const { products, totalPrice, stage, shippingAddress, paymentMethod, upiId } = req.body;
+  const { products, totalPrice, stage} = req.body;
 
   try {
     const user = await User.findById(req.user.userId);
