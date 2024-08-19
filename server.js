@@ -1,4 +1,3 @@
-// Import required packages and modules
 require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
@@ -11,16 +10,14 @@ const { S3Client } = require('@aws-sdk/client-s3');
 const multerS3 = require('multer-s3');
 const path = require('path');
 const { body, validationResult } = require('express-validator');
+const cron = require('node-cron');
 
-// Import models
 const User = require('./models/User');
 const Order = require('./models/Order');
 
-// Initialize express app
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Configure AWS S3
 const s3 = new S3Client({
   region: 'us-east-1',
   credentials: {
@@ -29,7 +26,6 @@ const s3 = new S3Client({
   }
 });
 
-// Configure multer for file uploads
 const upload = multer({
   storage: multerS3({
     s3: s3,
@@ -43,7 +39,6 @@ const upload = multer({
   })
 });
 
-// Middleware
 app.use(express.json());
 app.use(cookieParser());
 app.use(cors({
@@ -51,15 +46,12 @@ app.use(cors({
   credentials: true,
 }));
 
-// Connect to MongoDB
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('Connected to MongoDB Atlas'))
   .catch(err => console.error('Failed to connect to MongoDB Atlas', err));
 
-// JWT secret
 const JWT_SECRET = process.env.JWT_SECRET;
 
-// Authentication middleware
 const authenticateJWT = (req, res, next) => {
   const token = req.cookies.jwt_token;
   if (!token) return res.status(401).json({ message: 'Unauthorized' });
@@ -71,7 +63,6 @@ const authenticateJWT = (req, res, next) => {
   });
 };
 
-// User registration
 app.post('/api/register', upload.single('profileImage'), async (req, res) => {
   const { name, username, email, password, confirmPassword } = req.body;
   const profileImage = req.file ? req.file.location : '';
@@ -97,7 +88,6 @@ app.post('/api/register', upload.single('profileImage'), async (req, res) => {
   }
 });
 
-// User login
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
 
@@ -127,7 +117,6 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-// Get user profile
 app.get('/api/profile', authenticateJWT, async (req, res) => {
   try {
     const user = await User.findById(req.user.userId);
@@ -142,7 +131,6 @@ app.get('/api/profile', authenticateJWT, async (req, res) => {
   }
 });
 
-// Upload profile image
 app.post('/api/profile/upload', authenticateJWT, upload.single('profileImage'), async (req, res) => {
   try {
     const user = await User.findById(req.user.userId);
@@ -160,7 +148,6 @@ app.post('/api/profile/upload', authenticateJWT, upload.single('profileImage'), 
   }
 });
 
-// Order validation middleware
 const validateOrder = [
   body('products').isArray().withMessage('Products must be an array'),
   body('products.*.productId').isMongoId().withMessage('Each productId must be a valid MongoDB ObjectId'),
@@ -173,7 +160,6 @@ const validateOrder = [
   body('shippingAddress').isString().withMessage('Shipping address must be a string')
 ];
 
-// Create order
 app.post('/api/orders', authenticateJWT, validateOrder, async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -208,7 +194,6 @@ app.post('/api/orders', authenticateJWT, validateOrder, async (req, res) => {
   }
 });
 
-// Get user orders
 app.get('/api/profile/orders', authenticateJWT, async (req, res) => {
   try {
     const userId = req.user.userId;
@@ -226,7 +211,30 @@ app.get('/api/profile/orders', authenticateJWT, async (req, res) => {
   }
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+const updateOrderStatuses = async () => {
+  const now = new Date();
+
+  await Order.updateMany(
+    { stage: 'pending', createdAt: { $lte: new Date(now - 4 * 60 * 60 * 1000) } },
+    { $set: { stage: 'shipping' } }
+  );
+
+  await Order.updateMany(
+    { stage: 'shipping', createdAt: { $lte: new Date(now - 24 * 60 * 60 * 1000) } },
+    { $set: { stage: 'shipped' } }
+  );
+
+  await Order.updateMany(
+    { stage: 'shipped', createdAt: { $lte: new Date(now - 2 * 24 * 60 * 60 * 1000) } },
+    { $set: { stage: 'out for delivery' } }
+  );
+
+  await Order.updateMany(
+    { stage: 'out for delivery', createdAt: { $lte: new Date(now - 2 * 24 * 60 * 60 * 1000) } },
+    { $set: { stage: 'delivered' } }
+  );
+};
+
+cron.schedule('0 * * * *', updateOrderStatuses);
+
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

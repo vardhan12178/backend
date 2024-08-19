@@ -10,8 +10,9 @@ const orderSchema = new mongoose.Schema({
     price: Number
   }],
   totalPrice: { type: Number, required: true },
-  stage: { type: String, required: true },
-  shippingAddress: { type: String, required: true }
+  stage: { type: String, required: true, default: 'pending' },
+  shippingAddress: { type: String, required: true },
+  createdAt: { type: Date, default: Date.now }
 });
 
 module.exports = mongoose.model('Order', orderSchema);
