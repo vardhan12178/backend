@@ -10,7 +10,7 @@ const { S3Client } = require('@aws-sdk/client-s3');
 const multerS3 = require('multer-s3');
 const path = require('path');
 const { body, validationResult } = require('express-validator');
-const cron = require('node-cron');
+
 
 const User = require('./models/User');
 const Order = require('./models/Order');
@@ -211,30 +211,5 @@ app.get('/api/profile/orders', authenticateJWT, async (req, res) => {
   }
 });
 
-const updateOrderStatuses = async () => {
-  const now = new Date();
-
-  await Order.updateMany(
-    { stage: 'pending', createdAt: { $lte: new Date(now - 4 * 60 * 60 * 1000) } },
-    { $set: { stage: 'shipping' } }
-  );
-
-  await Order.updateMany(
-    { stage: 'shipping', createdAt: { $lte: new Date(now - 24 * 60 * 60 * 1000) } },
-    { $set: { stage: 'shipped' } }
-  );
-
-  await Order.updateMany(
-    { stage: 'shipped', createdAt: { $lte: new Date(now - 2 * 24 * 60 * 60 * 1000) } },
-    { $set: { stage: 'out for delivery' } }
-  );
-
-  await Order.updateMany(
-    { stage: 'out for delivery', createdAt: { $lte: new Date(now - 2 * 24 * 60 * 60 * 1000) } },
-    { $set: { stage: 'delivered' } }
-  );
-};
-
-cron.schedule('0 * * * *', updateOrderStatuses);
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
