@@ -19,7 +19,7 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 const s3 = new S3Client({
-  region: 'us-east-1',
+  region: 'ap-south-1',
   credentials: {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
@@ -29,7 +29,7 @@ const s3 = new S3Client({
 const upload = multer({
   storage: multerS3({
     s3: s3,
-    bucket: 'vkart-container',
+    bucket: 'vkart-assets-mumbai',
     metadata: (req, file, cb) => {
       cb(null, { fieldName: file.fieldname });
     },
