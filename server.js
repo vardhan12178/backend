@@ -11,7 +11,6 @@ const multerS3 = require('multer-s3');
 const path = require('path');
 const { body, validationResult } = require('express-validator');
 
-
 const User = require('./models/User');
 const Order = require('./models/Order');
 
@@ -55,7 +54,6 @@ const JWT_SECRET = process.env.JWT_SECRET;
 const authenticateJWT = (req, res, next) => {
   const token = req.cookies.jwt_token;
   if (!token) return res.status(401).json({ message: 'Unauthorized' });
-
   jwt.verify(token, JWT_SECRET, (err, user) => {
     if (err) return res.status(403).json({ message: 'Forbidden' });
     req.user = user;
@@ -66,42 +64,34 @@ const authenticateJWT = (req, res, next) => {
 app.post('/api/register', upload.single('profileImage'), async (req, res) => {
   const { name, username, email, password, confirmPassword } = req.body;
   const profileImage = req.file ? req.file.location : '';
-
   if (password !== confirmPassword) {
     return res.status(400).json({ message: 'Passwords do not match' });
   }
-
   try {
     const existingUser = await User.findOne({ username });
     if (existingUser) {
       return res.status(409).json({ message: 'Username already exists' });
     }
-
     const hashedPassword = await bcrypt.hash(password, 10);
     const newUser = new User({ name, username, email, password: hashedPassword, profileImage });
     await newUser.save();
-
     res.status(201).json({ message: 'User registered successfully' });
   } catch (error) {
-    console.error('Registration error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
 
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
-
   try {
     const user = await User.findOne({ username });
     if (!user) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
-
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
-
     const token = jwt.sign({ userId: user._id }, JWT_SECRET, { expiresIn: '30d' });
     res.cookie('jwt_token', token, {
       httpOnly: true,
@@ -109,10 +99,8 @@ app.post('/api/login', async (req, res) => {
       secure: process.env.NODE_ENV === 'production',
       sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax',
     });
-
     res.json({ token });
   } catch (error) {
-    console.error('Login error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
@@ -123,10 +111,8 @@ app.get('/api/profile', authenticateJWT, async (req, res) => {
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
-
     res.json(user);
   } catch (error) {
-    console.error('Profile fetch error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
@@ -137,26 +123,25 @@ app.post('/api/profile/upload', authenticateJWT, upload.single('profileImage'), 
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
-
     user.profileImage = req.file.location;
     await user.save();
-
     res.json(user);
   } catch (error) {
-    console.error('Profile image upload error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
 
 const validateOrder = [
-  body('products').isArray().withMessage('Products must be an array'),
-  body('products.*.productId').isMongoId().withMessage('Each productId must be a valid MongoDB ObjectId'),
+  body('products').isArray({ min: 1 }).withMessage('Products must be a non-empty array'),
+  body('products.*.productId').optional({ nullable: true }).isMongoId().withMessage('productId must be a valid MongoDB ObjectId'),
+  body('products.*.externalId').optional({ nullable: true }).isString().withMessage('externalId must be a string'),
+  body('products').custom((arr) => Array.isArray(arr) && arr.every(p => p.productId || p.externalId)).withMessage('Each product must include productId or externalId'),
   body('products.*.name').isString().withMessage('Each product must have a name'),
-  body('products.*.image').isString().withMessage('Each product must have an image URL'),
+  body('products.*.image').optional({ nullable: true }).isString().withMessage('Each product must have an image URL'),
   body('products.*.quantity').isInt({ gt: 0 }).withMessage('Each product quantity must be a positive integer'),
   body('products.*.price').isFloat({ gt: 0 }).withMessage('Each product price must be a positive number'),
   body('totalPrice').isFloat({ gt: 0 }).withMessage('Total price must be a positive number'),
-  body('stage').isString().withMessage('Order stage must be a string'),
+  body('stage').optional().isString().withMessage('Order stage must be a string'),
   body('shippingAddress').isString().withMessage('Shipping address must be a string')
 ];
 
@@ -165,15 +150,12 @@ app.post('/api/orders', authenticateJWT, validateOrder, async (req, res) => {
   if (!errors.isEmpty()) {
     return res.status(400).json({ errors: errors.array() });
   }
-
   const { products, totalPrice, shippingAddress, stage } = req.body;
-
   try {
     const user = await User.findById(req.user.userId);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
-
     const newOrder = new Order({
       userId: user._id,
       products,
@@ -181,15 +163,11 @@ app.post('/api/orders', authenticateJWT, validateOrder, async (req, res) => {
       stage,
       shippingAddress
     });
-
     await newOrder.save();
-
     user.orders.push(newOrder._id);
     await user.save();
-
     res.status(201).json(newOrder);
   } catch (error) {
-    console.error('Order creation error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
@@ -198,18 +176,14 @@ app.get('/api/profile/orders', authenticateJWT, async (req, res) => {
   try {
     const userId = req.user.userId;
     if (!userId) return res.status(400).json({ message: 'User ID missing' });
-
     const user = await User.findById(userId).populate('orders');
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
-
     res.json(user.orders);
   } catch (error) {
-    console.error('Failed to fetch orders:', error);
     res.status(500).json({ message: 'Failed to fetch orders' });
   }
 });
-
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
