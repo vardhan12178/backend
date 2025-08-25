@@ -19,13 +19,11 @@ const Order = require('./models/Order');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-/* ---------- Core & Security ---------- */
-app.set('trust proxy', 1); // behind any proxy/edge (Render/Netlify/Koyeb/etc)
+app.set('trust proxy', 1);
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json({ limit: '50kb' }));
 app.use(cookieParser());
 
-// Basic access log with timing to spot slow paths quickly
 app.use((req, res, next) => {
   const t0 = Date.now();
   res.on('finish', () => {
@@ -35,20 +33,17 @@ app.use((req, res, next) => {
   next();
 });
 
-// Strict CORS for your frontends
 app.use(cors({
   origin: ['http://localhost:3000', 'https://vkartshop.netlify.app'],
   credentials: true,
 }));
 
-// Rate-limit login to reduce brute force
 app.use('/api/login', rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 30,
   standardHeaders: true,
 }));
 
-/* ---------- Database ---------- */
 mongoose.connect(process.env.MONGO_URI, {
   maxPoolSize: 10,
   serverSelectionTimeoutMS: 5000,
@@ -56,7 +51,6 @@ mongoose.connect(process.env.MONGO_URI, {
 }).then(() => console.log('Connected to MongoDB Atlas'))
   .catch(err => console.error('Failed to connect to MongoDB Atlas', err));
 
-/* ---------- S3 Uploads (safer) ---------- */
 const s3 = new S3Client({
   region: process.env.S3_REGION || 'ap-south-1',
   credentials: {
@@ -65,7 +59,6 @@ const s3 = new S3Client({
   }
 });
 
-// Allow only small image files
 const ALLOWED_EXT = new Set(['.png', '.jpg', '.jpeg', '.webp']);
 const upload = multer({
   storage: multerS3({
@@ -75,7 +68,7 @@ const upload = multer({
     key: (req, file, cb) =>
       cb(null, `profile-images/${Date.now()}${path.extname(file.originalname)}`)
   }),
-  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB
+  limits: { fileSize: 2 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
     if (!ALLOWED_EXT.has(ext)) return cb(new Error('Only images allowed (.png/.jpg/.jpeg/.webp)'));
@@ -83,7 +76,6 @@ const upload = multer({
   }
 });
 
-// Multer error handler (so bad files get a clean 400)
 function uploadErrorHandler(err, req, res, next) {
   if (err && (err.name === 'MulterError' || err.message?.startsWith('Only images allowed'))) {
     return res.status(400).json({ message: err.message });
@@ -91,8 +83,11 @@ function uploadErrorHandler(err, req, res, next) {
   next(err);
 }
 
-/* ---------- Auth helpers ---------- */
 const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.error('FATAL: JWT_SECRET not set');
+  process.exit(1);
+}
 
 const authenticateJWT = (req, res, next) => {
   const token = req.cookies.jwt_token;
@@ -104,7 +99,6 @@ const authenticateJWT = (req, res, next) => {
   });
 };
 
-/* ---------- Health/Readiness ---------- */
 app.get('/health', (req, res) => res.status(200).send('ok'));
 app.get('/ready', async (req, res) => {
   try {
@@ -115,40 +109,45 @@ app.get('/ready', async (req, res) => {
   }
 });
 
-/* ---------- Auth Routes ---------- */
-// Register
 app.post('/api/register', upload.single('profileImage'), uploadErrorHandler, async (req, res) => {
-  const { name, username, email, password, confirmPassword } = req.body;
+  let { name, username, email, password, confirmPassword } = req.body;
   const profileImage = req.file ? req.file.location : '';
-  if (password !== confirmPassword) {
-    return res.status(400).json({ message: 'Passwords do not match' });
-  }
-  try {
-    const existingUser = await User.findOne({ username });
-    if (existingUser) return res.status(409).json({ message: 'Username already exists' });
+  if (!username || !email || !password) return res.status(400).json({ message: 'Missing required fields' });
+  if (password !== confirmPassword) return res.status(400).json({ message: 'Passwords do not match' });
 
-    const hashedPassword = await bcrypt.hash(password, 11); // strong but not too slow
+  username = String(username).trim().toLowerCase();
+  email = String(email).trim().toLowerCase();
+
+  try {
+    const existing = await User.findOne({ $or: [{ username }, { email }] });
+    if (existing) {
+      const field = existing.username === username ? 'Username' : 'Email';
+      return res.status(409).json({ message: `${field} already exists` });
+    }
+    const hashedPassword = await bcrypt.hash(password, 11);
     const newUser = new User({ name, username, email, password: hashedPassword, profileImage });
     await newUser.save();
     res.status(201).json({ message: 'User registered successfully' });
   } catch (error) {
+    if (error?.code === 11000) {
+      const key = Object.keys(error.keyPattern || {})[0] || 'Account';
+      return res.status(409).json({ message: `${key} already exists` });
+    }
     console.error('Register error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
 
-// Login
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
-  // quick payload sanity
   if (!username || !password) return res.status(400).json({ message: 'Invalid payload' });
+  const id = String(username).trim().toLowerCase();
+  const query = { $or: [{ username: id }, { email: id }] };
   try {
-    const user = await User.findOne({ username });
-    if (!user) return res.status(401).json({ message: 'Invalid credentials' });
-
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    if (!isPasswordValid) return res.status(401).json({ message: 'Invalid credentials' });
-
+    const user = await User.findOne(query).select('+password');
+    if (!user || typeof user.password !== 'string') return res.status(401).json({ message: 'Invalid credentials' });
+    const ok = await bcrypt.compare(password, user.password);
+    if (!ok) return res.status(401).json({ message: 'Invalid credentials' });
     const token = jwt.sign({ userId: user._id }, JWT_SECRET, { expiresIn: '30d' });
     res.cookie('jwt_token', token, {
       httpOnly: true,
@@ -163,7 +162,6 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-// Logout (clear cookie)
 app.post('/api/logout', (req, res) => {
   res.clearCookie('jwt_token', {
     httpOnly: true,
@@ -173,7 +171,6 @@ app.post('/api/logout', (req, res) => {
   res.json({ message: 'Logged out' });
 });
 
-/* ---------- Profile Routes ---------- */
 app.get('/api/profile', authenticateJWT, async (req, res) => {
   try {
     const user = await User.findById(req.user.userId);
@@ -198,7 +195,6 @@ app.post('/api/profile/upload', authenticateJWT, upload.single('profileImage'), 
   }
 });
 
-/* ---------- Orders ---------- */
 const STAGES = ['PLACED', 'CONFIRMED', 'SHIPPED', 'DELIVERED', 'CANCELLED'];
 
 const validateOrder = [
@@ -207,7 +203,7 @@ const validateOrder = [
   body('products.*.externalId').optional({ nullable: true }).isString().withMessage('externalId must be a string'),
   body('products').custom((arr) => Array.isArray(arr) && arr.every(p => p.productId || p.externalId)).withMessage('Each product must include productId or externalId'),
   body('products.*.name').isString().withMessage('Each product must have a name'),
-  body('products.*.image').optional({ nullable: true }).isString().withMessage('Each product must have an image URL'),
+  body('products.*.image').optional({ nullable: true }).isString().withMessage('Each product image must be a string'),
   body('products.*.quantity').isInt({ gt: 0 }).withMessage('Each product quantity must be a positive integer'),
   body('products.*.price').isFloat({ gt: 0 }).withMessage('Each product price must be a positive number'),
   body('totalPrice').isFloat({ gt: 0 }).withMessage('Total price must be a positive number'),
@@ -218,17 +214,14 @@ const validateOrder = [
 app.post('/api/orders', authenticateJWT, validateOrder, async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
-
   const { products, totalPrice, shippingAddress, stage } = req.body;
   try {
     const user = await User.findById(req.user.userId);
     if (!user) return res.status(404).json({ message: 'User not found' });
-
     const newOrder = new Order({ userId: user._id, products, totalPrice, stage, shippingAddress });
     await newOrder.save();
     user.orders.push(newOrder._id);
     await user.save();
-
     res.status(201).json(newOrder);
   } catch (error) {
     console.error('Create order error:', error);
@@ -236,7 +229,6 @@ app.post('/api/orders', authenticateJWT, validateOrder, async (req, res) => {
   }
 });
 
-// Existing list (unchanged response shape)
 app.get('/api/profile/orders', authenticateJWT, async (req, res) => {
   try {
     const userId = req.user.userId;
@@ -250,13 +242,11 @@ app.get('/api/profile/orders', authenticateJWT, async (req, res) => {
   }
 });
 
-// Optional: paginated list (new endpoint; safe for large histories)
 app.get('/api/profile/orders/paged', authenticateJWT, async (req, res) => {
   try {
     const page  = Math.max(parseInt(req.query.page)  || 1, 1);
     const limit = Math.min(parseInt(req.query.limit) || 10, 50);
     const skip  = (page - 1) * limit;
-
     const [items, total] = await Promise.all([
       Order.find({ userId: req.user.userId }).sort({ createdAt: -1 }).skip(skip).limit(limit),
       Order.countDocuments({ userId: req.user.userId })
@@ -268,5 +258,4 @@ app.get('/api/profile/orders/paged', authenticateJWT, async (req, res) => {
   }
 });
 
-/* ---------- Start ---------- */
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));

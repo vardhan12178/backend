@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
 const { Schema } = mongoose;
 
 const userSchema = new Schema(
@@ -34,17 +35,33 @@ const userSchema = new Schema(
         delete ret.password;
         return ret;
       }
+    },
+    toObject: {
+      transform(doc, ret) {
+        delete ret.password;
+        return ret;
+      }
     }
   }
 );
 
 userSchema.index({ username: 1 }, { unique: true });
 userSchema.index({ email: 1 }, { unique: true });
+userSchema.index({ createdAt: -1 });
 
 userSchema.pre('save', function (next) {
   if (this.isModified('email') && this.email) this.email = this.email.toLowerCase().trim();
   if (this.isModified('username') && this.username) this.username = this.username.toLowerCase().trim();
   next();
 });
+
+userSchema.methods.verifyPassword = function (plain) {
+  return bcrypt.compare(plain, this.password);
+};
+
+userSchema.statics.findForLogin = function (identifier) {
+  const id = String(identifier || '').trim().toLowerCase();
+  return this.findOne({ $or: [{ username: id }, { email: id }] }).select('+password');
+};
 
 module.exports = mongoose.model('User', userSchema);
