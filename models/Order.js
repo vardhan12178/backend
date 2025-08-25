@@ -22,8 +22,8 @@ const orderSchema = new mongoose.Schema({
       message: 'Each product must include productId (Mongo) or externalId (DummyJSON).'
     }
   },
-  subtotal:   { type: Number }, // optional if you store it
-  tax:        { type: Number }, // optional
+  subtotal:   { type: Number }, 
+  tax:        { type: Number }, 
   totalPrice: { type: Number, required: true },
   stage: { type: String, required: true, default: 'pending' },
   shippingAddress: { type: String, required: true },
