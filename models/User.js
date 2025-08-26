@@ -25,7 +25,9 @@ const userSchema = new Schema(
     },
     password: { type: String, required: true, select: false },
     profileImage: { type: String, trim: true },
-    orders: [{ type: Schema.Types.ObjectId, ref: 'Order' }]
+    orders: [{ type: Schema.Types.ObjectId, ref: 'Order' }],
+    resetPasswordTokenHash: { type: String, select: false },
+    resetPasswordExpiresAt: { type: Date }
   },
   {
     timestamps: true,
@@ -33,12 +35,14 @@ const userSchema = new Schema(
     toJSON: {
       transform(doc, ret) {
         delete ret.password;
+        delete ret.resetPasswordTokenHash;
         return ret;
       }
     },
     toObject: {
       transform(doc, ret) {
         delete ret.password;
+        delete ret.resetPasswordTokenHash;
         return ret;
       }
     }
