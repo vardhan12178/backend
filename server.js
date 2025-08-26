@@ -26,12 +26,10 @@ app.set('trust proxy', 1);
 app.use(helmet({
   contentSecurityPolicy: false,
   crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
-  crossOriginEmbedderPolicy: false,
-  // Optional, if we load images/scripts from other origins:
-  // crossOriginResourcePolicy: { policy: 'cross-origin' },
+  crossOriginEmbedderPolicy: false
 }));
 
-app.use(express.json({ limit: '50kb' }));
+app.use(express.json({ limit: '100kb' }));
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 
@@ -44,13 +42,34 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(cors({
-  origin: ['http://localhost:3000', 'https://vkartshop.netlify.app'],
+const allowOrigin = (origin) => {
+  if (!origin) return false;
+  const staticAllowed = [
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'https://vkartshop.netlify.app'
+  ];
+  if (staticAllowed.includes(origin)) return true;
+  if (/^https:\/\/[a-z0-9-]+--vkartshop\.netlify\.app$/.test(origin)) return true;
+  if (process.env.APP_ORIGIN && origin === process.env.APP_ORIGIN) return true;
+  return false;
+};
+
+const corsOptions = {
+  origin(origin, cb) {
+    if (allowOrigin(origin)) return cb(null, true);
+    return cb(null, false);
+  },
   credentials: true,
   methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
-  allowedHeaders: ['Content-Type','X-Requested-With','X-CSRF-Token'],
-}));
-app.options('*', cors());
+  allowedHeaders: ['Content-Type','X-Requested-With','X-CSRF-Token','Authorization'],
+  maxAge: 86400
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 
 app.use('/api/login', rateLimit({ windowMs: 15 * 60 * 1000, max: 30, standardHeaders: true }));
 app.use('/api/register', rateLimit({ windowMs: 15 * 60 * 1000, max: 20, standardHeaders: true }));
@@ -61,7 +80,7 @@ app.use('/auth/google', rateLimit({ windowMs: 60 * 1000, max: 10, standardHeader
 mongoose.connect(process.env.MONGO_URI, {
   maxPoolSize: 10,
   serverSelectionTimeoutMS: 5000,
-  socketTimeoutMS: 20000,
+  socketTimeoutMS: 20000
 }).then(() => console.log('Connected to MongoDB Atlas'))
   .catch(err => console.error('Failed to connect to MongoDB Atlas', err));
 
@@ -109,11 +128,26 @@ if (!GOOGLE_CLIENT_ID) {
 }
 const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
 
+const buildCookieOpts = (req, remember) => {
+  const origin = req.get('origin') || '';
+  const host = req.get('host') || '';
+  const crossSite = origin && !origin.includes(host);
+  const secure = req.secure || req.headers['x-forwarded-proto'] === 'https' || process.env.NODE_ENV === 'production';
+  const opts = {
+    httpOnly: true,
+    secure,
+    sameSite: crossSite ? 'None' : 'Lax',
+    path: '/'
+  };
+  if (remember) opts.maxAge = 30 * 24 * 60 * 60 * 1000;
+  return opts;
+};
+
 const authenticateJWT = (req, res, next) => {
   const bearer = req.headers.authorization;
   const token =
     req.cookies?.jwt_token ||
-    (bearer && bearer.startsWith('Bearer ') ? bearer.split(' ')[1] : null);
+    (bearer && bearer.startsWith('Bearer ') ? bearer.slice(7) : null);
 
   if (!token) return res.status(401).json({ message: 'Unauthorized' });
 
@@ -123,7 +157,6 @@ const authenticateJWT = (req, res, next) => {
     next();
   });
 };
-
 
 app.get('/health', (req, res) => res.status(200).send('ok'));
 app.get('/ready', async (req, res) => {
@@ -173,14 +206,7 @@ app.post('/api/login', async (req, res) => {
     const ok = await bcrypt.compare(password, user.password);
     if (!ok) return res.status(401).json({ message: 'Invalid credentials' });
     const token = jwt.sign({ userId: user._id }, JWT_SECRET, { expiresIn: '30d' });
-    const cookieOpts = {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax',
-      path: '/'
-    };
-    if (remember) cookieOpts.maxAge = 30 * 24 * 60 * 60 * 1000;
-    res.cookie('jwt_token', token, cookieOpts);
+    res.cookie('jwt_token', token, buildCookieOpts(req, remember));
     res.json({ token });
   } catch (error) {
     console.error('Login error:', error);
@@ -188,7 +214,6 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-console.log('Registering route: POST /auth/google');
 app.post('/auth/google/ping', (req, res) => res.json({ ok: true }));
 
 app.post('/auth/google', async (req, res) => {
@@ -224,15 +249,7 @@ app.post('/auth/google', async (req, res) => {
     }
 
     const token = jwt.sign({ userId: user._id }, JWT_SECRET, { expiresIn: '30d' });
-    const cookieOpts = {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax',
-      path: '/'
-    };
-    if (remember) cookieOpts.maxAge = 30 * 24 * 60 * 60 * 1000;
-
-    res.cookie('jwt_token', token, cookieOpts);
+    res.cookie('jwt_token', token, buildCookieOpts(req, remember));
     res.json({ token });
   } catch (err) {
     console.error('Google auth error:', err);
@@ -241,12 +258,8 @@ app.post('/auth/google', async (req, res) => {
 });
 
 app.post('/api/logout', (req, res) => {
-  res.clearCookie('jwt_token', {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax',
-    path: '/'
-  });
+  const opts = buildCookieOpts(req, false);
+  res.clearCookie('jwt_token', { ...opts, maxAge: undefined });
   res.json({ message: 'Logged out' });
 });
 
@@ -298,12 +311,8 @@ app.post('/auth/reset', async (req, res) => {
     user.resetPasswordTokenHash = undefined;
     user.resetPasswordExpiresAt = undefined;
     await user.save();
-    res.clearCookie('jwt_token', {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax',
-      path: '/'
-    });
+    const opts = buildCookieOpts(req, false);
+    res.clearCookie('jwt_token', { ...opts, maxAge: undefined });
     res.json({ message: 'Password reset successful' });
   } catch (e) {
     console.error('Reset error:', e);
@@ -347,20 +356,12 @@ const validateOrder = [
   body('products.*.image').optional({ nullable: true }).isString().withMessage('Each product image must be a string'),
   body('products.*.quantity').isInt({ gt: 0 }).withMessage('Each product quantity must be a positive integer'),
   body('products.*.price').isFloat({ gt: 0 }).withMessage('Each product price must be a positive number'),
-
   body('tax').optional().isFloat({ min: 0 }).withMessage('Tax must be a non-negative number'),
   body('shipping').optional().isFloat({ min: 0 }).withMessage('Shipping must be a non-negative number'),
   body('totalPrice').optional().isFloat({ gt: 0 }).withMessage('Total price must be a positive number'),
-
-  body('stage')
-    .optional()
-    .customSanitizer(v => typeof v === 'string' ? v.toUpperCase() : v)
-    .isIn(STAGES)
-    .withMessage('Invalid order stage'),
-
+  body('stage').optional().customSanitizer(v => typeof v === 'string' ? v.toUpperCase() : v).isIn(STAGES).withMessage('Invalid order stage'),
   body('shippingAddress').isString().withMessage('Shipping address must be a string')
 ];
-
 
 app.post('/api/orders', authenticateJWT, validateOrder, async (req, res) => {
   const errors = validationResult(req);
@@ -382,7 +383,6 @@ app.post('/api/orders', authenticateJWT, validateOrder, async (req, res) => {
       shipping,
       stage,
       shippingAddress
-    
     });
 
     await newOrder.save();
