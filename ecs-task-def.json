@@ -4,7 +4,7 @@
     "requiresCompatibilities": ["FARGATE"],
     "cpu": "256",
     "memory": "512",
-    "executionRoleArn": "arn:aws:iam::669734573991:role/ecsTaskExecutionRole",
+    "executionRoleArn": "arn:aws:iam::505915903615:role/ecsTaskExecutionRole",
     "containerDefinitions": [
       {
         "name": "vkart-backend",

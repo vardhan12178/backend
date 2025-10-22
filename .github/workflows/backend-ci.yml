@@ -55,10 +55,3 @@ jobs:
           service: vkart-backend-task-service-p2mbaty8
           cluster: vkart-cluster
           wait-for-service-stability: true
-          environment-variables: |
-            JWT_SECRET=${{ secrets.JWT_SECRET }}
-            MONGO_URI=${{ secrets.MONGO_URI }}
-            RESEND_API_KEY=${{ secrets.RESEND_API_KEY }}
-            FROM_EMAIL=${{ secrets.FROM_EMAIL }}
-            APP_URL=${{ secrets.APP_URL }}
-            GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}
