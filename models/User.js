@@ -1,5 +1,6 @@
-const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
+import mongoose from 'mongoose';
+import bcrypt from 'bcryptjs';
+
 const { Schema } = mongoose;
 
 const userSchema = new Schema(
@@ -68,4 +69,5 @@ userSchema.statics.findForLogin = function (identifier) {
   return this.findOne({ $or: [{ username: id }, { email: id }] }).select('+password');
 };
 
-module.exports = mongoose.model('User', userSchema);
+const User = mongoose.model('User', userSchema);
+export default User;

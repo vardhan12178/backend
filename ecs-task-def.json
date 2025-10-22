@@ -1,0 +1,25 @@
+{
+    "family": "vkart-backend-task",
+    "networkMode": "awsvpc",
+    "requiresCompatibilities": ["FARGATE"],
+    "cpu": "256",
+    "memory": "512",
+    "executionRoleArn": "arn:aws:iam::669734573991:role/ecsTaskExecutionRole",
+    "containerDefinitions": [
+      {
+        "name": "vkart-backend",
+        "image": "505915903615.dkr.ecr.ap-south-1.amazonaws.com/vkart-backend:latest",
+        "portMappings": [
+          { "containerPort": 5000, "protocol": "tcp" }
+        ],
+        "essential": true,
+        "environment": [
+          { "name": "AWS_REGION", "value": "ap-south-1" },
+          { "name": "S3_BUCKET", "value": "vkart-assets-mumbai" },
+          { "name": "NODE_ENV", "value": "production" },
+          { "name": "PORT", "value": "5000" }
+        ]
+      }
+    ]
+  }
+  

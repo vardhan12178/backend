@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const STAGES = ['PLACED', 'CONFIRMED', 'SHIPPED', 'DELIVERED', 'CANCELLED'];
 const TAX_RATE = 0.18;
@@ -30,8 +30,11 @@ const orderSchema = new mongoose.Schema(
       required: true,
       validate: {
         validator: (arr) =>
-          Array.isArray(arr) && arr.length > 0 && arr.every((p) => p && (p.productId || p.externalId)),
-        message: 'Each product must include productId or externalId, and products cannot be empty.',
+          Array.isArray(arr) &&
+          arr.length > 0 &&
+          arr.every((p) => p && (p.productId || p.externalId)),
+        message:
+          'Each product must include productId or externalId, and products cannot be empty.',
       },
     },
     subtotal: { type: Number, min: 0, default: 0, set: round2 },
@@ -80,4 +83,5 @@ orderSchema.pre('validate', function (next) {
 
 const Order = mongoose.model('Order', orderSchema);
 Order.STAGES = STAGES;
-module.exports = Order;
+
+export default Order;
