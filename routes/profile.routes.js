@@ -8,7 +8,7 @@ import { s3 } from '../utils/s3.js';
 
 const router = express.Router();
 
-// ---- S3 Upload Config ----
+/* S3 upload config */
 const ALLOWED_EXT = new Set(['.png', '.jpg', '.jpeg', '.webp']);
 
 const upload = multer({
@@ -17,42 +17,46 @@ const upload = multer({
     bucket: process.env.S3_BUCKET || 'vkart-assets-mumbai',
     contentType: multerS3.AUTO_CONTENT_TYPE,
     metadata: (req, file, cb) => cb(null, { fieldName: file.fieldname }),
-    key: (req, file, cb) => {
-      const filename = `profile-images/${Date.now()}${path.extname(file.originalname)}`;
-      cb(null, filename);
-    },
-    serverSideEncryption: 'AES256'
+    key: (req, file, cb) =>
+      cb(null, `profile-images/${Date.now()}${path.extname(file.originalname)}`),
+    serverSideEncryption: 'AES256',
   }),
   limits: { fileSize: 2 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
-    if (!ALLOWED_EXT.has(ext)) return cb(new Error('Only images allowed (.png/.jpg/.jpeg/.webp)'));
+    if (!ALLOWED_EXT.has(ext)) {
+      return cb(new Error('Only images allowed (.png/.jpg/.jpeg/.webp)'));
+    }
     cb(null, true);
-  }
+  },
 });
 
 function uploadErrorHandler(err, req, res, next) {
-  if (err && (err.name === 'MulterError' || err.message?.startsWith('Only images allowed'))) {
+  if (err && (err.name === 'MulterError' || err.message?.startsWith('Only images'))) {
     return res.status(400).json({ message: err.message });
   }
   next(err);
 }
 
-// ---- Routes ----
-
-// Fetch profile
+/* GET /api/profile */
 router.get('/profile', authenticateJWT, async (req, res) => {
   try {
-    const user = await User.findById(req.user.userId).select('name username email profileImage createdAt').lean();
+    const user = await User.findById(req.user.userId)
+      .select(
+        'name username email profileImage createdAt twoFactorEnabled suppress2faPrompt'
+      )
+      .lean();
+
     if (!user) return res.status(404).json({ message: 'User not found' });
-    res.json(user);
-  } catch (error) {
-    console.error('Profile error:', error);
-    res.status(500).json({ message: 'Internal server error' });
+
+    return res.json(user);
+  } catch (err) {
+    console.error('Profile error:', err);
+    return res.status(500).json({ message: 'Internal server error' });
   }
 });
 
-// Upload new profile image
+/* POST /api/profile/upload */
 router.post(
   '/profile/upload',
   authenticateJWT,
@@ -60,7 +64,9 @@ router.post(
   uploadErrorHandler,
   async (req, res) => {
     try {
-      if (!req.file?.location) return res.status(400).json({ message: 'No image uploaded' });
+      if (!req.file?.location) {
+        return res.status(400).json({ message: 'No image uploaded' });
+      }
 
       const user = await User.findById(req.user.userId);
       if (!user) return res.status(404).json({ message: 'User not found' });
@@ -68,10 +74,19 @@ router.post(
       user.profileImage = req.file.location;
       await user.save();
 
-      res.json({ message: 'Profile image updated', profileImage: req.file.location });
-    } catch (error) {
-      console.error('Profile upload error:', error);
-      res.status(500).json({ message: 'Internal server error' });
+      // send back the same shape as /api/profile so frontend can do setUser(res.data)
+      return res.json({
+        name: user.name,
+        username: user.username,
+        email: user.email,
+        profileImage: user.profileImage,
+        createdAt: user.createdAt,
+        twoFactorEnabled: user.twoFactorEnabled,
+        suppress2faPrompt: user.suppress2faPrompt,
+      });
+    } catch (err) {
+      console.error('Profile upload error:', err);
+      return res.status(500).json({ message: 'Internal server error' });
     }
   }
 );

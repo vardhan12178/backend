@@ -7,6 +7,7 @@ import { OAuth2Client } from 'google-auth-library';
 import multer from 'multer';
 import multerS3 from 'multer-s3';
 import path from 'path';
+import speakeasy from 'speakeasy';
 
 import User from '../models/User.js';
 import { buildCookieOpts } from '../utils/cookies.js';
@@ -16,12 +17,12 @@ import {
   registerLimiter,
   forgotLimiter,
   resetLimiter,
-  googleLimiter
+  googleLimiter,
 } from '../middleware/security.js';
 
 const router = express.Router();
 
-/* -------------------- File Upload (Profile Image) -------------------- */
+/* -------------------- file upload -------------------- */
 const ALLOWED_EXT = new Set(['.png', '.jpg', '.jpeg', '.webp']);
 
 const upload = multer({
@@ -49,13 +50,33 @@ const uploadErrorHandler = (err, req, res, next) => {
   next(err);
 };
 
-/* -------------------- Constants & Clients -------------------- */
+/* -------------------- shared 2FA helpers -------------------- */
+const ENC_KEY = Buffer.from(process.env.AES_KEY || '', 'utf8'); // must be 32 bytes
+const HAS_VALID_KEY = ENC_KEY.length === 32;
+if (!HAS_VALID_KEY) {
+  console.warn('⚠ AES_KEY must be 32 bytes for 2FA');
+}
+
+function decrypt2FA(enc) {
+  if (!HAS_VALID_KEY) throw new Error('2FA key not configured');
+  if (!enc || typeof enc !== 'string') return null;
+  const parts = enc.split(':');
+  if (parts.length !== 2) return null;
+  const [ivHex, dataHex] = parts;
+  const iv = Buffer.from(ivHex, 'hex');
+  const encrypted = Buffer.from(dataHex, 'hex');
+  const decipher = crypto.createDecipheriv('aes-256-cbc', ENC_KEY, iv);
+  const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
+  return decrypted.toString('utf8'); // this is the base32 secret
+}
+
+/* -------------------- constants -------------------- */
 const resend = new Resend(process.env.RESEND_API_KEY || 'dummy_key');
 const FROM_EMAIL = process.env.FROM_EMAIL || 'VKart <onboarding@resend.dev>';
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null;
 
-/* -------------------- Register -------------------- */
+/* -------------------- register -------------------- */
 router.post(
   '/register',
   registerLimiter,
@@ -94,23 +115,116 @@ router.post(
   }
 );
 
-/* -------------------- Login -------------------- */
+/* -------------------- login (with 2FA) -------------------- */
 router.post('/login', authLimiter, async (req, res) => {
-  const { username, password, remember } = req.body;
+  const { username, password, remember, token2fa } = req.body;
   if (!username || !password)
     return res.status(400).json({ message: 'Invalid payload' });
 
   const id = String(username).trim().toLowerCase();
-  const user = await User.findOne({ $or: [{ username: id }, { email: id }] }).select('+password');
+  // pick password AND 2FA secret
+  const user = await User.findOne({ $or: [{ username: id }, { email: id }] })
+    .select('+password +twoFactorSecretEnc');
+
   if (!user || !(await bcrypt.compare(password, user.password)))
     return res.status(401).json({ message: 'Invalid credentials' });
 
+  // if user enabled 2FA
+  if (user.twoFactorEnabled) {
+    // if no code yet -> ask frontend to show code box
+    if (!token2fa) {
+      return res.json({
+        require2FA: true,
+        userId: user._id, // frontend can use this for /api/2fa/login-verify too
+      });
+    }
+
+    // user sent code -> verify
+    if (!user.twoFactorSecretEnc) {
+      return res
+        .status(500)
+        .json({ message: '2FA secret missing. Please disable and enable 2FA again.' });
+    }
+
+    if (!HAS_VALID_KEY) {
+      return res.status(500).json({ message: '2FA key not configured on server' });
+    }
+
+    let base32Secret = null;
+    try {
+      base32Secret = decrypt2FA(user.twoFactorSecretEnc);
+    } catch (err) {
+      console.error('2FA decrypt error in login:', err);
+      return res.status(500).json({ message: '2FA verification failed' });
+    }
+
+    if (!base32Secret) {
+      return res.status(500).json({ message: '2FA secret invalid' });
+    }
+
+    const ok = speakeasy.totp.verify({
+      secret: base32Secret,
+      encoding: 'base32',
+      token: token2fa,
+      window: 1,
+    });
+
+    if (!ok) {
+      return res.status(401).json({ message: 'Invalid 2FA code' });
+    }
+  }
+
+  // final login
   const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '30d' });
   res.cookie('jwt_token', token, buildCookieOpts(req, remember));
   res.json({ token });
 });
 
-/* -------------------- Forgot Password -------------------- */
+/* -------------------- Google OAuth -------------------- */
+router.post('/auth/google', googleLimiter, async (req, res) => {
+  try {
+    const credential = req.body.credential || req.body.idToken;
+    if (!credential)
+      return res.status(400).json({ message: 'Missing Google credential' });
+
+    if (!googleClient)
+      return res.status(500).json({ message: 'Google client not configured' });
+
+    const ticket = await googleClient.verifyIdToken({
+      idToken: credential,
+      audience: GOOGLE_CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+    if (!payload?.email)
+      return res.status(400).json({ message: 'Google account missing email' });
+
+    const email = payload.email.toLowerCase();
+    let user = await User.findOne({ email });
+
+    if (!user) {
+      user = await User.create({
+        name: payload.name,
+        username: email.split('@')[0],
+        email,
+        profileImage: payload.picture || '',
+        password: await bcrypt.hash(crypto.randomBytes(10).toString('hex'), 11),
+      });
+    }
+
+    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
+      expiresIn: '30d',
+    });
+
+    res.cookie('jwt_token', token, buildCookieOpts(req, true));
+    res.json({ token });
+  } catch (err) {
+    console.error('Google login error:', err.message);
+    res.status(401).json({ message: 'Google sign-in failed' });
+  }
+});
+
+/* -------------------- forgot password -------------------- */
 router.post('/forgot', forgotLimiter, async (req, res) => {
   try {
     const raw = (req.body.emailOrUsername || '').toString().trim().toLowerCase();
@@ -147,7 +261,7 @@ router.post('/forgot', forgotLimiter, async (req, res) => {
   }
 });
 
-/* -------------------- Reset Password -------------------- */
+/* -------------------- reset password -------------------- */
 router.post('/reset', resetLimiter, async (req, res) => {
   try {
     const { token, password, confirmPassword } = req.body;
@@ -179,7 +293,7 @@ router.post('/reset', resetLimiter, async (req, res) => {
   }
 });
 
-/* -------------------- Logout -------------------- */
+/* -------------------- logout -------------------- */
 router.post('/logout', (req, res) => {
   res.clearCookie('jwt_token', { path: '/', httpOnly: true, sameSite: 'Lax' });
   res.json({ message: 'Logged out' });

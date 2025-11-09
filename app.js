@@ -6,6 +6,11 @@ import { notFound, errorHandler } from './middleware/errors.js';
 import authRoutes from './routes/auth.routes.js';
 import profileRoutes from './routes/profile.routes.js';
 import orderRoutes from './routes/order.routes.js';
+import aiRoutes from './routes/ai.routes.js';
+import twoFactorRoutes from './routes/twofactor.routes.js'; 
+import stripeRoutes from './routes/stripe.routes.js';
+import razorpayRoutes from './routes/razorpay.routes.js';
+
 
 const app = express();
 
@@ -21,7 +26,9 @@ app.options('*', corsMiddleware);
 // lightweight request timing
 app.use((req, res, next) => {
   const t0 = Date.now();
-  res.on('finish', () => console.log(`${req.method} ${req.originalUrl} ${res.statusCode} - ${Date.now()-t0}ms`));
+  res.on('finish', () =>
+    console.log(`${req.method} ${req.originalUrl} ${res.statusCode} - ${Date.now() - t0}ms`)
+  );
   next();
 });
 
@@ -32,6 +39,12 @@ app.get('/health', (req, res) => res.status(200).send('ok'));
 app.use('/api', authRoutes);
 app.use('/api', profileRoutes);
 app.use('/api', orderRoutes);
+app.use('/api', aiRoutes);
+app.use('/api', twoFactorRoutes);
+app.use('/', authRoutes); 
+app.use('/api', stripeRoutes);
+app.use('/api', razorpayRoutes);
+
 
 // 404 + errors
 app.use(notFound);
