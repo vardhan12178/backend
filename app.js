@@ -8,7 +8,6 @@ import profileRoutes from './routes/profile.routes.js';
 import orderRoutes from './routes/order.routes.js';
 import aiRoutes from './routes/ai.routes.js';
 import twoFactorRoutes from './routes/twofactor.routes.js'; 
-import stripeRoutes from './routes/stripe.routes.js';
 import razorpayRoutes from './routes/razorpay.routes.js';
 
 
@@ -42,7 +41,6 @@ app.use('/api', orderRoutes);
 app.use('/api', aiRoutes);
 app.use('/api', twoFactorRoutes);
 app.use('/', authRoutes); 
-app.use('/api', stripeRoutes);
 app.use('/api', razorpayRoutes);
 
 
