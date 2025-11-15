@@ -10,7 +10,8 @@ const allowOrigin = (origin) => {
   if ([
     'http://localhost:3000','http://127.0.0.1:3000',
     'http://localhost:5173','http://127.0.0.1:5173',
-    'https://vkartshop.netlify.app'
+    'https://vkartshop.netlify.app',
+    'https://vkart.balavardhan.dev' 
   ].includes(origin)) return true;
   if (/^https:\/\/[a-z0-9-]+--vkartshop\.netlify\.app$/.test(origin)) return true;
   if (process.env.APP_ORIGIN && origin === process.env.APP_ORIGIN) return true;
