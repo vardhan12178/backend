@@ -36,10 +36,13 @@ const userSchema = new Schema(
 
     /* ---------- Two-Factor Authentication ---------- */
     twoFactorEnabled: { type: Boolean, default: false },
-    twoFactorSecretEnc: { type: String, select: false }, 
-    twoFactorSecret: { type: String, select: false }, 
+    twoFactorSecretEnc: { type: String, select: false },
+    twoFactorSecret: { type: String, select: false },
     suppress2faPrompt: { type: Boolean, default: false },
     twoFactorBackupCodes: [{ type: String, select: false }],
+
+    /* ---------- Admin Block Feature (NEW) ---------- */
+    blocked: { type: Boolean, default: false },
   },
   {
     timestamps: true,
@@ -66,6 +69,7 @@ const userSchema = new Schema(
     },
   }
 );
+
 
 userSchema.index({ username: 1 }, { unique: true });
 userSchema.index({ email: 1 }, { unique: true });

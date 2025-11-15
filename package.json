@@ -6,7 +6,9 @@
   "main": "server.js",
   "scripts": {
     "test": "dotenv -e .env.test -- node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --detectOpenHandles --forceExit",
-    "start": "node server.js"
+    "start": "node server.js",
+    "import:products": "node ./scripts/importDummyProducts.js"
+
   },
   "keywords": [],
   "author": "",

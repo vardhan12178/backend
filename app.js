@@ -9,6 +9,10 @@ import orderRoutes from './routes/order.routes.js';
 import aiRoutes from './routes/ai.routes.js';
 import twoFactorRoutes from './routes/twofactor.routes.js'; 
 import razorpayRoutes from './routes/razorpay.routes.js';
+import productRoutes from "./routes/product.routes.js";
+import adminUsersRoutes from './routes/admin.users.routes.js';
+
+
 
 
 const app = express();
@@ -42,6 +46,9 @@ app.use('/api', aiRoutes);
 app.use('/api', twoFactorRoutes);
 app.use('/', authRoutes); 
 app.use('/api', razorpayRoutes);
+app.use('/api', productRoutes);
+app.use('/api/admin', adminUsersRoutes);
+
 
 
 // 404 + errors

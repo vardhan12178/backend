@@ -10,6 +10,7 @@ import path from 'path';
 import speakeasy from 'speakeasy';
 
 import User from '../models/User.js';
+import TokenBlacklist from "../models/TokenBlacklist.js"; 
 import { buildCookieOpts } from '../utils/cookies.js';
 import { s3 } from '../utils/s3.js';
 import {
@@ -293,10 +294,93 @@ router.post('/reset', resetLimiter, async (req, res) => {
   }
 });
 
-/* -------------------- logout -------------------- */
-router.post('/logout', (req, res) => {
-  res.clearCookie('jwt_token', { path: '/', httpOnly: true, sameSite: 'Lax' });
-  res.json({ message: 'Logged out' });
+/* -------------------- Admin Login -------------------- */
+router.post("/admin/login", async (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password)
+    return res.status(400).json({ message: "Invalid payload" });
+
+  const id = String(username).trim().toLowerCase();
+  const user = await User.findOne({ $or: [{ username: id }, { email: id }] }).select("+password");
+
+  if (!user || !(await bcrypt.compare(password, user.password)))
+    return res.status(401).json({ message: "Invalid credentials" });
+
+  //  Only allow these two emails
+  const adminEmails = ["balavardhan12178@gmail.com", "balavardhanpula@gmail.com"];
+  if (!adminEmails.includes(user.email)) {
+    return res.status(403).json({ message: "Access denied: Not an admin" });
+  }
+
+  //  Issue admin JWT
+  const token = jwt.sign({ userId: user._id, role: "admin" }, process.env.JWT_SECRET, {
+    expiresIn: "30d",
+  });
+
+  res.cookie("jwt_token", token, buildCookieOpts(req, true));
+  res.json({ token, role: "admin" });
 });
+
+/* -------------------- Admin Google OAuth -------------------- */
+router.post("/admin/google", async (req, res) => {
+  try {
+    const credential = req.body.credential || req.body.idToken;
+    if (!credential) return res.status(400).json({ message: "Missing Google credential" });
+
+    const ticket = await googleClient.verifyIdToken({
+      idToken: credential,
+      audience: GOOGLE_CLIENT_ID,
+    });
+    const payload = ticket.getPayload();
+    const email = payload?.email?.toLowerCase();
+
+    const adminEmails = ["balavardhan12178@gmail.com", "balavardhanpula@gmail.com"];
+    if (!email || !adminEmails.includes(email)) {
+      return res.status(403).json({ message: "Access denied: Not an admin" });
+    }
+
+    let user = await User.findOne({ email });
+    if (!user) {
+      user = await User.create({
+        name: payload.name,
+        username: email.split("@")[0],
+        email,
+        profileImage: payload.picture || "",
+        password: await bcrypt.hash(crypto.randomBytes(10).toString("hex"), 11),
+      });
+    }
+
+    const token = jwt.sign({ userId: user._id, role: "admin" }, process.env.JWT_SECRET, {
+      expiresIn: "30d",
+    });
+
+    res.cookie("jwt_token", token, buildCookieOpts(req, true));
+    res.json({ token, role: "admin" });
+  } catch (err) {
+    console.error("Admin Google login error:", err.message);
+    res.status(401).json({ message: "Google sign-in failed" });
+  }
+});
+
+
+/* -------------------- logout -------------------- */
+router.post("/logout", async (req, res) => {
+  try {
+    const token = req.cookies.jwt_token || req.headers.authorization?.split(" ")[1];
+    if (token) {
+      await TokenBlacklist.create({
+        token,
+        expiredAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), 
+      });
+    }
+
+    res.clearCookie("jwt_token", { path: "/", httpOnly: true, sameSite: "Lax" });
+    res.json({ message: "Logged out successfully" });
+  } catch (err) {
+    console.error("Logout error:", err);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
 
 export default router;
