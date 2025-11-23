@@ -5,6 +5,7 @@ import multer from "multer";
 import multerS3 from "multer-s3";
 import path from "path";
 import { s3 } from "../utils/s3.js";
+import User from "../models/User.js";
 
 
 const router = express.Router();
@@ -68,7 +69,7 @@ router.get("/products", async (req, res) => {
       maxPrice,
       sort = "newest",
       page = 1,
-      limit = 20,
+      limit = 20, 
     } = req.query;
 
     const query = { isActive: true };
@@ -85,16 +86,19 @@ router.get("/products", async (req, res) => {
       if (maxPrice) query.price.$lte = Number(maxPrice);
     }
 
-    let sortObj = { createdAt: -1 }; // newest default
+    let sortObj = { createdAt: -1 }; 
     if (sort === "price_asc") sortObj = { price: 1 };
     if (sort === "price_desc") sortObj = { price: -1 };
 
     const skip = (Number(page) - 1) * Number(limit);
 
+
     const products = await Product.find(query)
+      .select('title description category brand price discountPercentage rating stock thumbnail images')
       .sort(sortObj)
       .skip(skip)
-      .limit(Number(limit));
+      .limit(Number(limit))
+      .lean();
 
     const count = await Product.countDocuments(query);
 
@@ -112,57 +116,20 @@ router.get("/products", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
-
 /**
  * GET /api/products/:id
  * Product details
  */
 router.get("/products/:id", async (req, res) => {
   try {
-    const p = await Product.findById(req.params.id);
+    const p = await Product.findById(req.params.id)
+      .populate('reviews.userId', 'name username email profileImage'); 
+    
     if (!p) return res.status(404).json({ error: "Product not found" });
 
     res.json(p);
   } catch (err) {
-    res.status(500).json({ error: "Server error" });
-  }
-});
-
-/**
- * POST /api/products/:id/reviews
- * Add review — must be logged in
- */
-router.post("/products/:id/reviews", authenticateJWT, async (req, res) => {
-  try {
-    const { rating, comment } = req.body;
-
-    if (!rating || rating < 1 || rating > 5) {
-      return res.status(400).json({ error: "Invalid rating" });
-    }
-
-    const product = await Product.findById(req.params.id);
-    if (!product) return res.status(404).json({ error: "Product not found" });
-
-    const review = {
-      rating,
-      comment: comment || "",
-      userId: req.user.userId,
-      reviewerName: req.user.userId, // replace with user's name later if needed
-      reviewerEmail: "", // optional
-      date: new Date(),
-    };
-
-    product.reviews.push(review);
-
-    // Auto-update rating (avg)
-    const ratings = product.reviews.map((r) => r.rating);
-    product.rating = ratings.reduce((a, b) => a + b, 0) / ratings.length;
-
-    await product.save();
-
-    res.json({ message: "Review added", review });
-  } catch (err) {
-    console.error("Add review error:", err);
+    console.error("Product fetch error:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
@@ -290,5 +257,146 @@ router.post(
     }
   }
 );
+
+/**
+ * POST /api/products/:id/reviews
+ * Add review — must be logged in
+ */
+router.post("/products/:id/reviews", authenticateJWT, async (req, res) => {
+  try {
+    const { rating, comment } = req.body;
+
+    if (!rating || rating < 1 || rating > 5) {
+      return res.status(400).json({ error: "Invalid rating (1-5)" });
+    }
+
+    if (!comment || comment.trim().length < 10) {
+      return res.status(400).json({ error: "Comment must be at least 10 characters" });
+    }
+
+    const product = await Product.findById(req.params.id);
+    if (!product) return res.status(404).json({ error: "Product not found" });
+
+    const user = await User.findById(req.user.userId).select('name username email');
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const existingReview = product.reviews.find(
+      r => r.userId && r.userId.toString() === req.user.userId
+    );
+    
+    if (existingReview) {
+      return res.status(400).json({ error: "You have already reviewed this product" });
+    }
+
+    const review = {
+      rating: Number(rating),
+      comment: comment.trim(),
+      userId: req.user.userId,
+      reviewerName: user.name || user.username || "Anonymous",
+      reviewerEmail: user.email || "",
+      date: new Date(),
+    };
+
+    product.reviews.push(review);
+
+    const ratings = product.reviews.map((r) => r.rating);
+    product.rating = (ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(1);
+
+    await product.save();
+
+    res.status(201).json({ 
+      message: "Review added successfully", 
+      review: {
+        ...review,
+        _id: product.reviews[product.reviews.length - 1]._id
+      },
+      newRating: product.rating,
+      totalReviews: product.reviews.length
+    });
+  } catch (err) {
+    console.error("Add review error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+/**
+ * GET /api/products/:id/reviews
+ * Fetch reviews with pagination
+ */
+router.get("/products/:id/reviews", async (req, res) => {
+  try {
+    const { page = 1, limit = 10, sort = 'newest' } = req.query;
+    
+    const product = await Product.findById(req.params.id)
+      .select('reviews rating title')
+      .populate('reviews.userId', 'name username email profileImage');
+    
+    if (!product) return res.status(404).json({ error: "Product not found" });
+
+    let sortedReviews = [...product.reviews];
+    if (sort === 'newest') sortedReviews.sort((a, b) => new Date(b.date) - new Date(a.date));
+    else if (sort === 'oldest') sortedReviews.sort((a, b) => new Date(a.date) - new Date(b.date));
+    else if (sort === 'highest') sortedReviews.sort((a, b) => b.rating - a.rating);
+    else if (sort === 'lowest') sortedReviews.sort((a, b) => a.rating - b.rating);
+
+    const skip = (Number(page) - 1) * Number(limit);
+    const paginatedReviews = sortedReviews.slice(skip, skip + Number(limit));
+
+    res.json({
+      reviews: paginatedReviews,
+      total: product.reviews.length,
+      rating: product.rating,
+      productTitle: product.title,
+      pagination: {
+        page: Number(page),
+        limit: Number(limit),
+        totalPages: Math.ceil(product.reviews.length / limit),
+      },
+    });
+  } catch (err) {
+    console.error("Get reviews error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+/**
+ * DELETE /api/products/:id/reviews/:reviewId
+ * Delete own review
+ */
+router.delete("/products/:id/reviews/:reviewId", authenticateJWT, async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.id);
+    if (!product) return res.status(404).json({ error: "Product not found" });
+
+    const reviewIndex = product.reviews.findIndex(
+      r => r._id.toString() === req.params.reviewId && 
+           r.userId.toString() === req.user.userId
+    );
+
+    if (reviewIndex === -1) {
+      return res.status(404).json({ error: "Review not found or unauthorized" });
+    }
+
+    product.reviews.splice(reviewIndex, 1);
+
+    if (product.reviews.length > 0) {
+      const ratings = product.reviews.map(r => r.rating);
+      product.rating = (ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(1);
+    } else {
+      product.rating = 0;
+    }
+
+    await product.save();
+
+    res.json({ 
+      message: "Review deleted", 
+      newRating: product.rating,
+      totalReviews: product.reviews.length 
+    });
+  } catch (err) {
+    console.error("Delete review error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 
 export default router;
