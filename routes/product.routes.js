@@ -48,17 +48,26 @@ function uploadProductError(err, req, res, next) {
 
 
 /* ============================================================
-   PUBLIC ROUTES  — FRONTEND USERS
+   PUBLIC ROUTES — FRONTEND USERS
    ============================================================ */
 
 /**
  * GET /api/products
- * Supports:
- *   - search ?q=
- *   - category ?category=
- *   - price range ?minPrice=&maxPrice=
- *   - sort ?sort=price_asc | price_desc | newest
- *   - pagination ?page=&limit=
+ * Fetch products with filtering, sorting, and pagination
+ * 
+ * Query Parameters:
+ *   - q: Search term (text search on title and description)
+ *   - category: Filter by category slug
+ *   - minPrice: Minimum price filter
+ *   - maxPrice: Maximum price filter
+ *   - minRating: Minimum rating filter (1-5)
+ *   - sort: Sort order (price_asc | price_desc | rating_desc | newest)
+ *   - page: Page number for pagination (default: 1)
+ *   - limit: Items per page (default: 20)
+ * 
+ * Response:
+ *   - products: Array of product objects
+ *   - pagination: { page, limit, total, totalPages }
  */
 router.get("/products", async (req, res) => {
   try {
@@ -67,6 +76,7 @@ router.get("/products", async (req, res) => {
       category,
       minPrice,
       maxPrice,
+      minRating,
       sort = "newest",
       page = 1,
       limit = 20, 
@@ -74,33 +84,47 @@ router.get("/products", async (req, res) => {
 
     const query = { isActive: true };
 
+    // Text search filter
     if (q.trim()) {
       query.$text = { $search: q.trim() };
     }
 
-    if (category) query.category = category;
+    // Category filter
+    if (category) {
+      query.category = category;
+    }
 
+    // Price range filter
     if (minPrice || maxPrice) {
       query.price = {};
       if (minPrice) query.price.$gte = Number(minPrice);
       if (maxPrice) query.price.$lte = Number(maxPrice);
     }
 
+    // Rating filter
+    if (minRating) {
+      query.rating = { $gte: Number(minRating) };
+    }
+
+    // Sort configuration
     let sortObj = { createdAt: -1 }; 
     if (sort === "price_asc") sortObj = { price: 1 };
     if (sort === "price_desc") sortObj = { price: -1 };
+    if (sort === "rating_desc") sortObj = { rating: -1 };
 
+    // Pagination
     const skip = (Number(page) - 1) * Number(limit);
 
-
-    const products = await Product.find(query)
-      .select('title description category brand price discountPercentage rating stock thumbnail images')
-      .sort(sortObj)
-      .skip(skip)
-      .limit(Number(limit))
-      .lean();
-
-    const count = await Product.countDocuments(query);
+    // Execute queries in parallel for better performance
+    const [products, count] = await Promise.all([
+      Product.find(query)
+        .select('title description category brand price discountPercentage rating stock thumbnail images')
+        .sort(sortObj)
+        .skip(skip)
+        .limit(Number(limit))
+        .lean(),
+      Product.countDocuments(query)
+    ]);
 
     res.json({
       products,
@@ -116,9 +140,10 @@ router.get("/products", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
 /**
  * GET /api/products/:id
- * Product details
+ * Fetch single product details with populated reviews
  */
 router.get("/products/:id", async (req, res) => {
   try {
@@ -135,12 +160,12 @@ router.get("/products/:id", async (req, res) => {
 });
 
 /* ============================================================
-   ADMIN ROUTES  — ADMIN DASHBOARD
+   ADMIN ROUTES — ADMIN DASHBOARD
    ============================================================ */
 
 /**
  * POST /api/admin/products
- * Create product
+ * Create new product (Admin only)
  */
 router.post(
   "/admin/products",
@@ -162,7 +187,7 @@ router.post(
 
 /**
  * PUT /api/admin/products/:id
- * Update product
+ * Update existing product (Admin only)
  */
 router.put(
   "/admin/products/:id",
@@ -173,7 +198,7 @@ router.put(
       const updated = await Product.findByIdAndUpdate(
         req.params.id,
         req.body,
-        { new: true }
+        { new: true, runValidators: true }
       );
 
       if (!updated)
@@ -189,7 +214,7 @@ router.put(
 
 /**
  * DELETE /api/admin/products/:id
- * Delete product
+ * Delete product (Admin only)
  */
 router.delete(
   "/admin/products/:id",
@@ -212,7 +237,7 @@ router.delete(
 
 /**
  * GET /api/admin/products
- * List products for admin (no filters)
+ * List all products for admin dashboard (no filters)
  */
 router.get(
   "/admin/products",
@@ -229,10 +254,9 @@ router.get(
   }
 );
 
-
 /**
  * POST /api/admin/products/upload
- * Upload product image to S3
+ * Upload product image to S3 (Admin only)
  */
 router.post(
   "/admin/products/upload",
@@ -258,28 +282,39 @@ router.post(
   }
 );
 
+/* ============================================================
+   REVIEW ROUTES — USER REVIEWS
+   ============================================================ */
+
 /**
  * POST /api/products/:id/reviews
- * Add review — must be logged in
+ * Add product review (Authenticated users only)
+ * Validates one review per user per product
  */
 router.post("/products/:id/reviews", authenticateJWT, async (req, res) => {
   try {
     const { rating, comment } = req.body;
 
+    // Validate rating
     if (!rating || rating < 1 || rating > 5) {
       return res.status(400).json({ error: "Invalid rating (1-5)" });
     }
 
+    // Validate comment
     if (!comment || comment.trim().length < 10) {
       return res.status(400).json({ error: "Comment must be at least 10 characters" });
     }
 
-    const product = await Product.findById(req.params.id);
-    if (!product) return res.status(404).json({ error: "Product not found" });
+    // Fetch product and user in parallel
+    const [product, user] = await Promise.all([
+      Product.findById(req.params.id),
+      User.findById(req.user.userId).select('name username email')
+    ]);
 
-    const user = await User.findById(req.user.userId).select('name username email');
+    if (!product) return res.status(404).json({ error: "Product not found" });
     if (!user) return res.status(404).json({ error: "User not found" });
 
+    // Check for existing review
     const existingReview = product.reviews.find(
       r => r.userId && r.userId.toString() === req.user.userId
     );
@@ -288,6 +323,7 @@ router.post("/products/:id/reviews", authenticateJWT, async (req, res) => {
       return res.status(400).json({ error: "You have already reviewed this product" });
     }
 
+    // Create review object
     const review = {
       rating: Number(rating),
       comment: comment.trim(),
@@ -299,6 +335,7 @@ router.post("/products/:id/reviews", authenticateJWT, async (req, res) => {
 
     product.reviews.push(review);
 
+    // Recalculate product rating
     const ratings = product.reviews.map((r) => r.rating);
     product.rating = (ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(1);
 
@@ -321,7 +358,12 @@ router.post("/products/:id/reviews", authenticateJWT, async (req, res) => {
 
 /**
  * GET /api/products/:id/reviews
- * Fetch reviews with pagination
+ * Fetch product reviews with pagination and sorting
+ * 
+ * Query Parameters:
+ *   - page: Page number (default: 1)
+ *   - limit: Items per page (default: 10)
+ *   - sort: Sort order (newest | oldest | highest | lowest)
  */
 router.get("/products/:id/reviews", async (req, res) => {
   try {
@@ -333,12 +375,14 @@ router.get("/products/:id/reviews", async (req, res) => {
     
     if (!product) return res.status(404).json({ error: "Product not found" });
 
+    // Sort reviews based on query parameter
     let sortedReviews = [...product.reviews];
     if (sort === 'newest') sortedReviews.sort((a, b) => new Date(b.date) - new Date(a.date));
     else if (sort === 'oldest') sortedReviews.sort((a, b) => new Date(a.date) - new Date(b.date));
     else if (sort === 'highest') sortedReviews.sort((a, b) => b.rating - a.rating);
     else if (sort === 'lowest') sortedReviews.sort((a, b) => a.rating - b.rating);
 
+    // Paginate reviews
     const skip = (Number(page) - 1) * Number(limit);
     const paginatedReviews = sortedReviews.slice(skip, skip + Number(limit));
 
@@ -361,13 +405,15 @@ router.get("/products/:id/reviews", async (req, res) => {
 
 /**
  * DELETE /api/products/:id/reviews/:reviewId
- * Delete own review
+ * Delete user's own review (Authenticated users only)
+ * Recalculates product rating after deletion
  */
 router.delete("/products/:id/reviews/:reviewId", authenticateJWT, async (req, res) => {
   try {
     const product = await Product.findById(req.params.id);
     if (!product) return res.status(404).json({ error: "Product not found" });
 
+    // Find review by ID and verify ownership
     const reviewIndex = product.reviews.findIndex(
       r => r._id.toString() === req.params.reviewId && 
            r.userId.toString() === req.user.userId
@@ -377,8 +423,10 @@ router.delete("/products/:id/reviews/:reviewId", authenticateJWT, async (req, re
       return res.status(404).json({ error: "Review not found or unauthorized" });
     }
 
+    // Remove review
     product.reviews.splice(reviewIndex, 1);
 
+    // Recalculate product rating
     if (product.reviews.length > 0) {
       const ratings = product.reviews.map(r => r.rating);
       product.rating = (ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(1);

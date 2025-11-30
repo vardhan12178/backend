@@ -87,10 +87,46 @@ const productSchema = new Schema(
   }
 );
 
-/* ------------ Indexes for Search ------------ */
+/* ------------ Indexes for Performance Optimization ------------ */
+
+/**
+ * Compound index for active products with category filtering
+ * Optimizes queries like: { isActive: true, category: 'electronics' }
+ * This is the primary index for most product list queries
+ */
+productSchema.index({ isActive: 1, category: 1 });
+
+/**
+ * Compound index for active products with price filtering and sorting
+ * Optimizes queries like: { isActive: true, price: { $gte: 100, $lte: 500 } }
+ * Also supports sorting by price
+ */
+productSchema.index({ isActive: 1, price: 1 });
+
+/**
+ * Compound index for active products with rating filtering and sorting
+ * Optimizes queries like: { isActive: true, rating: { $gte: 4 } }
+ * Also supports sorting by rating (descending)
+ */
+productSchema.index({ isActive: 1, rating: -1 });
+
+/**
+ * Full-text search index for product title and description
+ * Enables text search queries using $text operator
+ */
 productSchema.index({ title: "text", description: "text" });
-productSchema.index({ category: 1 });
-productSchema.index({ price: 1 });
+
+/**
+ * Index for sorting by creation date (newest first)
+ * Optimizes "newest" sort queries
+ */
 productSchema.index({ createdAt: -1 });
+
+/**
+ * Sparse index for SKU lookups
+ * Only indexes documents that have a SKU field
+ * Useful for admin panel SKU searches
+ */
+productSchema.index({ sku: 1 }, { sparse: true });
 
 export default mongoose.model("Product", productSchema);
