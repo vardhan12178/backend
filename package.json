@@ -8,7 +8,6 @@
     "test": "dotenv -e .env.test -- node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --detectOpenHandles --forceExit",
     "start": "node server.js",
     "import:products": "node ./scripts/importDummyProducts.js"
-
   },
   "keywords": [],
   "author": "",
@@ -16,6 +15,10 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.623.0",
     "@aws-sdk/s3-request-presigner": "^3.623.0",
+    "@chroma-core/default-embed": "^0.1.9",
+    "@google/generative-ai": "^0.24.1",
+    "@langchain/core": "^1.1.0",
+    "@langchain/google-genai": "^2.0.0",
     "bcryptjs": "^2.4.3",
     "compression": "^1.8.1",
     "compromise": "^14.14.4",
@@ -30,7 +33,9 @@
     "google-auth-library": "^10.2.1",
     "helmet": "^8.1.0",
     "hpp": "^0.2.3",
+    "ioredis": "^5.8.2",
     "jsonwebtoken": "^9.0.2",
+    "langchain": "^1.1.1",
     "mongoose": "^8.5.2",
     "mongoose-sequence": "^6.0.1",
     "multer": "^1.4.5-lts.1",

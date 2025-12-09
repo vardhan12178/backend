@@ -1,35 +1,16 @@
-version: '3.9'
+version: '3.8'
 
 services:
   backend:
     build: .
     container_name: vkart-backend
-    restart: unless-stopped
     ports:
       - "5000:5000"
     env_file:
       - .env
-    depends_on:
-      - mongo
-    volumes:
-      - .:/app
-      - /app/node_modules
+    restart: on-failure
     networks:
       - vkart-network
-
-  mongo:
-    image: mongo:6
-    container_name: vkart-mongodb
-    restart: unless-stopped
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongo-data:/data/db
-    networks:
-      - vkart-network
-
-volumes:
-  mongo-data:
 
 networks:
   vkart-network:

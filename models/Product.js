@@ -9,7 +9,7 @@ const reviewSchema = new Schema(
     reviewerName: { type: String, trim: true },
     reviewerEmail: { type: String, trim: true },
     date: { type: Date, default: Date.now },
-    userId: { type: Schema.Types.ObjectId, ref: "User" }, // for verified purchase
+    userId: { type: Schema.Types.ObjectId, ref: "User" },
   },
   { _id: true }
 );
@@ -80,6 +80,17 @@ const productSchema = new Schema(
     // Admin controls
     isActive: { type: Boolean, default: true },
     createdBy: { type: Schema.Types.ObjectId, ref: "User" },
+
+    // --- AI Vector Search Integration ---
+    /**
+     * Stores the vector embedding (array of numbers) for semantic search.
+     * select: false -> Prevents this heavy field from being sent in normal API calls,
+     * ensuring no performance impact on your existing frontend apps.
+     */
+    embedding: {
+      type: [Number],
+      select: false, 
+    },
   },
   {
     timestamps: true,
@@ -89,44 +100,22 @@ const productSchema = new Schema(
 
 /* ------------ Indexes for Performance Optimization ------------ */
 
-/**
- * Compound index for active products with category filtering
- * Optimizes queries like: { isActive: true, category: 'electronics' }
- * This is the primary index for most product list queries
- */
+// Active + Category (Primary Browse Filter)
 productSchema.index({ isActive: 1, category: 1 });
 
-/**
- * Compound index for active products with price filtering and sorting
- * Optimizes queries like: { isActive: true, price: { $gte: 100, $lte: 500 } }
- * Also supports sorting by price
- */
+// Active + Price (Range Filter & Sort)
 productSchema.index({ isActive: 1, price: 1 });
 
-/**
- * Compound index for active products with rating filtering and sorting
- * Optimizes queries like: { isActive: true, rating: { $gte: 4 } }
- * Also supports sorting by rating (descending)
- */
+// Active + Rating (Quality Filter)
 productSchema.index({ isActive: 1, rating: -1 });
 
-/**
- * Full-text search index for product title and description
- * Enables text search queries using $text operator
- */
+// Standard Text Search (Keyword Fallback)
 productSchema.index({ title: "text", description: "text" });
 
-/**
- * Index for sorting by creation date (newest first)
- * Optimizes "newest" sort queries
- */
+// Newest Arrivals
 productSchema.index({ createdAt: -1 });
 
-/**
- * Sparse index for SKU lookups
- * Only indexes documents that have a SKU field
- * Useful for admin panel SKU searches
- */
+// Admin Lookup
 productSchema.index({ sku: 1 }, { sparse: true });
 
 export default mongoose.model("Product", productSchema);

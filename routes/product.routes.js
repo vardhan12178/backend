@@ -5,6 +5,7 @@ import multer from "multer";
 import multerS3 from "multer-s3";
 import path from "path";
 import { s3 } from "../utils/s3.js";
+import redis from "../utils/redis.js";
 import User from "../models/User.js";
 
 
@@ -71,70 +72,74 @@ function uploadProductError(err, req, res, next) {
  */
 router.get("/products", async (req, res) => {
   try {
-    const {
-      q = "",
-      category,
-      minPrice,
-      maxPrice,
-      minRating,
-      sort = "newest",
-      page = 1,
-      limit = 20, 
-    } = req.query;
+    const { q, category, minPrice, maxPrice, minRating, sort, page = 1 } = req.query;
+    
+    // Check if the request matches the default landing page criteria
+    const isDefaultView = !q && !category && !minPrice && !maxPrice && !minRating && (sort === "newest" || !sort) && Number(page) === 1;
+    const cacheKey = "products:default:page1";
+
+    if (isDefaultView) {
+      try {
+        const cachedData = await redis.get(cacheKey);
+        if (cachedData) {
+          return res.json(JSON.parse(cachedData));
+        }
+      } catch (err) {
+        console.warn("Redis Error:", err.message);
+      }
+    }
 
     const query = { isActive: true };
-
-    // Text search filter
-    if (q.trim()) {
-      query.$text = { $search: q.trim() };
-    }
-
-    // Category filter
-    if (category) {
-      query.category = category;
-    }
-
-    // Price range filter
+    if (q && q.trim()) query.$text = { $search: q.trim() };
+    if (category) query.category = category;
     if (minPrice || maxPrice) {
       query.price = {};
       if (minPrice) query.price.$gte = Number(minPrice);
       if (maxPrice) query.price.$lte = Number(maxPrice);
     }
+    if (minRating) query.rating = { $gte: Number(minRating) };
 
-    // Rating filter
-    if (minRating) {
-      query.rating = { $gte: Number(minRating) };
-    }
-
-    // Sort configuration
-    let sortObj = { createdAt: -1 }; 
+    let sortObj = { createdAt: -1 };
     if (sort === "price_asc") sortObj = { price: 1 };
     if (sort === "price_desc") sortObj = { price: -1 };
     if (sort === "rating_desc") sortObj = { rating: -1 };
 
-    // Pagination
-    const skip = (Number(page) - 1) * Number(limit);
+    const limit = Number(req.query.limit) || 20;
+    const skip = (Number(page) - 1) * limit;
 
-    // Execute queries in parallel for better performance
+    const countPromise = isDefaultView
+      ? Product.estimatedDocumentCount()
+      : Product.countDocuments(query);
+
     const [products, count] = await Promise.all([
       Product.find(query)
         .select('title description category brand price discountPercentage rating stock thumbnail images')
         .sort(sortObj)
         .skip(skip)
-        .limit(Number(limit))
+        .limit(limit)
         .lean(),
-      Product.countDocuments(query)
+      countPromise
     ]);
 
-    res.json({
+    const response = {
       products,
       pagination: {
         page: Number(page),
-        limit: Number(limit),
+        limit,
         total: count,
         totalPages: Math.ceil(count / limit),
       },
-    });
+    };
+
+    if (isDefaultView) {
+      try {
+        await redis.set(cacheKey, JSON.stringify(response), "EX", 300);
+      } catch (err) {
+        console.warn("Redis Set Error:", err.message);
+      }
+    }
+
+    res.json(response);
   } catch (err) {
     console.error("Products list error:", err);
     res.status(500).json({ error: "Server error" });
@@ -146,13 +151,38 @@ router.get("/products", async (req, res) => {
  * Fetch single product details with populated reviews
  */
 router.get("/products/:id", async (req, res) => {
-  try {
-    const p = await Product.findById(req.params.id)
-      .populate('reviews.userId', 'name username email profileImage'); 
-    
-    if (!p) return res.status(404).json({ error: "Product not found" });
+  const productId = req.params.id;
+  const cacheKey = `product:${productId}`;
 
-    res.json(p);
+  // 1. Attempt to retrieve from Cache (Fail-safe)
+  try {
+    const cachedProduct = await redis.get(cacheKey);
+    if (cachedProduct) {
+      return res.json(JSON.parse(cachedProduct));
+    }
+  } catch (err) {
+    // If Redis fails, log warning but continue to database
+    console.warn(`Redis Get Error: ${err.message}`);
+  }
+
+  // 2. If Cache Miss or Redis Error, Query Database
+  try {
+    const product = await Product.findById(productId)
+      .populate('reviews.userId', 'name username email profileImage');
+    
+    if (!product) {
+      return res.status(404).json({ error: "Product not found" });
+    }
+
+    // 3. Update Cache (Fail-safe)
+    try {
+      // Set key with 1 hour expiration (3600 seconds)
+      await redis.set(cacheKey, JSON.stringify(product), "EX", 3600);
+    } catch (err) {
+      console.warn(`Redis Set Error: ${err.message}`);
+    }
+
+    res.json(product);
   } catch (err) {
     console.error("Product fetch error:", err);
     res.status(500).json({ error: "Server error" });
