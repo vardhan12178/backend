@@ -1,16 +1,19 @@
 import express from "express";
-import Product from "../models/Product.js";
 import { authenticateJWT, requireAdmin } from "../middleware/auth.js";
 import multer from "multer";
 import multerS3 from "multer-s3";
 import path from "path";
 import { s3 } from "../utils/s3.js";
-import redis from "../utils/redis.js";
-import User from "../models/User.js";
-
+import * as productController from "../controllers/product.controller.js";
 
 const router = express.Router();
 const ALLOWED_EXT = new Set([".png", ".jpg", ".jpeg", ".webp"]);
+
+//
+// ────────────────────────────────────────────────────────────
+//   UPLOAD CONFIG
+// ────────────────────────────────────────────────────────────
+//
 
 const uploadProductImage = multer({
   storage: multerS3({
@@ -47,434 +50,59 @@ function uploadProductError(err, req, res, next) {
   next(err);
 }
 
+//
+// ────────────────────────────────────────────────────────────
+//   PUBLIC ROUTES
+// ────────────────────────────────────────────────────────────
+//
 
-/* ============================================================
-   PUBLIC ROUTES — FRONTEND USERS
-   ============================================================ */
+/* List Products */
+router.get("/products", productController.getProducts);
 
-/**
- * GET /api/products
- * Fetch products with filtering, sorting, and pagination
- * 
- * Query Parameters:
- *   - q: Search term (text search on title and description)
- *   - category: Filter by category slug
- *   - minPrice: Minimum price filter
- *   - maxPrice: Maximum price filter
- *   - minRating: Minimum rating filter (1-5)
- *   - sort: Sort order (price_asc | price_desc | rating_desc | newest)
- *   - page: Page number for pagination (default: 1)
- *   - limit: Items per page (default: 20)
- * 
- * Response:
- *   - products: Array of product objects
- *   - pagination: { page, limit, total, totalPages }
- */
-router.get("/products", async (req, res) => {
-  try {
-    const { q, category, minPrice, maxPrice, minRating, sort, page = 1 } = req.query;
-    
-    // Check if the request matches the default landing page criteria
-    const isDefaultView = !q && !category && !minPrice && !maxPrice && !minRating && (sort === "newest" || !sort) && Number(page) === 1;
-    const cacheKey = "products:default:page1";
+/* Product Details */
+router.get("/products/:id", productController.getProductById);
 
-    if (isDefaultView) {
-      try {
-        const cachedData = await redis.get(cacheKey);
-        if (cachedData) {
-          return res.json(JSON.parse(cachedData));
-        }
-      } catch (err) {
-        console.warn("Redis Error:", err.message);
-      }
-    }
+//
+// ────────────────────────────────────────────────────────────
+//   ADMIN ROUTES
+// ────────────────────────────────────────────────────────────
+//
 
-    const query = { isActive: true };
-    if (q && q.trim()) query.$text = { $search: q.trim() };
-    if (category) query.category = category;
-    if (minPrice || maxPrice) {
-      query.price = {};
-      if (minPrice) query.price.$gte = Number(minPrice);
-      if (maxPrice) query.price.$lte = Number(maxPrice);
-    }
-    if (minRating) query.rating = { $gte: Number(minRating) };
+/* Create Product */
+router.post("/admin/products", authenticateJWT, requireAdmin, productController.createProduct);
 
-    let sortObj = { createdAt: -1 };
-    if (sort === "price_asc") sortObj = { price: 1 };
-    if (sort === "price_desc") sortObj = { price: -1 };
-    if (sort === "rating_desc") sortObj = { rating: -1 };
+/* Update Product */
+router.put("/admin/products/:id", authenticateJWT, requireAdmin, productController.updateProduct);
 
-    const limit = Number(req.query.limit) || 20;
-    const skip = (Number(page) - 1) * limit;
+/* Delete Product */
+router.delete("/admin/products/:id", authenticateJWT, requireAdmin, productController.deleteProduct);
 
-    const countPromise = isDefaultView
-      ? Product.estimatedDocumentCount()
-      : Product.countDocuments(query);
+/* Admin List */
+router.get("/admin/products", authenticateJWT, requireAdmin, productController.getAdminProducts);
 
-    const [products, count] = await Promise.all([
-      Product.find(query)
-        .select('title description category brand price discountPercentage rating stock thumbnail images')
-        .sort(sortObj)
-        .skip(skip)
-        .limit(limit)
-        .lean(),
-      countPromise
-    ]);
-
-    const response = {
-      products,
-      pagination: {
-        page: Number(page),
-        limit,
-        total: count,
-        totalPages: Math.ceil(count / limit),
-      },
-    };
-
-    if (isDefaultView) {
-      try {
-        await redis.set(cacheKey, JSON.stringify(response), "EX", 300);
-      } catch (err) {
-        console.warn("Redis Set Error:", err.message);
-      }
-    }
-
-    res.json(response);
-  } catch (err) {
-    console.error("Products list error:", err);
-    res.status(500).json({ error: "Server error" });
-  }
-});
-
-/**
- * GET /api/products/:id
- * Fetch single product details with populated reviews
- */
-router.get("/products/:id", async (req, res) => {
-  const productId = req.params.id;
-  const cacheKey = `product:${productId}`;
-
-  // 1. Attempt to retrieve from Cache (Fail-safe)
-  try {
-    const cachedProduct = await redis.get(cacheKey);
-    if (cachedProduct) {
-      return res.json(JSON.parse(cachedProduct));
-    }
-  } catch (err) {
-    // If Redis fails, log warning but continue to database
-    console.warn(`Redis Get Error: ${err.message}`);
-  }
-
-  // 2. If Cache Miss or Redis Error, Query Database
-  try {
-    const product = await Product.findById(productId)
-      .populate('reviews.userId', 'name username email profileImage');
-    
-    if (!product) {
-      return res.status(404).json({ error: "Product not found" });
-    }
-
-    // 3. Update Cache (Fail-safe)
-    try {
-      // Set key with 1 hour expiration (3600 seconds)
-      await redis.set(cacheKey, JSON.stringify(product), "EX", 3600);
-    } catch (err) {
-      console.warn(`Redis Set Error: ${err.message}`);
-    }
-
-    res.json(product);
-  } catch (err) {
-    console.error("Product fetch error:", err);
-    res.status(500).json({ error: "Server error" });
-  }
-});
-
-/* ============================================================
-   ADMIN ROUTES — ADMIN DASHBOARD
-   ============================================================ */
-
-/**
- * POST /api/admin/products
- * Create new product (Admin only)
- */
-router.post(
-  "/admin/products",
-  authenticateJWT,
-  requireAdmin,
-  async (req, res) => {
-    try {
-      const data = req.body;
-      data.createdBy = req.user.userId;
-
-      const product = await Product.create(data);
-      res.status(201).json({ message: "Product created", product });
-    } catch (err) {
-      console.error("Create product error:", err);
-      res.status(500).json({ error: "Server error" });
-    }
-  }
-);
-
-/**
- * PUT /api/admin/products/:id
- * Update existing product (Admin only)
- */
-router.put(
-  "/admin/products/:id",
-  authenticateJWT,
-  requireAdmin,
-  async (req, res) => {
-    try {
-      const updated = await Product.findByIdAndUpdate(
-        req.params.id,
-        req.body,
-        { new: true, runValidators: true }
-      );
-
-      if (!updated)
-        return res.status(404).json({ error: "Product not found" });
-
-      res.json({ message: "Product updated", product: updated });
-    } catch (err) {
-      console.error("Update product error:", err);
-      res.status(500).json({ error: "Server error" });
-    }
-  }
-);
-
-/**
- * DELETE /api/admin/products/:id
- * Delete product (Admin only)
- */
-router.delete(
-  "/admin/products/:id",
-  authenticateJWT,
-  requireAdmin,
-  async (req, res) => {
-    try {
-      const deleted = await Product.findByIdAndDelete(req.params.id);
-
-      if (!deleted)
-        return res.status(404).json({ error: "Product not found" });
-
-      res.json({ message: "Product deleted" });
-    } catch (err) {
-      console.error("Delete product error:", err);
-      res.status(500).json({ error: "Server error" });
-    }
-  }
-);
-
-/**
- * GET /api/admin/products
- * List all products for admin dashboard (no filters)
- */
-router.get(
-  "/admin/products",
-  authenticateJWT,
-  requireAdmin,
-  async (req, res) => {
-    try {
-      const list = await Product.find().sort({ createdAt: -1 });
-      res.json(list);
-    } catch (err) {
-      console.error("Admin list products error:", err);
-      res.status(500).json({ error: "Server error" });
-    }
-  }
-);
-
-/**
- * POST /api/admin/products/upload
- * Upload product image to S3 (Admin only)
- */
+/* Upload Image */
 router.post(
   "/admin/products/upload",
   authenticateJWT,
   requireAdmin,
   uploadProductImage.single("image"),
   uploadProductError,
-  (req, res) => {
-    try {
-      if (!req.file?.location) {
-        return res.status(400).json({ message: "No image uploaded" });
-      }
-
-      return res.json({
-        url: req.file.location,
-        key: req.file.key,
-        message: "Image uploaded successfully",
-      });
-    } catch (err) {
-      console.error("Product image upload error:", err);
-      return res.status(500).json({ message: "Internal server error" });
-    }
-  }
+  productController.uploadProductImageHandler
 );
 
-/* ============================================================
-   REVIEW ROUTES — USER REVIEWS
-   ============================================================ */
+//
+// ────────────────────────────────────────────────────────────
+//   REVIEW ROUTES
+// ────────────────────────────────────────────────────────────
+//
 
-/**
- * POST /api/products/:id/reviews
- * Add product review (Authenticated users only)
- * Validates one review per user per product
- */
-router.post("/products/:id/reviews", authenticateJWT, async (req, res) => {
-  try {
-    const { rating, comment } = req.body;
+/* Add Review */
+router.post("/products/:id/reviews", authenticateJWT, productController.addReview);
 
-    // Validate rating
-    if (!rating || rating < 1 || rating > 5) {
-      return res.status(400).json({ error: "Invalid rating (1-5)" });
-    }
+/* List Reviews */
+router.get("/products/:id/reviews", productController.getReviews);
 
-    // Validate comment
-    if (!comment || comment.trim().length < 10) {
-      return res.status(400).json({ error: "Comment must be at least 10 characters" });
-    }
-
-    // Fetch product and user in parallel
-    const [product, user] = await Promise.all([
-      Product.findById(req.params.id),
-      User.findById(req.user.userId).select('name username email')
-    ]);
-
-    if (!product) return res.status(404).json({ error: "Product not found" });
-    if (!user) return res.status(404).json({ error: "User not found" });
-
-    // Check for existing review
-    const existingReview = product.reviews.find(
-      r => r.userId && r.userId.toString() === req.user.userId
-    );
-    
-    if (existingReview) {
-      return res.status(400).json({ error: "You have already reviewed this product" });
-    }
-
-    // Create review object
-    const review = {
-      rating: Number(rating),
-      comment: comment.trim(),
-      userId: req.user.userId,
-      reviewerName: user.name || user.username || "Anonymous",
-      reviewerEmail: user.email || "",
-      date: new Date(),
-    };
-
-    product.reviews.push(review);
-
-    // Recalculate product rating
-    const ratings = product.reviews.map((r) => r.rating);
-    product.rating = (ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(1);
-
-    await product.save();
-
-    res.status(201).json({ 
-      message: "Review added successfully", 
-      review: {
-        ...review,
-        _id: product.reviews[product.reviews.length - 1]._id
-      },
-      newRating: product.rating,
-      totalReviews: product.reviews.length
-    });
-  } catch (err) {
-    console.error("Add review error:", err);
-    res.status(500).json({ error: "Server error" });
-  }
-});
-
-/**
- * GET /api/products/:id/reviews
- * Fetch product reviews with pagination and sorting
- * 
- * Query Parameters:
- *   - page: Page number (default: 1)
- *   - limit: Items per page (default: 10)
- *   - sort: Sort order (newest | oldest | highest | lowest)
- */
-router.get("/products/:id/reviews", async (req, res) => {
-  try {
-    const { page = 1, limit = 10, sort = 'newest' } = req.query;
-    
-    const product = await Product.findById(req.params.id)
-      .select('reviews rating title')
-      .populate('reviews.userId', 'name username email profileImage');
-    
-    if (!product) return res.status(404).json({ error: "Product not found" });
-
-    // Sort reviews based on query parameter
-    let sortedReviews = [...product.reviews];
-    if (sort === 'newest') sortedReviews.sort((a, b) => new Date(b.date) - new Date(a.date));
-    else if (sort === 'oldest') sortedReviews.sort((a, b) => new Date(a.date) - new Date(b.date));
-    else if (sort === 'highest') sortedReviews.sort((a, b) => b.rating - a.rating);
-    else if (sort === 'lowest') sortedReviews.sort((a, b) => a.rating - b.rating);
-
-    // Paginate reviews
-    const skip = (Number(page) - 1) * Number(limit);
-    const paginatedReviews = sortedReviews.slice(skip, skip + Number(limit));
-
-    res.json({
-      reviews: paginatedReviews,
-      total: product.reviews.length,
-      rating: product.rating,
-      productTitle: product.title,
-      pagination: {
-        page: Number(page),
-        limit: Number(limit),
-        totalPages: Math.ceil(product.reviews.length / limit),
-      },
-    });
-  } catch (err) {
-    console.error("Get reviews error:", err);
-    res.status(500).json({ error: "Server error" });
-  }
-});
-
-/**
- * DELETE /api/products/:id/reviews/:reviewId
- * Delete user's own review (Authenticated users only)
- * Recalculates product rating after deletion
- */
-router.delete("/products/:id/reviews/:reviewId", authenticateJWT, async (req, res) => {
-  try {
-    const product = await Product.findById(req.params.id);
-    if (!product) return res.status(404).json({ error: "Product not found" });
-
-    // Find review by ID and verify ownership
-    const reviewIndex = product.reviews.findIndex(
-      r => r._id.toString() === req.params.reviewId && 
-           r.userId.toString() === req.user.userId
-    );
-
-    if (reviewIndex === -1) {
-      return res.status(404).json({ error: "Review not found or unauthorized" });
-    }
-
-    // Remove review
-    product.reviews.splice(reviewIndex, 1);
-
-    // Recalculate product rating
-    if (product.reviews.length > 0) {
-      const ratings = product.reviews.map(r => r.rating);
-      product.rating = (ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(1);
-    } else {
-      product.rating = 0;
-    }
-
-    await product.save();
-
-    res.json({ 
-      message: "Review deleted", 
-      newRating: product.rating,
-      totalReviews: product.reviews.length 
-    });
-  } catch (err) {
-    console.error("Delete review error:", err);
-    res.status(500).json({ error: "Server error" });
-  }
-});
+/* Delete Review */
+router.delete("/products/:id/reviews/:reviewId", authenticateJWT, productController.deleteReview);
 
 export default router;

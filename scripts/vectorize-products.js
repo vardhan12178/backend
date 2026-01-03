@@ -1,15 +1,16 @@
 import mongoose from "mongoose";
 import dotenv from "dotenv";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import Product from "../models/Product.js"; 
+import Product from "../models/Product.js";
 
 dotenv.config();
 
-const BATCH_DELAY = 1000; 
-const EMBEDDING_MODEL = "text-embedding-004"; 
+// CHANGE 1: Super fast speed for Paid Tier
+const BATCH_DELAY = 100;
+const EMBEDDING_MODEL = "text-embedding-004";
 
 if (!process.env.GEMINI_API_KEY || !process.env.MONGO_URI) {
-  console.error("Error: Missing GEMINI_API_KEY or MONGO_URL in environment variables.");
+  console.error("Error: Missing GEMINI_API_KEY or MONGO_URL.");
   process.exit(1);
 }
 
@@ -19,10 +20,11 @@ const model = genAI.getGenerativeModel({ model: EMBEDDING_MODEL });
 const vectorizeProducts = async () => {
   try {
     await mongoose.connect(process.env.MONGO_URI);
-    console.log("Connected to MongoDB.");
+    console.log("[INFO] MongoDB Connected.");
 
-    const products = await Product.find({ isActive: true });
-    console.log(`Found ${products.length} active products to process.`);
+    // CHANGE 2: Fetch ALL products (removed 'isActive: true' just in case)
+    const products = await Product.find({});
+    console.log(`[INFO] Found ${products.length} products to vectorize...`);
 
     let successCount = 0;
     let errorCount = 0;
@@ -30,11 +32,10 @@ const vectorizeProducts = async () => {
     for (const [index, product] of products.entries()) {
       const textToEmbed = `
         Title: ${product.title}
-        Brand: ${product.brand || "Generic"}
         Category: ${product.category}
         Description: ${product.description}
-        Tags: ${product.tags ? product.tags.join(", ") : ""}
         Price: ${product.price}
+        Brand: ${product.brand || "Generic"}
       `.trim();
 
       try {
@@ -43,27 +44,30 @@ const vectorizeProducts = async () => {
 
         product.embedding = vector;
         await product.save();
-        
-        successCount++;
-        console.log(`[${index + 1}/${products.length}] Updated: ${product.title}`);
 
-        // Rate limiting for API stability
+        successCount++;
+        // Log progress every 10 items to keep console clean
+        if (successCount % 10 === 0) {
+          console.log(`   [${index + 1}/${products.length}] Vectors updated...`);
+        }
+
+        // Fast delay
         await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
 
       } catch (err) {
         errorCount++;
-        console.error(`Error processing "${product.title}":`, err.message);
+        console.error(`[ERROR] Error on "${product.title.substring(0, 15)}...":`, err.message);
       }
     }
 
-    console.log(`\nOperation completed.`);
+    console.log(`\n[INFO] Operation completed.`);
     console.log(`Success: ${successCount}`);
     console.log(`Errors: ${errorCount}`);
-    
+
     process.exit(0);
 
   } catch (error) {
-    console.error("Script failed:", error);
+    console.error("Critical Script Failure:", error);
     process.exit(1);
   }
 };

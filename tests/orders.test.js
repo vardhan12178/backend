@@ -1,42 +1,85 @@
-import request from 'supertest';
-import app from '../app.js';
+import { jest } from '@jest/globals';
 
-describe('Orders API', () => {
-  let token;
+// Mock Redis
+jest.unstable_mockModule('../utils/redis.js', () => ({
+    default: {
+        get: jest.fn().mockResolvedValue(null),
+        set: jest.fn(),
+        del: jest.fn(),
+        on: jest.fn(),
+        quit: jest.fn()
+    }
+}));
 
-  beforeAll(async () => {
-    const login = await request(app)
-      .post('/api/login')
-      .send({ username: 'testuser', password: 'password123' });
-    token = login.body?.token || '';
-  });
+// Dynamic imports
+const { default: request } = await import('supertest');
+const { default: app } = await import('../app.js');
+const { default: User } = await import('../models/User.js');
+const { default: Product } = await import('../models/Product.js');
 
-  const fakeOrder = {
-    products: [
-      { name: 'Test Product', externalId: 'p1', quantity: 1, price: 100 }
-    ],
-    shippingAddress: '123 Test Street'
-  };
+describe('Order API', () => {
+    let token;
+    let productId;
 
-  test('POST /api/orders should require authentication', async () => {
-    const res = await request(app).post('/api/orders').send(fakeOrder);
-    expect(res.statusCode).toBe(401);
-  });
+    beforeEach(async () => {
+        // 1. Create User
+        const userRes = await request(app)
+            .post('/api/register')
+            .send({
+                name: 'Order Test User',
+                username: 'ordertester',
+                email: 'order@test.com',
+                password: 'Password123!',
+                confirmPassword: 'Password123!'
+            });
 
-  test('POST /api/orders should create order with valid token', async () => {
-    if (!token) return;
-    const res = await request(app)
-      .post('/api/orders')
-      .set('Authorization', `Bearer ${token}`)
-      .send(fakeOrder);
-    expect([201, 400, 401]).toContain(res.statusCode);
-  });
+        // 2. Login to get token
+        const loginRes = await request(app)
+            .post('/api/login')
+            .send({ username: 'ordertester', password: 'Password123!' });
 
-  test('GET /api/profile/orders should return user orders', async () => {
-    if (!token) return;
-    const res = await request(app)
-      .get('/api/profile/orders')
-      .set('Authorization', `Bearer ${token}`);
-    expect([200, 401]).toContain(res.statusCode);
-  });
+        token = loginRes.body.token;
+
+        // 3. Create Product
+        const product = await Product.create({
+            title: 'Test Item',
+            description: 'Desc',
+            category: 'test',
+            price: 100,
+            stock: 10,
+            thumbnail: 'img.jpg',
+            embedding: []
+        });
+        productId = product._id;
+    });
+
+    it('should create an order with valid token', async () => {
+        const orderData = {
+            products: [
+                {
+                    productId: productId,
+                    name: 'Test Item',
+                    quantity: 2,
+                    price: 100
+                }
+            ],
+            shippingAddress: '123 Fake St'
+        };
+
+        const res = await request(app)
+            .post('/api/orders')
+            .set('Authorization', `Bearer ${token}`)
+            .send(orderData);
+
+        expect(res.statusCode).toEqual(201);
+        expect(res.body).toHaveProperty('_id');
+    });
+
+    it('should reject order without token', async () => {
+        const res = await request(app)
+            .post('/api/orders')
+            .send({});
+
+        expect(res.statusCode).toEqual(401);
+    });
 });

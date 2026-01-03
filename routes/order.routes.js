@@ -1,14 +1,14 @@
 import express from "express";
-import { body, validationResult } from "express-validator";
-import Order, { STAGES } from "../models/Order.js";
-import User from "../models/User.js";
+import { body } from "express-validator";
+import { STAGES } from "../models/Order.js";
 import { authenticateJWT } from "../middleware/auth.js";
+import * as orderController from "../controllers/order.controller.js";
 
 const router = express.Router();
 
 //
 // ────────────────────────────────────────────────────────────
-//   VALIDATION
+//   VALIDATION CONFIG
 // ────────────────────────────────────────────────────────────
 //
 
@@ -41,165 +41,33 @@ const validateOrder = [
 
 //
 // ────────────────────────────────────────────────────────────
-//   CREATE ORDER (USER)
+//   ROUTES
 // ────────────────────────────────────────────────────────────
 //
 
-router.post("/orders", authenticateJWT, validateOrder, async (req, res) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty())
-    return res.status(400).json({ errors: errors.array() });
+/* CREATE ORDER (USER) */
+router.post("/orders", authenticateJWT, validateOrder, orderController.createOrder);
 
-  const { products, shippingAddress } = req.body;
+/* CUSTOMER — GET ALL ORDERS */
+router.get("/profile/orders", authenticateJWT, orderController.getUserOrders);
 
-  const stage = typeof req.body.stage === "string" ? req.body.stage : undefined;
-  const tax = Number(req.body.tax) || 0;
-  const shipping = Number(req.body.shipping) || 0;
+/* CUSTOMER — PAGINATED ORDERS */
+router.get("/profile/orders/paged", authenticateJWT, orderController.getUserOrdersPaged);
 
-  const user = await User.findById(req.user.userId).lean();
-  if (!user) return res.status(404).json({ message: "User not found" });
+/* ADMIN — GET ALL ORDERS */
+router.get("/admin/orders", authenticateJWT, orderController.getAllOrders);
 
-  const newOrder = new Order({
-    userId: user._id,
-    customer: {
-      name: user.name,
-      email: user.email,
-      phone: user.phone || "",
-    },
-    products,
-    tax,
-    shipping,
-    stage,
-    shippingAddress,
-  });
+/* ADMIN — GET ORDER BY ID */
+router.get("/admin/orders/:id", authenticateJWT, orderController.getOrderById);
 
-  await newOrder.save();
-
-  await User.updateOne(
-    { _id: user._id },
-    { $push: { orders: newOrder._id } }
-  );
-
-  res.status(201).json(newOrder);
-});
-
-//
-// ────────────────────────────────────────────────────────────
-//   CUSTOMER — GET ALL ORDERS
-// ────────────────────────────────────────────────────────────
-//
-
-router.get("/profile/orders", authenticateJWT, async (req, res) => {
-  const user = await User.findById(req.user.userId)
-    .populate("orders")
-    .lean();
-
-  if (!user) return res.status(404).json({ message: "User not found" });
-
-  res.json(user.orders);
-});
-
-//
-// ────────────────────────────────────────────────────────────
-//   CUSTOMER — PAGINATED ORDERS
-// ────────────────────────────────────────────────────────────
-//
-
-router.get("/profile/orders/paged", authenticateJWT, async (req, res) => {
-  const page = Math.max(parseInt(req.query.page) || 1, 1);
-  const limit = Math.min(parseInt(req.query.limit) || 10, 50);
-  const skip = (page - 1) * limit;
-
-  const [items, total] = await Promise.all([
-    Order.find({ userId: req.user.userId })
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .lean(),
-    Order.countDocuments({ userId: req.user.userId }),
-  ]);
-
-  res.json({ page, limit, total, items });
-});
-
-//
-// ────────────────────────────────────────────────────────────
-//   ADMIN — GET ALL ORDERS
-// ────────────────────────────────────────────────────────────
-//
-
-router.get("/admin/orders", authenticateJWT, async (req, res) => {
-  const orders = await Order.find()
-    .sort({ createdAt: -1 })
-    .lean();
-
-  res.json(orders);
-});
-
-//
-// ────────────────────────────────────────────────────────────
-//   ADMIN — GET ORDER BY ID
-// ────────────────────────────────────────────────────────────
-//
-
-router.get("/admin/orders/:id", authenticateJWT, async (req, res) => {
-  const order = await Order.findById(req.params.id).lean();
-  if (!order) return res.status(404).json({ message: "Order not found" });
-
-  res.json(order);
-});
-
-//
-// ────────────────────────────────────────────────────────────
-//   ADMIN — UPDATE ORDER STAGE
-// ────────────────────────────────────────────────────────────
-//
-
+/* ADMIN — UPDATE ORDER STAGE */
 router.patch(
   "/admin/orders/:id/stage",
   authenticateJWT,
   body("stage")
     .customSanitizer((v) => v.toUpperCase())
     .isIn(STAGES),
-  async (req, res) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty())
-      return res.status(400).json({ errors: errors.array() });
-
-    const order = await Order.findById(req.params.id);
-    if (!order) return res.status(404).json({ message: "Order not found" });
-
-    const newStage = req.body.stage;
-
-    // Cannot update completed orders
-    if (["DELIVERED", "CANCELLED"].includes(order.stage)) {
-      return res.status(400).json({
-        message: "Order is already completed or cancelled.",
-      });
-    }
-
-    // Update stage
-    order.stage = newStage;
-
-    // Push timeline entry
-    order.statusHistory.push({
-      stage: newStage,
-      date: new Date(),
-    });
-
-    await order.save();
-
-    res.json({
-      message: "Order stage updated successfully",
-      order,
-    });
-  }
+  orderController.updateOrderStage
 );
-
-//
-// ────────────────────────────────────────────────────────────
-//   EXPORT
-// ────────────────────────────────────────────────────────────
-//
 
 export default router;

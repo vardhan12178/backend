@@ -1,18 +1,32 @@
 import 'dotenv/config';
 import mongoose from 'mongoose';
+import http from 'http';
 import app from './app.js';
-import { spawn } from 'node:child_process'; 
+import { initSocket } from './utils/socket.js';
 
 const PORT = process.env.PORT || 5000;
+
+// Validate required environment variables
+const REQUIRED_ENV = ['JWT_SECRET', 'MONGO_URI'];
+const missing = REQUIRED_ENV.filter(key => !process.env[key]);
+if (missing.length > 0) {
+  console.error(`Missing required environment variables: ${missing.join(', ')}`);
+  process.exit(1);
+}
+
+// Warn about optional but important env vars
+if (!process.env.AES_KEY || Buffer.from(process.env.AES_KEY, 'utf8').length !== 32) {
+  console.warn('[WARN] AES_KEY is missing or not 32 bytes - 2FA will not work');
+}
 
 (async () => {
   try {
     await mongoose.connect(process.env.MONGO_URI, {
       maxPoolSize: 10, serverSelectionTimeoutMS: 5000, socketTimeoutMS: 20000
     });
-    console.log('Connected to MongoDB Atlas');
+    console.log('[INFO] Connected to MongoDB Atlas');
   } catch (e) {
-    console.error('Mongo connection failed', e);
+    console.error('[ERROR] Mongo connection failed', e);
     process.exit(1);
   }
 
@@ -26,13 +40,11 @@ const PORT = process.env.PORT || 5000;
     catch { res.status(500).send('not-ready'); }
   });
 
-  app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
+  // Create HTTP Server for Socket.io
+  const server = http.createServer(app);
 
-  // Auto-start Chroma server in background (for AI vector search)
-  spawn('npx', ['chroma', 'run', '--path', './chroma_db', '--port', '8000'], { 
-    stdio: 'ignore', 
-    detached: true, 
-    shell: true 
-  });
-  console.log('Chroma vector DB started in background on port 8000');
+  // Initialize Socket.io
+  initSocket(server);
+
+  server.listen(PORT, '0.0.0.0', () => console.log(`[INFO] Server running on port ${PORT}`));
 })();

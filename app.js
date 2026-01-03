@@ -7,13 +7,12 @@ import authRoutes from './routes/auth.routes.js';
 import profileRoutes from './routes/profile.routes.js';
 import orderRoutes from './routes/order.routes.js';
 import aiRoutes from './routes/ai.routes.js';
-import twoFactorRoutes from './routes/twofactor.routes.js'; 
+import twoFactorRoutes from './routes/twofactor.routes.js';
 import razorpayRoutes from './routes/razorpay.routes.js';
 import productRoutes from "./routes/product.routes.js";
 import adminUsersRoutes from './routes/admin.users.routes.js';
-
-
-
+import adminSettingsRoutes from './routes/admin.settings.routes.js';
+import adminNotificationRoutes from './routes/admin.notifications.routes.js';
 
 const app = express();
 
@@ -42,14 +41,13 @@ app.get('/health', (req, res) => res.status(200).send('ok'));
 app.use('/api', authRoutes);
 app.use('/api', profileRoutes);
 app.use('/api', orderRoutes);
-app.use('/api', aiRoutes);
+app.use('/api/ai', aiRoutes);
 app.use('/api', twoFactorRoutes);
-app.use('/', authRoutes); 
 app.use('/api', razorpayRoutes);
 app.use('/api', productRoutes);
 app.use('/api/admin', adminUsersRoutes);
-
-
+app.use('/api/admin/settings', adminSettingsRoutes);
+app.use('/api/admin/notifications', adminNotificationRoutes);
 
 // 404 + errors
 app.use(notFound);

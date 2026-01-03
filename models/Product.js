@@ -43,7 +43,11 @@ const productSchema = new Schema(
     description: { type: String, required: true, trim: true },
     category: { type: String, required: true, trim: true },
     brand: { type: String, trim: true },
-
+    isIndianized: { type: Boolean, default: false },
+    originalData: {
+      type: mongoose.Schema.Types.Mixed, // Allows storing the full old object
+      select: false // Hides it from frontend
+    },
     // Pricing
     price: { type: Number, required: true, min: 0 },
     discountPercentage: { type: Number, min: 0, max: 90, default: 0 },
@@ -79,6 +83,7 @@ const productSchema = new Schema(
 
     // Admin controls
     isActive: { type: Boolean, default: true },
+    isFeatured: { type: Boolean, default: true },
     createdBy: { type: Schema.Types.ObjectId, ref: "User" },
 
     // --- AI Vector Search Integration ---
@@ -89,7 +94,7 @@ const productSchema = new Schema(
      */
     embedding: {
       type: [Number],
-      select: false, 
+      select: false,
     },
   },
   {
@@ -114,6 +119,9 @@ productSchema.index({ title: "text", description: "text" });
 
 // Newest Arrivals
 productSchema.index({ createdAt: -1 });
+
+// Relevance (Featured + Rating + Newest)
+productSchema.index({ isActive: 1, isFeatured: -1, rating: -1, createdAt: -1 });
 
 // Admin Lookup
 productSchema.index({ sku: 1 }, { sparse: true });
