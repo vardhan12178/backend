@@ -5,7 +5,13 @@ let io;
 export const initSocket = (httpServer) => {
     io = new Server(httpServer, {
         cors: {
-            origin: process.env.CLIENT_URL || "http://localhost:3000",
+            origin: [
+                process.env.CLIENT_URL,
+                "http://localhost:3000",
+                "https://vkart.balavardhan.dev",
+                "https://vkart-admin.balavardhan.dev",
+                "https://vkart-t64z.onrender.com"
+            ].filter(Boolean),
             methods: ["GET", "POST"],
             credentials: true
         }
