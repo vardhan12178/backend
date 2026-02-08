@@ -1,5 +1,7 @@
 import express from "express";
-import { authenticateJWT, requireAdmin } from "../middleware/auth.js";
+import { body } from "express-validator";
+import validate from "../middleware/validate.js";
+import { authenticateJWT, requireAdmin, optionalAuth } from "../middleware/auth.js";
 import multer from "multer";
 import multerS3 from "multer-s3";
 import path from "path";
@@ -56,11 +58,14 @@ function uploadProductError(err, req, res, next) {
 // ────────────────────────────────────────────────────────────
 //
 
-/* List Products */
-router.get("/products", productController.getProducts);
+/* List Products (optionalAuth for Prime sale pricing) */
+router.get("/products", optionalAuth, productController.getProducts);
 
-/* Product Details */
-router.get("/products/:id", productController.getProductById);
+/* Search Autocomplete (before :id) */
+router.get("/products/suggest", productController.suggestProducts);
+
+/* Product Details (optionalAuth for Prime pricing) */
+router.get("/products/:id", optionalAuth, productController.getProductById);
 
 //
 // ────────────────────────────────────────────────────────────
@@ -97,7 +102,10 @@ router.post(
 //
 
 /* Add Review */
-router.post("/products/:id/reviews", authenticateJWT, productController.addReview);
+router.post("/products/:id/reviews", authenticateJWT, [
+  body("rating").isInt({ min: 1, max: 5 }).withMessage("Rating must be 1-5"),
+  body("comment").isString().trim().isLength({ min: 10, max: 1000 }).withMessage("Comment must be 10-1000 chars"),
+], validate, productController.addReview);
 
 /* List Reviews */
 router.get("/products/:id/reviews", productController.getReviews);

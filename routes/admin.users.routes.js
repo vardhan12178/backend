@@ -17,6 +17,9 @@ router.patch("/users/:id/reset-password", authenticateJWT, isAdmin, adminControl
 // Disable user 2FA
 router.patch("/users/:id/disable-2fa", authenticateJWT, isAdmin, adminController.disableUser2FA);
 
+// Toggle admin role
+router.patch("/users/:id/role", authenticateJWT, isAdmin, adminController.toggleAdminRole);
+
 // Delete user
 router.delete("/users/:id", authenticateJWT, isAdmin, adminController.deleteUser);
 

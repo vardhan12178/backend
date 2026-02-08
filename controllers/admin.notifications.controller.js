@@ -2,15 +2,15 @@ import Notification from '../models/Notification.js';
 import { getIO } from '../utils/socket.js';
 
 /**
- * Get recent notifications
+ * Get recent admin notifications (userId: null means admin notification)
  */
 export const getNotifications = async (req, res) => {
     try {
-        const notifications = await Notification.find()
+        const notifications = await Notification.find({ userId: null })
             .sort({ createdAt: -1 })
-            .limit(50); // Limit to last 50 to avoid overload
+            .limit(50);
 
-        const unreadCount = await Notification.countDocuments({ isRead: false });
+        const unreadCount = await Notification.countDocuments({ userId: null, isRead: false });
 
         res.json({
             success: true,
@@ -18,30 +18,30 @@ export const getNotifications = async (req, res) => {
             unreadCount
         });
     } catch (error) {
-        console.error('[ERROR] Get Notifications:', error);
+        console.error('[ERROR] Get Admin Notifications:', error);
         res.status(500).json({ success: false, message: 'Failed to fetch notifications' });
     }
 };
 
 /**
- * Mark notifications as read
+ * Mark admin notifications as read
  */
 export const markAsRead = async (req, res) => {
     try {
         const { all, ids } = req.body;
 
         if (all) {
-            await Notification.updateMany({ isRead: false }, { isRead: true });
+            await Notification.updateMany({ userId: null, isRead: false }, { isRead: true });
         } else if (ids && Array.isArray(ids) && ids.length > 0) {
             await Notification.updateMany(
-                { _id: { $in: ids } },
+                { _id: { $in: ids }, userId: null },
                 { isRead: true }
             );
         }
 
         res.json({ success: true, message: 'Notifications updated' });
     } catch (error) {
-        console.error('[ERROR] Mark Notifications Read:', error);
+        console.error('[ERROR] Mark Admin Notifications Read:', error);
         res.status(500).json({ success: false, message: 'Failed to update notifications' });
     }
 };

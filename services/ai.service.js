@@ -8,7 +8,6 @@ if (!process.env.GEMINI_API_KEY) {
   console.error("Error: GEMINI_API_KEY is missing in .env file");
 }
 
-// Initialize GenAI SDK
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 const embeddingModel = genAI.getGenerativeModel({ model: "text-embedding-004" });
@@ -20,9 +19,49 @@ const chatModel = genAI.getGenerativeModel({
   }
 });
 
+// --- Timeout helper ---
+const AI_TIMEOUT_MS = 10000;
+
+function withTimeout(promise, ms = AI_TIMEOUT_MS) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error("AI request timed out")), ms)),
+  ]);
+}
+
+// --- Circuit breaker ---
+const circuit = { failures: 0, lastFailure: 0, threshold: 3, resetMs: 60000 };
+
+function isCircuitOpen() {
+  if (circuit.failures >= circuit.threshold) {
+    if (Date.now() - circuit.lastFailure < circuit.resetMs) return true;
+    circuit.failures = 0; // reset after cooldown
+  }
+  return false;
+}
+
+function recordFailure() {
+  circuit.failures++;
+  circuit.lastFailure = Date.now();
+}
+
+function recordSuccess() {
+  circuit.failures = 0;
+}
+
+const FALLBACK_RESPONSE = {
+  structured: {
+    response: {
+      summary: "AI assistant is temporarily unavailable. Please use the search bar instead.",
+      points: []
+    },
+    followUp: "Try again in a minute."
+  },
+  products: []
+};
+
 /**
- * Contextual Query Refinement
- * Enhances short or vague user inputs based on session history.
+ * Refines vague queries using conversation history.
  */
 async function expandQuery(message, history) {
   if (history.length === 0) return message;
@@ -47,7 +86,7 @@ async function expandQuery(message, history) {
   `;
 
   try {
-    const result = await chatModel.generateContent(prompt);
+    const result = await withTimeout(chatModel.generateContent(prompt));
     const parsed = JSON.parse(result.response.text());
     const expanded = parsed.expandedQuery || message;
 
@@ -62,13 +101,11 @@ async function expandQuery(message, history) {
 }
 
 /**
- * Semantic Vector Search
- * Retrieves relevant documents from MongoDB based on vector similarity.
- * Includes a SIMILARITY THRESHOLD to filter out irrelevant garbage.
+ * Vector search against MongoDB.
  */
 async function searchProducts(query, limit = 4) {
   try {
-    const result = await embeddingModel.embedContent(query);
+    const result = await withTimeout(embeddingModel.embedContent(query));
     const queryVector = result.embedding.values;
 
     const products = await Product.aggregate([
@@ -77,22 +114,22 @@ async function searchProducts(query, limit = 4) {
           index: "vector_index",
           path: "embedding",
           queryVector: queryVector,
-          numCandidates: 100, // Look at 100 nearest neighbors first
-          limit: limit * 2 // Fetch extra to allow for filtering
+          numCandidates: 100,
+          limit: limit * 2
         }
       },
       {
         $addFields: {
-          score: { $meta: "vectorSearchScore" } // 1. Get the accuracy score (0 to 1)
+          score: { $meta: "vectorSearchScore" }
         }
       },
       {
         $match: {
-          score: { $gte: 0.60 } // 2. FILTER: Ignore matches below 60% accuracy
+          score: { $gte: 0.60 }
         }
       },
       {
-        $limit: limit // 3. Return only the requested number of GOOD results
+        $limit: limit
       },
       {
         $project: {
@@ -116,8 +153,7 @@ async function searchProducts(query, limit = 4) {
 }
 
 /**
- * Response Orchestration
- * Generates a structured JSON response for the frontend UI.
+ * Generates a structured JSON response for the frontend.
  */
 async function generateSmartReply(userQuery, products, conversationHistory = []) {
   const productContext = products.map((p, index) =>
@@ -162,11 +198,11 @@ async function generateSmartReply(userQuery, products, conversationHistory = [])
   `;
 
   try {
-    const result = await chatModel.generateContent(prompt);
+    const result = await withTimeout(chatModel.generateContent(prompt));
     const text = result.response.text();
     return JSON.parse(text);
   } catch (error) {
-    console.error("Generation Service Error:", error);
+    console.error("Generation error:", error);
     return {
       response: {
         summary: "I found some matching products. Please review the options below.",
@@ -179,8 +215,7 @@ async function generateSmartReply(userQuery, products, conversationHistory = [])
 }
 
 /**
- * Vectorization Utility
- * Generates embeddings for product catalog updates.
+ * Generates embeddings for a product document.
  */
 export async function vectorizeProduct(product) {
   try {
@@ -205,20 +240,22 @@ export async function vectorizeProduct(product) {
 }
 
 /**
- * Main Chat Controller
+ * Main chat handler with circuit breaker.
  */
 export async function handleChat(message, history = []) {
   try {
     if (!message) throw new Error("Empty message received");
 
-    // Check for greetings or non-product queries
+    if (isCircuitOpen()) {
+      console.warn("[WARN] AI circuit breaker is open, returning fallback");
+      return FALLBACK_RESPONSE;
+    }
+
     const greetingPatterns = /^(h+i+|hello|hey+|hola|greetings|namaste|sup|wassup|thanks|thank\s*you|ty|bye|good\s*(morning|afternoon|evening)|ok(?:ay)?|cool|awesome|nice|help)[\s.!?]*$/i;
 
     if (greetingPatterns.test(message.trim())) {
-      console.log(`[INFO] Greeting detected`);
       return {
         structured: {
-          // Response without greeting key to avoid special UI handling
           response: {
             summary: "Hello! Welcome to VKart. I'm your digital shopping assistant. I can help you find products, compare specs, and check prices.",
             points: ["Try 'Best gaming laptop'", "Or 'Running shoes under 2000'"]
@@ -229,10 +266,8 @@ export async function handleChat(message, history = []) {
       };
     }
 
-    // 1. Expand query using conversation history
     const expandedMessage = await expandQuery(message, history);
 
-    // 2. Perform vector search
     let products = await searchProducts(expandedMessage);
 
     // Handle empty results
@@ -249,41 +284,26 @@ export async function handleChat(message, history = []) {
       };
     }
 
-    // 3. Generate AI response
+    // Generate AI response
     let structured = await generateSmartReply(message, products, history);
 
-    // Re-sort products to ensure the best match is first
-    // This aligns the AI's recommendation with the product list order
+    // Reorder products so the recommended item is first
     if (structured.recommendation && structured.recommendation.productIndex) {
-      const recommendedIndex = structured.recommendation.productIndex - 1; // Convert 1-based to 0-based
+      const recommendedIndex = structured.recommendation.productIndex - 1;
 
-      // Check if the index is valid and not already at the top
       if (recommendedIndex > 0 && recommendedIndex < products.length) {
-        console.log(`[INFO] Re-sorting: Moving item ${recommendedIndex} to top.`);
-
-        // Remove the item from its current spot
         const [bestMatchItem] = products.splice(recommendedIndex, 1);
-
-        // Put it at the very beginning
         products.unshift(bestMatchItem);
-
-        // Update the AI response to point to Index 1 (since it's now first)
         structured.recommendation.productIndex = 1;
       }
     }
 
+    recordSuccess();
     return { structured, products };
 
   } catch (error) {
-    console.error("Service Error:", error);
-    return {
-      structured: {
-        response: {
-          summary: "I am experiencing high traffic. Please use the standard search bar temporarily.",
-          points: []
-        }
-      },
-      products: []
-    };
+    console.error("Chat error:", error.message);
+    recordFailure();
+    return FALLBACK_RESPONSE;
   }
 }

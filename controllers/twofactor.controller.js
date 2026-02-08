@@ -1,9 +1,27 @@
 import speakeasy from "speakeasy";
 import qrcode from "qrcode";
 import jwt from "jsonwebtoken";
+import crypto from "crypto";
 import User from "../models/User.js";
+import redis, { CACHE_TTL } from "../utils/redis.js";
 import { buildCookieOpts } from "../utils/cookies.js";
 import { encrypt, decrypt, HAS_VALID_KEY } from "../utils/crypto.js";
+
+// 2FA challenge store: short-lived opaque token -> userId mapping (Redis)
+const CHALLENGE_PREFIX = "2fa_challenge:";
+
+export const create2FAChallenge = async (userId) => {
+    const challengeToken = crypto.randomBytes(32).toString("hex");
+    await redis.set(`${CHALLENGE_PREFIX}${challengeToken}`, String(userId), "EX", CACHE_TTL.TWO_FA);
+    return challengeToken;
+};
+
+const resolve2FAChallenge = async (challengeToken) => {
+    const key = `${CHALLENGE_PREFIX}${challengeToken}`;
+    const userId = await redis.get(key);
+    if (userId) await redis.del(key); // one-time use
+    return userId;
+};
 
 /* 1) Generate Secret + QR */
 export const setup2FA = async (req, res) => {
@@ -71,11 +89,16 @@ export const disable2FA = async (req, res) => {
 /* 4) Verify (Login) */
 export const verify2FA = async (req, res) => {
     try {
-        const { userId, token } = req.body;
-        if (!userId || !token)
+        const { challengeToken, token } = req.body;
+        if (!challengeToken || !token)
             return res.status(400).json({ message: "Missing parameters" });
 
-        const user = await User.findById(userId).select("+twoFactorSecretEnc");
+        // Resolve opaque challenge token to userId
+        const userId = await resolve2FAChallenge(challengeToken);
+        if (!userId)
+            return res.status(400).json({ message: "Challenge expired or invalid. Please log in again." });
+
+        const user = await User.findById(userId).select("+twoFactorSecretEnc +roles");
         if (!user || !user.twoFactorEnabled)
             return res.status(400).json({ message: "2FA not enabled" });
 
@@ -98,9 +121,11 @@ export const verify2FA = async (req, res) => {
 
         if (!ok) return res.status(400).json({ message: "Invalid verification code" });
 
-        const jwtToken = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
-            expiresIn: "30d",
-        });
+        const jwtToken = jwt.sign(
+            { userId: user._id, roles: user.roles || ["user"] },
+            process.env.JWT_SECRET,
+            { expiresIn: "30d" }
+        );
         res.cookie("jwt_token", jwtToken, buildCookieOpts(req, true));
         res.json({ token: jwtToken });
     } catch (err) {

@@ -8,6 +8,7 @@ import {
   googleLimiter,
 } from '../middleware/security.js';
 import * as authController from '../controllers/auth.controller.js';
+import { authenticateJWT } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -25,10 +26,12 @@ router.post('/auth/google', googleLimiter, authController.googleAuth);
 router.post('/forgot', forgotLimiter, authController.forgotPassword);
 router.post('/reset', resetLimiter, authController.resetPassword);
 router.post('/logout', authController.logout);
+router.get('/verify-email', authController.verifyEmail);
+router.post('/resend-verify', authenticateJWT, authController.resendVerifyEmail);
 
 /* -------------------- Admin Auth -------------------- */
-router.post("/admin/login", authController.adminLogin);
-router.post("/admin/google", authController.adminGoogleAuth);
+router.post("/admin/login", authLimiter, authController.adminLogin);
+router.post("/admin/google", googleLimiter, authController.adminGoogleAuth);
 router.get("/admin/verify", authController.verifyAdmin);
 router.post("/admin/logout", authController.logout);
 

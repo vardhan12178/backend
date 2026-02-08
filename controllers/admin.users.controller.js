@@ -6,7 +6,7 @@ import User from "../models/User.js";
 export const getUsers = async (req, res) => {
     try {
         const users = await User.find({})
-            .select("name username email profileImage createdAt twoFactorEnabled blocked");
+            .select("name username email profileImage createdAt twoFactorEnabled blocked roles emailVerified");
 
         res.json({ users });
     } catch (err) {
@@ -18,6 +18,9 @@ export const getUsers = async (req, res) => {
 /* ---------------------- BLOCK / UNBLOCK USER ---------------------- */
 export const toggleBlockUser = async (req, res) => {
     try {
+        if (req.params.id === req.user.userId)
+            return res.status(400).json({ message: "Cannot block your own account" });
+
         const user = await User.findById(req.params.id);
 
         if (!user) return res.status(404).json({ message: "User not found" });
@@ -81,6 +84,9 @@ export const disableUser2FA = async (req, res) => {
 /* ---------------------- DELETE USER ---------------------- */
 export const deleteUser = async (req, res) => {
     try {
+        if (req.params.id === req.user.userId)
+            return res.status(400).json({ message: "Cannot delete your own account" });
+
         const user = await User.findByIdAndDelete(req.params.id);
 
         if (!user) return res.status(404).json({ message: "User not found" });
@@ -88,6 +94,30 @@ export const deleteUser = async (req, res) => {
         res.json({ message: "User deleted successfully" });
     } catch (err) {
         console.error("Admin delete user error:", err);
+        res.status(500).json({ message: "Internal server error" });
+    }
+};
+
+/* ---------------------- TOGGLE ADMIN ROLE ---------------------- */
+export const toggleAdminRole = async (req, res) => {
+    try {
+        if (req.params.id === req.user.userId)
+            return res.status(400).json({ message: "Cannot modify your own admin role" });
+
+        const user = await User.findById(req.params.id);
+        if (!user) return res.status(404).json({ message: "User not found" });
+
+        const roles = Array.isArray(user.roles) ? user.roles : ["user"];
+        if (roles.includes("admin")) {
+            user.roles = roles.filter((r) => r !== "admin");
+        } else {
+            user.roles = Array.from(new Set([...roles, "admin"]));
+        }
+
+        await user.save();
+        res.json({ message: "Role updated", roles: user.roles });
+    } catch (err) {
+        console.error("Admin role update error:", err);
         res.status(500).json({ message: "Internal server error" });
     }
 };

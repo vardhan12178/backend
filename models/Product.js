@@ -10,6 +10,7 @@ const reviewSchema = new Schema(
     reviewerEmail: { type: String, trim: true },
     date: { type: Date, default: Date.now },
     userId: { type: Schema.Types.ObjectId, ref: "User" },
+    isHidden: { type: Boolean, default: false },
   },
   { _id: true }
 );
@@ -77,6 +78,15 @@ const productSchema = new Schema(
 
     // Reviews
     reviews: [reviewSchema],
+
+    // Variants (e.g. Size, Color, Storage)
+    variants: [
+      {
+        type: { type: String, trim: true },
+        options: [{ type: String, trim: true }],
+        _id: false,
+      },
+    ],
 
     // Metadata
     meta: metaSchema,

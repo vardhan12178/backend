@@ -4,12 +4,17 @@ import { profileUpload } from '../utils/upload.js';
 import {
     getSettings,
     updateStoreSettings,
-    updateAdminProfile
+    updateAdminProfile,
+    getAnnouncements,
+    updateAnnouncements
 } from '../controllers/admin.settings.controller.js';
 
 const router = express.Router();
 
-// All routes require Admin Auth
+// Public: active announcements (no auth)
+router.get('/announcements/public', getAnnouncements);
+
+// All remaining routes require Admin Auth
 router.use(authenticateJWT, requireAdmin);
 
 // GET /api/admin/settings
@@ -20,5 +25,9 @@ router.put('/store', profileUpload.single('storeLogo'), updateStoreSettings);
 
 // PUT /api/admin/settings/profile (supports avatar upload)
 router.put('/profile', profileUpload.single('profileImage'), updateAdminProfile);
+
+// Announcements
+router.get('/announcements', getAnnouncements);
+router.put('/announcements', updateAnnouncements);
 
 export default router;

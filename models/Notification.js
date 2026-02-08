@@ -3,15 +3,20 @@ import mongoose from 'mongoose';
 const { Schema } = mongoose;
 
 const notificationSchema = new Schema({
+    userId: {
+        type: Schema.Types.ObjectId,
+        ref: 'User',
+        default: null // null = admin notification, ObjectId = user-specific notification
+    },
     type: {
         type: String,
-        enum: ['order', 'alert', 'user', 'system'],
+        enum: ['order', 'alert', 'user', 'system', 'return', 'refund'],
         required: true
     },
     title: { type: String, required: true },
     message: { type: String, required: true },
     isRead: { type: Boolean, default: false },
-    link: { type: String }, // Optional URL to redirect to (e.g. /admin/orders/123)
+    link: { type: String },
 }, {
     timestamps: true,
     versionKey: false

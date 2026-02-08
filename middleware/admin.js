@@ -2,7 +2,8 @@
 export function isAdmin(req, res, next) {
     try {
       // req.user is injected by auth.js after verifying JWT
-      if (!req.user || req.user.role !== "admin") {
+      const roles = Array.isArray(req.user?.roles) ? req.user.roles : [];
+      if (!req.user || !roles.includes("admin")) {
         return res.status(403).json({ message: "Admin access only" });
       }
       next();

@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
-import { Resend } from 'resend';
+import { sendEmail, emailTemplate } from '../services/email.service.js';
 import { OAuth2Client } from 'google-auth-library';
 import speakeasy from 'speakeasy';
 
@@ -11,10 +11,17 @@ import { buildCookieOpts, buildClearCookieOpts } from '../utils/cookies.js';
 import { decrypt, HAS_VALID_KEY } from '../utils/crypto.js';
 import { createNotification } from './admin.notifications.controller.js';
 
-const resend = new Resend(process.env.RESEND_API_KEY || 'dummy_key');
-const FROM_EMAIL = process.env.FROM_EMAIL || 'VKart <onboarding@resend.dev>';
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null;
+
+const APP_URL = (process.env.APP_URL || 'https://vkartshop.netlify.app').replace(/\/+$/, '');
+
+const createEmailVerifyToken = () => {
+    const tokenRaw = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(tokenRaw).digest('hex');
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    return { tokenRaw, tokenHash, expiresAt };
+};
 
 // Register
 export const register = async (req, res) => {
@@ -22,6 +29,8 @@ export const register = async (req, res) => {
     const profileImage = req.file ? req.file.location : '';
     if (!username || !email || !password)
         return res.status(400).json({ message: 'Missing required fields' });
+    if (String(password).length < 8)
+        return res.status(400).json({ message: 'Password must be at least 8 characters' });
     if (password !== confirmPassword)
         return res.status(400).json({ message: 'Passwords do not match' });
 
@@ -38,6 +47,24 @@ export const register = async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, 11);
         const newUser = new User({ name, username, email, password: hashedPassword, profileImage });
         await newUser.save();
+
+        // Email verification
+        const { tokenRaw, tokenHash, expiresAt } = createEmailVerifyToken();
+        newUser.emailVerifyTokenHash = tokenHash;
+        newUser.emailVerifyExpiresAt = expiresAt;
+        await newUser.save();
+
+        const verifyLink = `${APP_URL}/verify-email?token=${tokenRaw}`;
+        await sendEmail({
+            to: newUser.email,
+            subject: 'Verify your VKart email',
+            html: emailTemplate({
+                title: 'Verify your email',
+                body: 'Thanks for signing up. Please verify your email to secure your account.',
+                ctaLabel: 'Verify Email',
+                ctaUrl: verifyLink,
+            })
+        });
 
         // Notify Admins
         createNotification(
@@ -59,6 +86,7 @@ export const register = async (req, res) => {
 
 // Login
 export const login = async (req, res) => {
+  try {
     const { username, password, remember, token2fa } = req.body;
     if (!username || !password)
         return res.status(400).json({ message: 'Invalid payload' });
@@ -76,9 +104,12 @@ export const login = async (req, res) => {
 
     if (user.twoFactorEnabled) {
         if (!token2fa) {
+            // Return opaque challenge token instead of raw userId
+            const { create2FAChallenge } = await import('./twofactor.controller.js');
+            const challengeToken = await create2FAChallenge(user._id);
             return res.json({
                 require2FA: true,
-                userId: user._id,
+                challengeToken,
             });
         }
 
@@ -114,9 +145,17 @@ export const login = async (req, res) => {
         }
     }
 
-    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '30d' });
+    const token = jwt.sign(
+        { userId: user._id, roles: user.roles || ["user"] },
+        process.env.JWT_SECRET,
+        { expiresIn: '30d' }
+    );
     res.cookie('jwt_token', token, buildCookieOpts(req, remember));
     res.json({ token });
+  } catch (err) {
+    console.error('Login error:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
 };
 
 // Google Auth
@@ -148,10 +187,15 @@ export const googleAuth = async (req, res) => {
                 email,
                 profileImage: payload.picture || '',
                 password: await bcrypt.hash(crypto.randomBytes(10).toString('hex'), 11),
+                emailVerified: true,
             });
         }
 
-        const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '30d' });
+        const token = jwt.sign(
+            { userId: user._id, roles: user.roles || ["user"] },
+            process.env.JWT_SECRET,
+            { expiresIn: '30d' }
+        );
         res.cookie('jwt_token', token, buildCookieOpts(req, true));
         res.json({ token });
     } catch (err) {
@@ -174,17 +218,18 @@ export const forgotPassword = async (req, res) => {
             user.resetPasswordExpiresAt = new Date(Date.now() + 30 * 60 * 1000);
             await user.save();
 
-            const appUrl = (process.env.APP_URL || 'https://vkartshop.netlify.app').replace(/\/+$/, '');
-            const link = `${appUrl}/reset-password?token=${tokenRaw}`;
+            const link = `${APP_URL}/reset-password?token=${tokenRaw}`;
 
             try {
-                await resend.emails.send({
-                    from: FROM_EMAIL,
+                await sendEmail({
                     to: user.email,
                     subject: 'VKart password reset',
-                    html: `<p>Click to reset (expires in 30m)</p>
-                   <p><a href="${link}">Reset Password</a></p>
-                   <p>${link}</p>`,
+                    html: emailTemplate({
+                        title: 'Reset your password',
+                        body: 'Click the link below to reset your password. The link expires in 30 minutes.',
+                        ctaLabel: 'Reset Password',
+                        ctaUrl: link,
+                    }),
                 });
             } catch {
                 console.warn('Email send skipped in test env');
@@ -230,6 +275,7 @@ export const resetPassword = async (req, res) => {
 
 // Admin Login
 export const adminLogin = async (req, res) => {
+  try {
     const { username, password } = req.body;
     if (!username || !password)
         return res.status(400).json({ message: "Invalid payload" });
@@ -244,14 +290,18 @@ export const adminLogin = async (req, res) => {
         return res.status(403).json({ message: "Account suspended. Contact support." });
     }
 
-    const adminEmails = ["balavardhan12178@gmail.com", "balavardhanpula@gmail.com"];
-    if (!adminEmails.includes(user.email)) {
+    const roles = Array.isArray(user.roles) ? user.roles : ["user"];
+    if (!roles.includes("admin")) {
         return res.status(403).json({ message: "Access denied: Not an admin" });
     }
 
-    const token = jwt.sign({ userId: user._id, role: "admin" }, process.env.JWT_SECRET, { expiresIn: "30d" });
+    const token = jwt.sign({ userId: user._id, roles }, process.env.JWT_SECRET, { expiresIn: "30d" });
     res.cookie("jwt_token", token, buildCookieOpts(req, true));
     res.json({ token, role: "admin" });
+  } catch (err) {
+    console.error('Admin login error:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
 };
 
 // Admin Google Auth
@@ -267,23 +317,21 @@ export const adminGoogleAuth = async (req, res) => {
         const payload = ticket.getPayload();
         const email = payload?.email?.toLowerCase();
 
-        const adminEmails = ["balavardhan12178@gmail.com", "balavardhanpula@gmail.com"];
-        if (!email || !adminEmails.includes(email)) {
+        if (!email) {
+            return res.status(400).json({ message: "Google account missing email" });
+        }
+
+        const user = await User.findOne({ email });
+        if (!user) {
             return res.status(403).json({ message: "Access denied: Not an admin" });
         }
 
-        let user = await User.findOne({ email });
-        if (!user) {
-            user = await User.create({
-                name: payload.name,
-                username: email.split("@")[0],
-                email,
-                profileImage: payload.picture || "",
-                password: await bcrypt.hash(crypto.randomBytes(10).toString("hex"), 11),
-            });
+        const roles = Array.isArray(user.roles) ? user.roles : ["user"];
+        if (!roles.includes("admin")) {
+            return res.status(403).json({ message: "Access denied: Not an admin" });
         }
 
-        const token = jwt.sign({ userId: user._id, role: "admin" }, process.env.JWT_SECRET, { expiresIn: "30d" });
+        const token = jwt.sign({ userId: user._id, roles }, process.env.JWT_SECRET, { expiresIn: "30d" });
         res.cookie("jwt_token", token, buildCookieOpts(req, true));
         res.json({ token, role: "admin" });
     } catch (err) {
@@ -299,7 +347,8 @@ export const verifyAdmin = async (req, res) => {
         if (!token) return res.status(401).json({ valid: false, message: "No token" });
 
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        if (decoded.role !== "admin") {
+        const roles = Array.isArray(decoded?.roles) ? decoded.roles : [];
+        if (!roles.includes("admin")) {
             return res.status(401).json({ valid: false, message: "Not an admin" });
         }
 
@@ -330,5 +379,64 @@ export const logout = async (req, res) => {
     } catch (err) {
         console.error("Logout error:", err);
         res.status(500).json({ message: "Internal server error" });
+    }
+};
+
+// Verify Email
+export const verifyEmail = async (req, res) => {
+    try {
+        const token = String(req.query.token || "");
+        if (!token) return res.status(400).json({ message: "Missing token" });
+
+        const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+        const user = await User.findOne({
+            emailVerifyTokenHash: tokenHash,
+            emailVerifyExpiresAt: { $gt: new Date() },
+        });
+
+        if (!user) {
+            return res.status(400).json({ message: "Invalid or expired token" });
+        }
+
+        user.emailVerified = true;
+        user.emailVerifyTokenHash = undefined;
+        user.emailVerifyExpiresAt = undefined;
+        await user.save();
+
+        return res.json({ message: "Email verified successfully" });
+    } catch (err) {
+        console.error("Verify email error:", err);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+};
+
+// Resend verification (logged-in user)
+export const resendVerifyEmail = async (req, res) => {
+    try {
+        const user = await User.findById(req.user.userId);
+        if (!user) return res.status(404).json({ message: "User not found" });
+        if (user.emailVerified) return res.json({ message: "Email already verified" });
+
+        const { tokenRaw, tokenHash, expiresAt } = createEmailVerifyToken();
+        user.emailVerifyTokenHash = tokenHash;
+        user.emailVerifyExpiresAt = expiresAt;
+        await user.save();
+
+        const verifyLink = `${APP_URL}/verify-email?token=${tokenRaw}`;
+        await sendEmail({
+            to: user.email,
+            subject: "Verify your VKart email",
+            html: emailTemplate({
+                title: "Verify your email",
+                body: "Please verify your email to enable all features.",
+                ctaLabel: "Verify Email",
+                ctaUrl: verifyLink,
+            }),
+        });
+
+        return res.json({ message: "Verification email sent" });
+    } catch (err) {
+        console.error("Resend verify error:", err);
+        return res.status(500).json({ message: "Internal server error" });
     }
 };

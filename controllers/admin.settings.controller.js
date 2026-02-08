@@ -37,9 +37,8 @@ export const getSettings = async (req, res) => {
  */
 export const updateStoreSettings = async (req, res) => {
     try {
-        const { storeName, tagline, supportEmail, supportPhone } = req.body;
+        const { storeName, tagline, supportEmail, supportPhone, freeShippingThreshold, primeEnabled } = req.body;
 
-        // Upsert settings
         let settings = await Settings.findOne();
         if (!settings) {
             settings = new Settings({});
@@ -49,8 +48,9 @@ export const updateStoreSettings = async (req, res) => {
         if (tagline) settings.tagline = tagline;
         if (supportEmail) settings.supportEmail = supportEmail;
         if (supportPhone) settings.supportPhone = supportPhone;
+        if (freeShippingThreshold !== undefined) settings.freeShippingThreshold = Number(freeShippingThreshold);
+        if (primeEnabled !== undefined) settings.primeEnabled = Boolean(primeEnabled);
 
-        // Handle Logo Upload if present
         if (req.file) {
             settings.storeLogo = req.file.location;
         }
@@ -60,6 +60,35 @@ export const updateStoreSettings = async (req, res) => {
     } catch (error) {
         console.error('[ERROR] Update Store Settings:', error);
         res.status(500).json({ message: 'Failed to update store settings' });
+    }
+};
+
+export const getAnnouncements = async (req, res) => {
+    try {
+        let settings = await Settings.findOne();
+        if (!settings) settings = await Settings.create({});
+        const active = (settings.announcements || []).filter(a => a.isActive).sort((a, b) => a.sortOrder - b.sortOrder);
+        res.json(active);
+    } catch (error) {
+        console.error('[ERROR] Get Announcements:', error);
+        res.status(500).json({ message: 'Failed to fetch announcements' });
+    }
+};
+
+export const updateAnnouncements = async (req, res) => {
+    try {
+        const { announcements } = req.body;
+        if (!Array.isArray(announcements)) {
+            return res.status(400).json({ message: 'announcements must be an array' });
+        }
+        let settings = await Settings.findOne();
+        if (!settings) settings = new Settings({});
+        settings.announcements = announcements;
+        await settings.save();
+        res.json({ message: 'Announcements updated', announcements: settings.announcements });
+    } catch (error) {
+        console.error('[ERROR] Update Announcements:', error);
+        res.status(500).json({ message: 'Failed to update announcements' });
     }
 };
 

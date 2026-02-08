@@ -1,6 +1,7 @@
 import express from 'express';
+import mongoose from 'mongoose';
 import cookieParser from 'cookie-parser';
-import { helmetMiddleware, corsMiddleware, commonSecurity } from './middleware/security.js';
+import { helmetMiddleware, corsMiddleware, commonSecurity, csrfMiddleware, csrfGuard, globalApiLimiter } from './middleware/security.js';
 import { notFound, errorHandler } from './middleware/errors.js';
 
 import authRoutes from './routes/auth.routes.js';
@@ -13,6 +14,16 @@ import productRoutes from "./routes/product.routes.js";
 import adminUsersRoutes from './routes/admin.users.routes.js';
 import adminSettingsRoutes from './routes/admin.settings.routes.js';
 import adminNotificationRoutes from './routes/admin.notifications.routes.js';
+import adminReviewsRoutes from './routes/admin.reviews.routes.js';
+import couponRoutes from './routes/coupon.routes.js';
+import userNotificationRoutes from './routes/user.notifications.routes.js';
+import walletRoutes from './routes/wallet.routes.js';
+import saleRoutes from './routes/sale.routes.js';
+import membershipRoutes from './routes/membership.routes.js';
+import homeRoutes from './routes/home.routes.js';
+import blogRoutes from './routes/blog.routes.js';
+import newsletterRoutes from './routes/newsletter.routes.js';
+import { getSitemap } from './controllers/sitemap.controller.js';
 
 const app = express();
 
@@ -24,6 +35,9 @@ app.use(cookieParser());
 app.use(commonSecurity);
 app.use(corsMiddleware);
 app.options('*', corsMiddleware);
+app.use(globalApiLimiter);
+app.use(csrfMiddleware);
+app.use(csrfGuard);
 
 // lightweight request timing
 app.use((req, res, next) => {
@@ -48,6 +62,23 @@ app.use('/api', productRoutes);
 app.use('/api/admin', adminUsersRoutes);
 app.use('/api/admin/settings', adminSettingsRoutes);
 app.use('/api/admin/notifications', adminNotificationRoutes);
+app.use('/api/admin/reviews', adminReviewsRoutes);
+app.use('/api/coupons', couponRoutes);
+app.use('/api/user/notifications', userNotificationRoutes);
+app.use('/api', walletRoutes);
+app.use('/api/sales', saleRoutes);
+app.use('/api/membership', membershipRoutes);
+app.use('/api', homeRoutes);
+app.use('/api', blogRoutes);
+app.use('/api/newsletter', newsletterRoutes);
+app.get('/sitemap.xml', getSitemap);
+
+// root + readiness (must be before 404 handler)
+app.get('/', (req, res) => res.send('VKart API is running successfully!'));
+app.get('/ready', async (req, res) => {
+  try { await mongoose.connection.db.admin().command({ ping: 1 }); res.status(200).send('ready'); }
+  catch { res.status(500).send('not-ready'); }
+});
 
 // 404 + errors
 app.use(notFound);
