@@ -6,7 +6,8 @@ import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import crypto from 'crypto';
 
-const allowOrigin = (origin) => {
+// Shared CORS origin checker (used by both HTTP and Socket.io)
+export const allowOrigin = (origin) => {
   if (!origin) return false;
   if ([
     'http://localhost:3000', 'http://127.0.0.1:3000',
@@ -31,8 +32,9 @@ export const corsMiddleware = cors({
 
 export const helmetMiddleware = helmet({
   contentSecurityPolicy: false,
-  crossOriginOpenerPolicy: false,
+  crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
   crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
 });
 
 export const commonSecurity = [
@@ -64,9 +66,32 @@ export const csrfMiddleware = (req, res, next) => {
   next();
 };
 
+// CSRF Guard - Apply selectively to state-changing routes (not auth endpoints)
 export const csrfGuard = (req, res, next) => {
   const method = String(req.method || 'GET').toUpperCase();
   if (['GET', 'HEAD', 'OPTIONS'].includes(method)) return next();
+
+  // Exempt auth routes from CSRF (they use other protections)
+  const exemptPaths = [
+    '/api/login',
+    '/api/register',
+    '/api/auth/google',
+    '/api/admin/login',
+    '/api/admin/google',
+    '/api/logout',
+    '/api/admin/logout',
+    '/api/forgot',
+    '/api/reset',
+    '/api/verify-email',
+    '/api/resend-verify',
+    '/razorpay/verify',
+    '/api/wallet/verify',
+    '/api/membership/verify',
+  ];
+  
+  if (exemptPaths.some(path => req.path === path || req.originalUrl === path)) {
+    return next();
+  }
 
   const token = req.cookies?.csrf_token;
   const header = req.headers['x-csrf-token'];

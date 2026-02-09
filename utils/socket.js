@@ -1,12 +1,19 @@
 import { Server } from 'socket.io';
 import jwt from 'jsonwebtoken';
+import { allowOrigin } from '../middleware/security.js';
 
 let io;
 
 export const initSocket = (httpServer) => {
     io = new Server(httpServer, {
         cors: {
-            origin: process.env.CLIENT_URL || "http://localhost:3000",
+            origin: (origin, callback) => {
+                if (allowOrigin(origin)) {
+                    callback(null, true);
+                } else {
+                    callback(null, false);
+                }
+            },
             methods: ["GET", "POST"],
             credentials: true
         }

@@ -37,6 +37,7 @@ app.use(corsMiddleware);
 app.options('*', corsMiddleware);
 app.use(globalApiLimiter);
 app.use(csrfMiddleware);
+// Note: csrfGuard is now applied with exemptions for auth routes (see middleware/security.js)
 app.use(csrfGuard);
 
 // lightweight request timing
