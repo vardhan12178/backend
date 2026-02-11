@@ -8,7 +8,8 @@ import crypto from 'crypto';
 
 // Shared CORS origin checker (used by both HTTP and Socket.io)
 export const allowOrigin = (origin) => {
-  if (!origin) return false;
+  if (!origin) return true;
+  const normalized = String(origin).replace(/\/+$/, '');
   if ([
     'http://localhost:3000', 'http://127.0.0.1:3000',
     'http://localhost:5173', 'http://127.0.0.1:5173',
@@ -16,9 +17,10 @@ export const allowOrigin = (origin) => {
     'https://vkart-admin.balavardhan.dev',
     'https://vkart.balavardhan.dev',
     'https://vkart-t64z.onrender.com'
-  ].includes(origin)) return true;
-  if (/^https:\/\/[a-z0-9-]+--vkartshop\.netlify\.app$/.test(origin)) return true;
-  if (process.env.APP_ORIGIN && origin === process.env.APP_ORIGIN) return true;
+  ].includes(normalized)) return true;
+  if (/^https:\/\/[a-z0-9-]+--vkartshop\.netlify\.app$/.test(normalized)) return true;
+  if (/^http:\/\/localhost:\d+$/.test(normalized) || /^http:\/\/127\.0\.0\.1:\d+$/.test(normalized)) return true;
+  if (process.env.APP_ORIGIN && normalized === String(process.env.APP_ORIGIN).replace(/\/+$/, '')) return true;
   return false;
 };
 
@@ -129,4 +131,3 @@ export const globalApiLimiter = rateLimit({
   message: { error: 'Too many requests, please try again later' },
   skip: (req) => req.path === '/health' || req.path === '/ready',
 });
-

@@ -7,10 +7,11 @@ dotenv.config();
 
 // CHANGE 1: Super fast speed for Paid Tier
 const BATCH_DELAY = 100;
-const EMBEDDING_MODEL = "text-embedding-004";
+const EMBEDDING_MODEL = process.env.GEMINI_EMBEDDING_MODEL || "gemini-embedding-001";
+const EMBEDDING_DIM = Number(process.env.EMBEDDING_DIM || 768);
 
 if (!process.env.GEMINI_API_KEY || !process.env.MONGO_URI) {
-  console.error("Error: Missing GEMINI_API_KEY or MONGO_URL.");
+  console.error("Error: Missing GEMINI_API_KEY or MONGO_URI.");
   process.exit(1);
 }
 
@@ -39,7 +40,14 @@ const vectorizeProducts = async () => {
       `.trim();
 
       try {
-        const result = await model.embedContent(textToEmbed);
+        const payload = {
+          content: { parts: [{ text: textToEmbed }] },
+        };
+        if (Number.isFinite(EMBEDDING_DIM) && EMBEDDING_DIM > 0) {
+          payload.outputDimensionality = EMBEDDING_DIM;
+        }
+
+        const result = await model.embedContent(payload);
         const vector = result.embedding.values;
 
         product.embedding = vector;

@@ -8,9 +8,14 @@ if (!process.env.GEMINI_API_KEY) {
   console.error("Error: GEMINI_API_KEY is missing in .env file");
 }
 
+const EMBEDDING_MODEL = process.env.GEMINI_EMBEDDING_MODEL || "gemini-embedding-001";
+const EMBEDDING_DIM = Number(process.env.EMBEDDING_DIM || 768);
+const VECTOR_MIN_SCORE = Number(process.env.AI_VECTOR_MIN_SCORE || 0.60);
+const VECTOR_NUM_CANDIDATES = Number(process.env.AI_VECTOR_CANDIDATES || 150);
+
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-const embeddingModel = genAI.getGenerativeModel({ model: "text-embedding-004" });
+const embeddingModel = genAI.getGenerativeModel({ model: EMBEDDING_MODEL });
 
 const chatModel = genAI.getGenerativeModel({
   model: "gemini-2.5-flash",
@@ -60,6 +65,69 @@ const FALLBACK_RESPONSE = {
   products: []
 };
 
+const PRODUCT_PROJECTION = {
+  _id: 1,
+  title: 1,
+  price: 1,
+  description: 1,
+  brand: 1,
+  category: 1,
+  thumbnail: 1
+};
+
+const escapeRegex = (value = "") => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+async function embedText(text) {
+  const payload = {
+    content: { parts: [{ text: String(text || "").trim() }] },
+  };
+
+  if (Number.isFinite(EMBEDDING_DIM) && EMBEDDING_DIM > 0) {
+    payload.outputDimensionality = EMBEDDING_DIM;
+  }
+
+  const result = await withTimeout(embeddingModel.embedContent(payload));
+  const vector = result?.embedding?.values;
+
+  if (!Array.isArray(vector) || vector.length === 0) {
+    throw new Error("Embedding generation returned an empty vector");
+  }
+
+  return vector;
+}
+
+async function keywordFallbackSearch(query, limit = 4) {
+  const cleaned = String(query || "").trim();
+  if (!cleaned) return [];
+
+  try {
+    const textMatches = await Product.find(
+      { isActive: true, $text: { $search: cleaned } },
+      { ...PRODUCT_PROJECTION, score: { $meta: "textScore" } }
+    )
+      .sort({ score: { $meta: "textScore" } })
+      .limit(limit)
+      .lean();
+
+    if (textMatches.length) {
+      return textMatches;
+    }
+  } catch (error) {
+    // If text index is unavailable, fallback to regex search below.
+    console.warn("Keyword fallback (text index) failed:", error.message);
+  }
+
+  const rx = new RegExp(escapeRegex(cleaned), "i");
+
+  return Product.find({
+    isActive: true,
+    $or: [{ title: rx }, { description: rx }, { category: rx }, { brand: rx }]
+  })
+    .select(PRODUCT_PROJECTION)
+    .limit(limit)
+    .lean();
+}
+
 /**
  * Refines vague queries using conversation history.
  */
@@ -105,8 +173,9 @@ async function expandQuery(message, history) {
  */
 async function searchProducts(query, limit = 4) {
   try {
-    const result = await withTimeout(embeddingModel.embedContent(query));
-    const queryVector = result.embedding.values;
+    const queryVector = await embedText(query);
+    const safeLimit = Math.max(1, Number(limit) || 4);
+    const numCandidates = Math.max(VECTOR_NUM_CANDIDATES, safeLimit * 10);
 
     const products = await Product.aggregate([
       {
@@ -114,8 +183,8 @@ async function searchProducts(query, limit = 4) {
           index: "vector_index",
           path: "embedding",
           queryVector: queryVector,
-          numCandidates: 100,
-          limit: limit * 2
+          numCandidates: numCandidates,
+          limit: safeLimit * 3
         }
       },
       {
@@ -125,30 +194,29 @@ async function searchProducts(query, limit = 4) {
       },
       {
         $match: {
-          score: { $gte: 0.60 }
+          isActive: true,
+          score: { $gte: VECTOR_MIN_SCORE }
         }
       },
       {
-        $limit: limit
+        $limit: safeLimit
       },
       {
         $project: {
-          _id: 1,
-          title: 1,
-          price: 1,
-          description: 1,
-          brand: 1,
-          category: 1,
-          thumbnail: 1,
+          ...PRODUCT_PROJECTION,
           score: 1
         }
       }
     ]);
 
-    return products;
+    if (products.length > 0) {
+      return products;
+    }
+
+    return keywordFallbackSearch(query, safeLimit);
   } catch (error) {
-    console.error("Search Service Error:", error);
-    return [];
+    console.error("Search Service Error:", error.message);
+    return keywordFallbackSearch(query, limit);
   }
 }
 
@@ -228,8 +296,7 @@ export async function vectorizeProduct(product) {
       Price: ${product.price}
     `.trim();
 
-    const result = await embeddingModel.embedContent(textToEmbed);
-    product.embedding = result.embedding.values;
+    product.embedding = await embedText(textToEmbed);
     await product.save();
     console.log(`[INFO] Index updated: ${product.title}`);
     return true;
