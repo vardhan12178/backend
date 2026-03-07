@@ -1,5 +1,5 @@
 import Sale from "../models/Sale.js";
-import redis, { CACHE_TTL } from "../utils/redis.js";
+import redis, { CACHE_TTL, invalidatePattern } from "../utils/redis.js";
 
 const SALE_CACHE_KEY = "sale:active";
 
@@ -32,8 +32,8 @@ export const getActiveSale = async () => {
 
 export const clearSaleCache = async () => {
   try { await redis.del(SALE_CACHE_KEY); } catch { /* ignore */ }
-  // Also clear home page cache since it includes activeSale data
   try { await redis.del("home:data"); } catch { /* ignore */ }
+  await invalidatePattern("products:*");
 };
 
 export const overlaySalePricing = (products, sale, isPrime = false) => {

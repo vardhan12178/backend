@@ -64,6 +64,8 @@ router.get("/products", optionalAuth, productController.getProducts);
 /* Search Autocomplete (before :id) */
 router.get("/products/suggest", productController.suggestProducts);
 
+router.get("/products/filters", optionalAuth, productController.getProductFilters);
+
 /* Product Details (optionalAuth for Prime pricing) */
 router.get("/products/:id", optionalAuth, productController.getProductById);
 

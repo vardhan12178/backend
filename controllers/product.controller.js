@@ -5,118 +5,491 @@ import { vectorizeProduct } from "../services/ai.service.js";
 import { getActiveSale, overlaySalePricing } from "./sale.controller.js";
 import path from "path";
 
-/* GET /api/products - List with filters & cache */
+const DEFAULT_LIST_LIMIT = 12;
+const MAX_LIST_LIMIT = 60;
+
+const PRODUCT_LIST_PROJECTION = {
+    _id: 1,
+    title: 1,
+    description: 1,
+    category: 1,
+    brand: 1,
+    rating: 1,
+    stock: 1,
+    thumbnail: 1,
+    images: 1,
+    price: "$effectivePrice",
+    discountPercentage: "$effectiveDiscountPercentage",
+    onSale: "$onSale",
+    saleName: "$saleName",
+    saleId: "$saleId",
+    originalPrice: {
+        $cond: [
+            { $eq: ["$onSale", true] },
+            "$price",
+            "$$REMOVE",
+        ],
+    },
+    originalDiscountPercentage: {
+        $cond: [
+            { $eq: ["$onSale", true] },
+            "$discountPercentage",
+            "$$REMOVE",
+        ],
+    },
+};
+
+const toPositiveInt = (value, fallback, max = Number.MAX_SAFE_INTEGER) => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed < 1) return fallback;
+    return Math.min(Math.trunc(parsed), max);
+};
+
+const toFiniteNumber = (value) => {
+    if (value === null || value === undefined || value === "") return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+};
+
+const normalizeText = (value) => String(value || "").trim();
+const cachePart = (value) => encodeURIComponent(String(value ?? ""));
+
+const buildSaleSummary = (sale) =>
+    sale ? { _id: sale._id, name: sale.name, endDate: sale.endDate } : null;
+
+const buildEmptyCatalogResponse = ({ page, limit, activeSale }) => ({
+    products: [],
+    activeSale: buildSaleSummary(activeSale),
+    pagination: {
+        page,
+        limit,
+        total: 0,
+        totalPages: 0,
+    },
+});
+
+const buildEmptyFiltersResponse = ({ activeSale }) => ({
+    categories: [],
+    priceRange: { min: 0, max: 0 },
+    activeSale: buildSaleSummary(activeSale),
+});
+
+const getIsPrimeUser = async (userId) => {
+    if (!userId) return false;
+    const user = await User.findById(userId).select("membership").lean();
+    return !!(user?.membership?.endDate && new Date() < new Date(user.membership.endDate));
+};
+
+const normalizeSaleCategories = (sale) =>
+    (sale?.categories || [])
+        .map((entry) => ({
+            category: normalizeText(entry.category).toLowerCase(),
+            discountPercent: Number(entry.discountPercent) || 0,
+            primeDiscountPercent: Number(entry.primeDiscountPercent) || 0,
+        }))
+        .filter((entry) => entry.category && (entry.discountPercent > 0 || entry.primeDiscountPercent > 0));
+
+const buildCatalogMatch = ({ q, category, minRating, saleOnly, activeSale }) => {
+    const match = { isActive: true };
+    const searchTerm = normalizeText(q);
+    const normalizedCategory = normalizeText(category).toLowerCase();
+    const rating = toFiniteNumber(minRating);
+    const saleCategories = normalizeSaleCategories(activeSale);
+    const saleCategoryNames = saleCategories.map((entry) => entry.category);
+
+    if (searchTerm) match.$text = { $search: searchTerm };
+    if (rating !== null && rating > 0) match.rating = { $gte: rating };
+
+    if (saleOnly) {
+        if (!saleCategoryNames.length) {
+            return { empty: true, match };
+        }
+        if (normalizedCategory) {
+            if (!saleCategoryNames.includes(normalizedCategory)) {
+                return { empty: true, match };
+            }
+            match.category = normalizedCategory;
+        } else {
+            match.category = { $in: saleCategoryNames };
+        }
+    } else if (normalizedCategory) {
+        match.category = normalizedCategory;
+    }
+
+    return { empty: false, match, hasSearch: Boolean(searchTerm) };
+};
+
+const buildEffectivePriceStages = (activeSale, isPrime) => {
+    const saleCategories = normalizeSaleCategories(activeSale);
+    if (!saleCategories.length) {
+        return [
+            {
+                $addFields: {
+                    effectivePrice: "$price",
+                    effectiveDiscountPercentage: "$discountPercentage",
+                    onSale: false,
+                    saleName: null,
+                    saleId: null,
+                },
+            },
+        ];
+    }
+
+    const saleDiscountExpression = isPrime
+        ? {
+            $cond: [
+                { $gt: [{ $ifNull: ["$_saleCategoryConfig.primeDiscountPercent", 0] }, 0] },
+                { $ifNull: ["$_saleCategoryConfig.primeDiscountPercent", 0] },
+                { $ifNull: ["$_saleCategoryConfig.discountPercent", 0] },
+            ],
+        }
+        : { $ifNull: ["$_saleCategoryConfig.discountPercent", 0] };
+
+    return [
+        {
+            $addFields: {
+                _saleCategoryConfig: {
+                    $first: {
+                        $filter: {
+                            input: saleCategories,
+                            as: "saleCategory",
+                            cond: {
+                                $eq: [
+                                    { $toLower: "$category" },
+                                    "$$saleCategory.category",
+                                ],
+                            },
+                        },
+                    },
+                },
+            },
+        },
+        {
+            $addFields: {
+                _saleDiscountPercent: saleDiscountExpression,
+            },
+        },
+        {
+            $addFields: {
+                effectivePrice: {
+                    $cond: [
+                        { $gt: [{ $ifNull: ["$_saleDiscountPercent", 0] }, 0] },
+                        {
+                            $round: [
+                                {
+                                    $multiply: [
+                                        {
+                                            $cond: [
+                                                { $gt: ["$discountPercentage", 0] },
+                                                {
+                                                    $divide: [
+                                                        "$price",
+                                                        {
+                                                            $subtract: [
+                                                                1,
+                                                                { $divide: ["$discountPercentage", 100] },
+                                                            ],
+                                                        },
+                                                    ],
+                                                },
+                                                { $multiply: ["$price", 1.2] },
+                                            ],
+                                        },
+                                        {
+                                            $subtract: [
+                                                1,
+                                                { $divide: ["$_saleDiscountPercent", 100] },
+                                            ],
+                                        },
+                                    ],
+                                },
+                                0,
+                            ],
+                        },
+                        "$price",
+                    ],
+                },
+                effectiveDiscountPercentage: {
+                    $cond: [
+                        { $gt: [{ $ifNull: ["$_saleDiscountPercent", 0] }, 0] },
+                        "$_saleDiscountPercent",
+                        "$discountPercentage",
+                    ],
+                },
+                onSale: { $gt: [{ $ifNull: ["$_saleDiscountPercent", 0] }, 0] },
+                saleName: {
+                    $cond: [
+                        { $gt: [{ $ifNull: ["$_saleDiscountPercent", 0] }, 0] },
+                        activeSale?.name || null,
+                        null,
+                    ],
+                },
+                saleId: {
+                    $cond: [
+                        { $gt: [{ $ifNull: ["$_saleDiscountPercent", 0] }, 0] },
+                        activeSale?._id || null,
+                        null,
+                    ],
+                },
+            },
+        },
+        {
+            $project: {
+                _saleCategoryConfig: 0,
+                _saleDiscountPercent: 0,
+            },
+        },
+    ];
+};
+
+const buildPriceStages = ({ minPrice, maxPrice }) => {
+    const min = toFiniteNumber(minPrice);
+    const max = toFiniteNumber(maxPrice);
+    const priceMatch = {};
+
+    if (min !== null && min >= 0) priceMatch.$gte = min;
+    if (max !== null && max >= 0) priceMatch.$lte = max;
+
+    return Object.keys(priceMatch).length
+        ? [{ $match: { effectivePrice: priceMatch } }]
+        : [];
+};
+
+const buildSortStage = ({ sort, hasSearch }) => {
+    if (sort === "price_asc") return { effectivePrice: 1, createdAt: -1 };
+    if (sort === "price_desc") return { effectivePrice: -1, createdAt: -1 };
+    if (sort === "rating_desc") return { rating: -1, createdAt: -1 };
+    if (sort === "newest") return { createdAt: -1 };
+    if (hasSearch) return { _textScore: -1, isFeatured: -1, rating: -1, createdAt: -1 };
+    return { isFeatured: -1, rating: -1, createdAt: -1 };
+};
+
+const buildCatalogStages = ({ q, category, minRating, minPrice, maxPrice, saleOnly, activeSale, isPrime }) => {
+    const { empty, match, hasSearch } = buildCatalogMatch({ q, category, minRating, saleOnly, activeSale });
+    if (empty) return { empty: true, hasSearch: false, stages: [] };
+
+    const stages = [
+        { $match: match },
+        ...(hasSearch ? [{ $addFields: { _textScore: { $meta: "textScore" } } }] : []),
+        ...buildEffectivePriceStages(activeSale, isPrime),
+        ...buildPriceStages({ minPrice, maxPrice }),
+    ];
+
+    return { empty: false, hasSearch, stages };
+};
+
+const buildProductsCacheKey = ({ q, category, minPrice, maxPrice, minRating, sort, page, limit, saleOnly, activeSale, isPrime }) =>
+    [
+        "products:list",
+        `q=${cachePart(normalizeText(q).toLowerCase())}`,
+        `category=${cachePart(normalizeText(category).toLowerCase())}`,
+        `minPrice=${cachePart(minPrice ?? "")}`,
+        `maxPrice=${cachePart(maxPrice ?? "")}`,
+        `minRating=${cachePart(minRating ?? "")}`,
+        `sort=${cachePart(sort || "relevance")}`,
+        `page=${page}`,
+        `limit=${limit}`,
+        `sale=${saleOnly ? 1 : 0}`,
+        `saleId=${cachePart(activeSale?._id || "none")}`,
+        `prime=${isPrime ? 1 : 0}`,
+    ].join(":");
+
+const buildFiltersCacheKey = ({ q, minRating, saleOnly, activeSale, isPrime }) =>
+    [
+        "products:filters",
+        `q=${cachePart(normalizeText(q).toLowerCase())}`,
+        `minRating=${cachePart(minRating ?? "")}`,
+        `sale=${saleOnly ? 1 : 0}`,
+        `saleId=${cachePart(activeSale?._id || "none")}`,
+        `prime=${isPrime ? 1 : 0}`,
+    ].join(":");
+
 export const getProducts = async (req, res) => {
     try {
-        const { q, category, minPrice, maxPrice, minRating, sort, page = 1, sale } = req.query;
-        const limit = Number(req.query.limit) || 20;
-
-        // Check if the request matches the default landing page criteria
-        const isDefaultView = !q && !category && !sale && !minPrice && !maxPrice && !minRating && (sort === "newest" || !sort) && Number(page) === 1;
-        const cacheKey = `products:raw:page1:limit${limit}`;
-
-        let products, count;
-
-        // Try cache for default view (raw products without sale overlay)
-        let fromCache = false;
-        if (isDefaultView) {
-            try {
-                const cachedData = await redis.get(cacheKey);
-                if (cachedData) {
-                    const parsed = JSON.parse(cachedData);
-                    products = parsed.products;
-                    count = parsed.total;
-                    fromCache = true;
-                }
-            } catch (err) {
-                console.warn("Redis Error:", err.message);
-            }
-        }
-
-        if (!fromCache) {
-            const query = { isActive: true };
-            if (q && q.trim()) query.$text = { $search: q.trim() };
-            if (category) query.category = category;
-
-            // Sale filter: restrict to active sale categories only
-            if (sale === 'true' && !category) {
-                const activeSale = await getActiveSale();
-                if (activeSale?.categories?.length) {
-                    const saleCats = activeSale.categories.map(c => new RegExp(`^${c.category}$`, 'i'));
-                    query.category = { $in: saleCats };
-                } else {
-                    // No active sale — return empty
-                    return res.json({ products: [], activeSale: null, pagination: { page: 1, limit, total: 0, totalPages: 0 } });
-                }
-            }
-
-            if (minPrice || maxPrice) {
-                query.price = {};
-                if (minPrice) query.price.$gte = Number(minPrice);
-                if (maxPrice) query.price.$lte = Number(maxPrice);
-            }
-            if (minRating) query.rating = { $gte: Number(minRating) };
-
-            let sortObj = { isFeatured: -1, rating: -1, createdAt: -1 };
-            if (sort === "price_asc") sortObj = { price: 1 };
-            if (sort === "price_desc") sortObj = { price: -1 };
-            if (sort === "rating_desc") sortObj = { rating: -1 };
-            if (sort === "newest") sortObj = { createdAt: -1 };
-
-            const skip = (Number(page) - 1) * limit;
-
-            const countPromise = isDefaultView
-                ? Product.estimatedDocumentCount()
-                : Product.countDocuments(query);
-
-            [products, count] = await Promise.all([
-                Product.find(query)
-                    .select('title description category brand price discountPercentage rating stock thumbnail images')
-                    .sort(sortObj)
-                    .skip(skip)
-                    .limit(limit)
-                    .lean(),
-                countPromise
-            ]);
-
-            // Cache raw products for default view
-            if (isDefaultView) {
-                try {
-                    await redis.set(cacheKey, JSON.stringify({ products, total: count }), "EX", CACHE_TTL.PRODUCTS_LIST);
-                } catch (err) {
-                    console.warn("Redis Set Error:", err.message);
-                }
-            }
-        }
-
-        // Always apply sale overlay fresh (depends on user's Prime status)
         const activeSale = await getActiveSale();
+        const saleOnly = req.query.sale === "true";
+        const page = toPositiveInt(req.query.page, 1);
+        const limit = toPositiveInt(req.query.limit, DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT);
+        const isPrime = await getIsPrimeUser(req.user?.userId);
 
-        // Check if logged-in user is Prime for sale pricing
-        let isPrime = false;
-        if (req.user?.userId) {
-            const u = await User.findById(req.user.userId).select("membership").lean();
-            if (u?.membership?.endDate && new Date() < new Date(u.membership.endDate)) isPrime = true;
+        const cacheKey = buildProductsCacheKey({
+            q: req.query.q,
+            category: req.query.category,
+            minPrice: req.query.minPrice,
+            maxPrice: req.query.maxPrice,
+            minRating: req.query.minRating,
+            sort: req.query.sort,
+            page,
+            limit,
+            saleOnly,
+            activeSale,
+            isPrime,
+        });
+
+        try {
+            const cached = await redis.get(cacheKey);
+            if (cached) {
+                return res.json(JSON.parse(cached));
+            }
+        } catch (err) {
+            console.warn("Products cache read error:", err.message);
         }
 
-        const overlaid = activeSale
-            ? overlaySalePricing(products, activeSale, isPrime)
-            : products;
+        const { empty, hasSearch, stages } = buildCatalogStages({
+            q: req.query.q,
+            category: req.query.category,
+            minRating: req.query.minRating,
+            minPrice: req.query.minPrice,
+            maxPrice: req.query.maxPrice,
+            saleOnly,
+            activeSale,
+            isPrime,
+        });
 
+        if (empty) {
+            return res.json(buildEmptyCatalogResponse({ page, limit, activeSale }));
+        }
+
+        const skip = (page - 1) * limit;
+        const sortStage = buildSortStage({ sort: req.query.sort, hasSearch });
+
+        const [aggregated] = await Product.aggregate([
+            ...stages,
+            {
+                $facet: {
+                    products: [
+                        { $sort: sortStage },
+                        { $skip: skip },
+                        { $limit: limit },
+                        { $project: PRODUCT_LIST_PROJECTION },
+                    ],
+                    totalCount: [{ $count: "total" }],
+                },
+            },
+        ]);
+
+        const products = aggregated?.products || [];
+        const total = aggregated?.totalCount?.[0]?.total || 0;
         const response = {
-            products: overlaid,
-            activeSale: activeSale ? { _id: activeSale._id, name: activeSale.name, endDate: activeSale.endDate } : null,
+            products,
+            activeSale: buildSaleSummary(activeSale),
             pagination: {
-                page: Number(page),
+                page,
                 limit,
-                total: count,
-                totalPages: Math.ceil(count / limit),
+                total,
+                totalPages: Math.ceil(total / limit),
             },
         };
+
+        try {
+            await redis.set(cacheKey, JSON.stringify(response), "EX", CACHE_TTL.PRODUCTS_LIST);
+        } catch (err) {
+            console.warn("Products cache write error:", err.message);
+        }
 
         res.json(response);
     } catch (err) {
         console.error("Products list error:", err);
+        res.status(500).json({ error: "Server error" });
+    }
+};
+
+export const getProductFilters = async (req, res) => {
+    try {
+        const activeSale = await getActiveSale();
+        const saleOnly = req.query.sale === "true";
+        const isPrime = await getIsPrimeUser(req.user?.userId);
+        const stageParams = {
+            q: req.query.q,
+            category: "",
+            minRating: req.query.minRating,
+            minPrice: null,
+            maxPrice: null,
+            saleOnly,
+            activeSale,
+            isPrime,
+        };
+
+        const cacheKey = buildFiltersCacheKey({
+            q: req.query.q,
+            minRating: req.query.minRating,
+            saleOnly,
+            activeSale,
+            isPrime,
+        });
+
+        try {
+            const cached = await redis.get(cacheKey);
+            if (cached) {
+                return res.json(JSON.parse(cached));
+            }
+        } catch (err) {
+            console.warn("Product filters cache read error:", err.message);
+        }
+
+        const { empty } = buildCatalogStages(stageParams);
+
+        if (empty) {
+            return res.json(buildEmptyFiltersResponse({ activeSale }));
+        }
+
+        const categoryStages = buildCatalogStages(stageParams).stages;
+        const priceStages = buildCatalogStages(stageParams).stages;
+        const [categoryRows, priceRows] = await Promise.all([
+            Product.aggregate([
+                ...categoryStages,
+                {
+                    $group: {
+                        _id: "$category",
+                        count: { $sum: 1 },
+                    },
+                },
+                { $sort: { _id: 1 } },
+            ]),
+            Product.aggregate([
+                ...priceStages,
+                {
+                    $group: {
+                        _id: null,
+                        min: { $min: "$effectivePrice" },
+                        max: { $max: "$effectivePrice" },
+                    },
+                },
+            ]),
+        ]);
+
+        const categories = (categoryRows || [])
+            .map((entry) => {
+                const value = normalizeText(entry._id);
+                return value
+                    ? {
+                        slug: value.toLowerCase().replace(/\s+/g, "-"),
+                        label: value.replace(/-/g, " ").replace(/\b\w/g, (ch) => ch.toUpperCase()),
+                        count: entry.count,
+                    }
+                    : null;
+            })
+            .filter(Boolean);
+
+        const bounds = priceRows?.[0] || {};
+        const response = {
+            categories,
+            priceRange: {
+                min: Math.round(bounds.min || 0),
+                max: Math.round(bounds.max || 0),
+            },
+            activeSale: buildSaleSummary(activeSale),
+        };
+
+        try {
+            await redis.set(cacheKey, JSON.stringify(response), "EX", CACHE_TTL.PRODUCTS_LIST);
+        } catch (err) {
+            console.warn("Product filters cache write error:", err.message);
+        }
+
+        res.json(response);
+    } catch (err) {
+        console.error("Product filters error:", err);
         res.status(500).json({ error: "Server error" });
     }
 };
