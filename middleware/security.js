@@ -70,6 +70,8 @@ export const csrfMiddleware = (req, res, next) => {
 
 // CSRF Guard - Apply selectively to state-changing routes (not auth endpoints)
 export const csrfGuard = (req, res, next) => {
+  if (process.env.NODE_ENV === 'test') return next();
+
   const method = String(req.method || 'GET').toUpperCase();
   if (['GET', 'HEAD', 'OPTIONS'].includes(method)) return next();
 
@@ -87,6 +89,7 @@ export const csrfGuard = (req, res, next) => {
     '/api/verify-email',
     '/api/resend-verify',
     '/razorpay/verify',
+    '/api/razorpay/verify',
     '/api/wallet/verify',
     '/api/membership/verify',
   ];

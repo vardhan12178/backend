@@ -3,11 +3,34 @@ import crypto from "crypto";
 import User from "../models/User.js";
 import MembershipPlan from "../models/MembershipPlan.js";
 import redis from "../utils/redis.js";
+import {
+  consumeMembershipOrderSession,
+  getMembershipOrderSession,
+  saveMembershipOrderSession,
+} from "../services/payment.session.service.js";
 
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
   key_secret: process.env.RAZORPAY_KEY_SECRET,
 });
+
+const toIdString = (v) => {
+  if (!v) return "";
+  if (typeof v === "string") return v;
+  if (typeof v === "object") {
+    if (typeof v.toHexString === "function") return v.toHexString();
+    if (typeof v.$oid === "string") return v.$oid;
+    if (typeof v.id === "string") return v.id;
+    if (v._id) return toIdString(v._id);
+  }
+  return String(v);
+};
+
+const secureEqual = (a, b) => {
+  const aBuf = Buffer.from(String(a || ""), "utf8");
+  const bBuf = Buffer.from(String(b || ""), "utf8");
+  return aBuf.length === bBuf.length && crypto.timingSafeEqual(aBuf, bBuf);
+};
 
 export const getPlans = async (req, res) => {
   try {
@@ -48,6 +71,15 @@ export const purchasePlan = async (req, res) => {
       payment_capture: 1,
     });
 
+    await saveMembershipOrderSession(order.id, {
+      userId: toIdString(req.user.userId),
+      planId: String(plan._id),
+      amount: order.amount,
+      currency: order.currency,
+      receipt: order.receipt,
+      createdAt: new Date().toISOString(),
+    });
+
     res.json({
       success: true,
       orderId: order.id,
@@ -77,8 +109,7 @@ export const verifyAndActivate = async (req, res) => {
     if (
       !razorpay_order_id ||
       !razorpay_payment_id ||
-      !razorpay_signature ||
-      !planId
+      !razorpay_signature
     ) {
       return res.status(400).json({ message: "Missing payment fields" });
     }
@@ -89,11 +120,53 @@ export const verifyAndActivate = async (req, res) => {
       .update(body)
       .digest("hex");
 
-    if (expected !== razorpay_signature) {
+    if (!secureEqual(expected, razorpay_signature)) {
       return res.status(400).json({ message: "Invalid signature" });
     }
 
-    const plan = await MembershipPlan.findById(planId);
+    const pending = await getMembershipOrderSession(razorpay_order_id);
+    if (!pending) {
+      return res.status(400).json({ message: "Membership payment session expired or invalid" });
+    }
+
+    if (toIdString(pending.userId) !== toIdString(req.user.userId)) {
+      return res.status(403).json({ message: "Membership payment session does not belong to user" });
+    }
+
+    // Optional client field can be present for backward compatibility,
+    // but activation always follows server-side pending planId.
+    if (planId && String(planId) !== String(pending.planId)) {
+      return res.status(400).json({ message: "Plan mismatch for payment order" });
+    }
+
+    const [rzpOrder, rzpPayment] = await Promise.all([
+      razorpay.orders.fetch(razorpay_order_id),
+      razorpay.payments.fetch(razorpay_payment_id),
+    ]);
+
+    if (!rzpOrder || rzpOrder.id !== razorpay_order_id) {
+      return res.status(400).json({ message: "Invalid Razorpay order" });
+    }
+
+    if (!rzpPayment || rzpPayment.order_id !== razorpay_order_id) {
+      return res.status(400).json({ message: "Payment/order mismatch" });
+    }
+
+    if ((rzpOrder.amount || 0) !== (Number(pending.amount) || 0)) {
+      return res.status(400).json({ message: "Order amount mismatch" });
+    }
+
+    if ((rzpPayment.amount || 0) !== (Number(pending.amount) || 0)) {
+      return res.status(400).json({ message: "Paid amount mismatch" });
+    }
+
+    if (String(rzpPayment.status || "").toLowerCase() !== "captured") {
+      return res.status(400).json({ message: "Payment is not captured" });
+    }
+
+    await consumeMembershipOrderSession(razorpay_order_id);
+
+    const plan = await MembershipPlan.findById(pending.planId);
     if (!plan) return res.status(404).json({ message: "Plan not found" });
 
     const user = await User.findById(req.user.userId);

@@ -16,7 +16,7 @@ router.post("/verify", authenticateJWT, [
   body("razorpay_order_id").isString().notEmpty(),
   body("razorpay_payment_id").isString().notEmpty(),
   body("razorpay_signature").isString().notEmpty(),
-  body("planId").isMongoId(),
+  body("planId").optional().isMongoId(),
 ], validate, memberCtrl.verifyAndActivate);
 
 router.get("/admin/plans", authenticateJWT, requireAdmin, memberCtrl.adminListPlans);

@@ -44,7 +44,8 @@ app.use(csrfGuard);
 app.use((req, res, next) => {
   const t0 = Date.now();
   res.on('finish', () =>
-    console.log(`${req.method} ${req.originalUrl} ${res.statusCode} - ${Date.now() - t0}ms`)
+    // Keep logs useful without writing sensitive query params (reset/verify tokens, etc.).
+    console.log(`${req.method} ${req.baseUrl || ''}${req.path} ${res.statusCode} - ${Date.now() - t0}ms`)
   );
   next();
 });

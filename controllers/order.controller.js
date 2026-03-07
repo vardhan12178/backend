@@ -7,8 +7,29 @@ import { createNotification } from "./admin.notifications.controller.js";
 import { createUserNotification } from "./user.notifications.controller.js";
 import { sendEmail, emailTemplate } from "../services/email.service.js";
 import { applyCoupon, recordCouponUsage } from "./coupon.controller.js";
-import { getActiveSale } from "./sale.controller.js";
+import { getActiveSale, overlaySalePricing } from "./sale.controller.js";
+import {
+  consumeCheckoutVerificationToken,
+  getCheckoutVerificationToken,
+} from "../services/payment.session.service.js";
 import PDFDocument from "pdfkit";
+
+const TAX_RATE = 0.18;
+const FREE_SHIPPING_THRESHOLD = 999;
+const FLAT_SHIPPING_FEE = 50;
+const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+const INCLUDED_TAX_RATE = TAX_RATE / (1 + TAX_RATE);
+const toIdString = (v) => {
+  if (!v) return "";
+  if (typeof v === "string") return v;
+  if (typeof v === "object") {
+    if (typeof v.toHexString === "function") return v.toHexString();
+    if (typeof v.$oid === "string") return v.$oid;
+    if (typeof v.id === "string") return v.id;
+    if (v._id) return toIdString(v._id);
+  }
+  return String(v);
+};
 
 /* CREATE ORDER */
 export const createOrder = async (req, res) => {
@@ -16,52 +37,121 @@ export const createOrder = async (req, res) => {
   if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
   const { products, shippingAddress } = req.body;
-
-  const stage = typeof req.body.stage === "string" ? req.body.stage : undefined;
-  const paymentStatus =
-    typeof req.body.paymentStatus === "string" ? req.body.paymentStatus.toUpperCase() : undefined;
-  const paymentMethod =
-    typeof req.body.paymentMethod === "string" ? req.body.paymentMethod.toUpperCase() : undefined;
-  const paymentId = typeof req.body.paymentId === "string" ? req.body.paymentId : undefined;
-  const paymentOrderId =
-    typeof req.body.paymentOrderId === "string" ? req.body.paymentOrderId : undefined;
-  const walletUsed = Math.max(0, Number(req.body.walletUsed) || 0);
-  const tax = Number(req.body.tax) || 0;
-  const shipping = Number(req.body.shipping) || 0;
+  const walletRequested = Math.max(0, Number(req.body.walletUsed) || 0);
   const promoCode = typeof req.body.promo === "string" ? req.body.promo.trim() : null;
+  const paymentVerificationToken =
+    typeof req.body.paymentVerificationToken === "string"
+      ? req.body.paymentVerificationToken.trim()
+      : "";
+  const authUserId = toIdString(req.user.userId);
+  let paymentTokenToConsume = "";
 
   const session = await mongoose.startSession();
   session.startTransaction();
 
+  const abortWith = async (status, payload) => {
+    await session.abortTransaction();
+    session.endSession();
+    return res.status(status).json(payload);
+  };
+
   try {
-    const user = await User.findById(req.user.userId).session(session);
-    if (!user) {
-      await session.abortTransaction();
-      return res.status(404).json({ message: "User not found" });
-    }
+    const user = await User.findById(authUserId).session(session);
+    if (!user) return abortWith(404, { message: "User not found" });
 
-    // Inventory enforcement for products stored in DB
+    const activeSale = await getActiveSale();
+    const isPrime =
+      !!(user.membership?.endDate && new Date() < new Date(user.membership.endDate));
+
+    // Inventory + canonical product prices come from DB.
+    const normalizedProducts = [];
+    let saleApplied = false;
+    let saleId = null;
+    let saleName = null;
+
     for (const p of products) {
-      if (!p.productId) continue;
-      const product = await Product.findById(p.productId).session(session);
+      const qty = Math.max(1, Math.trunc(Number(p.quantity) || 0));
+      const product = await Product.findById(p.productId)
+        .select("title thumbnail images category price discountPercentage stock isActive")
+        .session(session);
+
       if (!product || !product.isActive) {
-        await session.abortTransaction();
-        return res.status(400).json({ message: "Product unavailable" });
+        return abortWith(400, { message: "Product unavailable" });
       }
-      if (product.stock < p.quantity) {
-        await session.abortTransaction();
-        return res.status(400).json({ message: `Insufficient stock for ${product.title}` });
+      if (product.stock < qty) {
+        return abortWith(400, { message: `Insufficient stock for ${product.title}` });
       }
-      product.stock -= p.quantity;
+
+      product.stock -= qty;
       await product.save({ session });
+
+      const productSnapshot = {
+        _id: product._id,
+        title: product.title,
+        thumbnail: product.thumbnail,
+        images: product.images,
+        category: product.category,
+        price: product.price,
+        discountPercentage: Number(product.discountPercentage) || 0,
+      };
+
+      const overlaidProduct = activeSale
+        ? overlaySalePricing([productSnapshot], activeSale, isPrime)[0]
+        : productSnapshot;
+
+      const unitPrice = round2(overlaidProduct?.price ?? product.price);
+      if (activeSale && unitPrice !== round2(product.price)) {
+        saleApplied = true;
+        saleId = activeSale._id;
+        saleName = activeSale.name;
+      }
+
+      normalizedProducts.push({
+        productId: product._id,
+        name: product.title,
+        image: p.image || product.thumbnail || product.images?.[0] || "",
+        quantity: qty,
+        price: unitPrice,
+        ...(p.selectedVariants ? { selectedVariants: String(p.selectedVariants) } : {}),
+      });
     }
 
+    const lineSubtotal = round2(
+      normalizedProducts.reduce(
+        (sum, p) => sum + round2(Number(p.price) * Number(p.quantity)),
+        0
+      )
+    );
+
+    // Validate coupon server-side.
+    let discount = 0;
+    let couponId = null;
+    if (promoCode) {
+      const couponResult = await applyCoupon(promoCode, lineSubtotal, authUserId);
+      if (!couponResult.valid) {
+        return abortWith(400, { message: couponResult.reason });
+      }
+      discount = couponResult.discount;
+      couponId = couponResult.coupon._id;
+    }
+
+    // Sale pricing is already baked into normalizedProducts to match the cart.
+    const saleDiscount = 0;
+
+    // Membership discount placeholder.
+    const membershipDiscount = 0;
+    const totalDiscount = round2(discount + membershipDiscount);
+    const taxableBase = round2(Math.max(0, lineSubtotal - totalDiscount));
+    const tax = round2(taxableBase * INCLUDED_TAX_RATE);
+    const effectiveShipping = taxableBase >= FREE_SHIPPING_THRESHOLD ? 0 : FLAT_SHIPPING_FEE;
+    const grossTotal = round2(Math.max(0.01, taxableBase + effectiveShipping));
+
+    const walletUsed = round2(Math.min(walletRequested, grossTotal));
     if (walletUsed > 0) {
       if ((user.walletBalance || 0) < walletUsed) {
-        await session.abortTransaction();
-        return res.status(400).json({ message: "Insufficient wallet balance" });
+        return abortWith(400, { message: "Insufficient wallet balance" });
       }
-      user.walletBalance = Math.round((user.walletBalance - walletUsed) * 100) / 100;
+      user.walletBalance = round2(user.walletBalance - walletUsed);
       user.walletTransactions.push({
         type: "DEBIT",
         amount: walletUsed,
@@ -69,48 +159,57 @@ export const createOrder = async (req, res) => {
       });
     }
 
-    // Validate coupon server-side
-    let discount = 0;
-    let couponId = null;
-    if (promoCode) {
-      const lineTotal = products.reduce((sum, p) => sum + (Number(p.price) || 0) * (Number(p.quantity) || 0), 0);
-      const couponResult = await applyCoupon(promoCode, lineTotal, req.user.userId);
-      if (!couponResult.valid) {
-        await session.abortTransaction();
-        return res.status(400).json({ message: couponResult.reason });
+    const netPayable = round2(Math.max(0, grossTotal - walletUsed));
+    let paymentStatus = "PENDING";
+    let paymentMethod = "COD";
+    let paymentId;
+    let paymentOrderId;
+
+    if (netPayable > 0) {
+      if (!paymentVerificationToken) {
+        return abortWith(400, {
+          message: "Payment verification token required for online payment",
+        });
       }
-      discount = couponResult.discount;
-      couponId = couponResult.coupon._id;
+
+      const verifiedPayment = await getCheckoutVerificationToken(paymentVerificationToken);
+      if (!verifiedPayment) {
+        return abortWith(400, { message: "Invalid or expired payment verification token" });
+      }
+
+      if (toIdString(verifiedPayment.userId) !== authUserId) {
+        return abortWith(403, { message: "Payment verification does not belong to user" });
+      }
+
+      const duplicateOrder = await Order.findOne({
+        $or: [
+          { paymentId: verifiedPayment.paymentId },
+          { paymentOrderId: verifiedPayment.paymentOrderId },
+        ],
+      })
+        .select("_id orderId")
+        .session(session);
+      if (duplicateOrder) {
+        return abortWith(409, {
+          message: "Order already exists for this payment",
+          orderId: duplicateOrder.orderId || String(duplicateOrder._id),
+        });
+      }
+
+      const expectedPaise = Math.round(netPayable * 100);
+      if (Math.abs((Number(verifiedPayment.amountPaise) || 0) - expectedPaise) > 1) {
+        return abortWith(400, { message: "Payment amount mismatch" });
+      }
+
+      paymentStatus = "PAID";
+      paymentMethod = "CARD";
+      paymentId = verifiedPayment.paymentId;
+      paymentOrderId = verifiedPayment.paymentOrderId;
+      paymentTokenToConsume = paymentVerificationToken;
+    } else {
+      paymentStatus = "PAID";
+      paymentMethod = "WALLET";
     }
-
-    // Sale discount
-    let saleDiscount = 0;
-    let saleId = null;
-    let saleName = null;
-    const sale = await getActiveSale();
-    if (sale && sale.categories?.length) {
-      const isPrime = user.membership?.endDate && new Date() < new Date(user.membership.endDate);
-      const catMap = new Map(sale.categories.map(c => [c.category.toLowerCase(), c]));
-
-      for (const p of products) {
-        if (!p.productId) continue;
-        const prod = await Product.findById(p.productId).select("category price").session(session);
-        if (!prod) continue;
-        const cat = catMap.get((prod.category || "").toLowerCase());
-        if (!cat) continue;
-        const pct = isPrime && cat.primeDiscountPercent > 0
-          ? cat.primeDiscountPercent
-          : cat.discountPercent;
-        saleDiscount += Math.round(prod.price * (pct / 100) * (Number(p.quantity) || 1) * 100) / 100;
-      }
-      if (saleDiscount > 0) {
-        saleId = sale._id;
-        saleName = sale.name;
-      }
-    }
-
-    // Membership discount (extra flat % if Prime and no sale)
-    let membershipDiscount = 0;
 
     const newOrder = new Order({
       userId: user._id,
@@ -119,15 +218,13 @@ export const createOrder = async (req, res) => {
         email: user.email,
         phone: user.phone || "",
       },
-      products,
+      products: normalizedProducts,
       discount,
       saleDiscount,
       saleId: saleId || undefined,
       saleName: saleName || undefined,
       membershipDiscount,
-      tax,
-      shipping,
-      stage,
+      shipping: effectiveShipping,
       shippingAddress,
       promo: promoCode || undefined,
       couponId: couponId || undefined,
@@ -146,41 +243,47 @@ export const createOrder = async (req, res) => {
     await session.commitTransaction();
     session.endSession();
 
-    // Record coupon usage after successful commit
+    if (paymentTokenToConsume) {
+      consumeCheckoutVerificationToken(paymentTokenToConsume).catch((err) =>
+        console.error("Payment token consume failed:", err)
+      );
+    }
+
+    // Record coupon usage after successful commit.
     if (promoCode && couponId) {
       recordCouponUsage(promoCode, user._id).catch((err) =>
         console.error("Coupon usage tracking failed:", err)
       );
     }
 
-    // Notify Admins
     createNotification(
       "order",
       `New Order #${newOrder._id}`,
-      `Order placed by ${user.name} for â‚¹${newOrder.totalPrice || "N/A"}.`,
+      `Order placed by ${user.name} for INR ${newOrder.totalPrice || "N/A"}.`,
       "/admin/orders"
     );
 
     if (user.email) {
-      await sendEmail({
+      sendEmail({
         to: user.email,
         subject: "VKart Order Placed",
         html: emailTemplate({
           title: "Order placed successfully",
           body: `Your order ${newOrder.orderId || newOrder._id} has been placed successfully.`,
         }),
-      });
+      }).catch((err) => console.error("Order email failed:", err));
     }
 
     return res.status(201).json(newOrder);
   } catch (err) {
-    await session.abortTransaction();
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
     session.endSession();
     console.error("Create order error:", err);
     return res.status(500).json({ message: "Internal server error" });
   }
 };
-
 /* GET ALL ORDERS (User) */
 export const getUserOrders = async (req, res) => {
   try {
@@ -279,19 +382,19 @@ export const updateOrderStage = async (req, res) => {
 
   const stageMessages = {
     CONFIRMED: {
-      title: "Order Confirmed! âœ…",
+      title: "Order Confirmed",
       message: `Your order for ${displayNames} has been confirmed.`,
     },
     SHIPPED: {
-      title: "Order Shipped! ðŸ“¦",
+      title: "Order Shipped",
       message: `Your order for ${displayNames} is on its way.`,
     },
     OUT_FOR_DELIVERY: {
-      title: "Out for Delivery! ðŸšš",
+      title: "Out for Delivery",
       message: `Your order for ${displayNames} will arrive today.`,
     },
     DELIVERED: {
-      title: "Order Delivered! ðŸŽ‰",
+      title: "Order Delivered",
       message: `Your order for ${displayNames} has been delivered.`,
     },
     CANCELLED: {

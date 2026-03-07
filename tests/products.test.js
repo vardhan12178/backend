@@ -1,14 +1,26 @@
 import { jest } from '@jest/globals';
 
 // Define mock BEFORE imports
+const redisMock = {
+    get: jest.fn().mockResolvedValue(null), // Always cache miss
+    set: jest.fn(),
+    del: jest.fn(),
+    scan: jest.fn().mockResolvedValue(["0", []]),
+    on: jest.fn(),
+    quit: jest.fn()
+};
+
 jest.unstable_mockModule('../utils/redis.js', () => ({
-    default: {
-        get: jest.fn().mockResolvedValue(null), // Always cache miss
-        set: jest.fn(),
-        del: jest.fn(),
-        on: jest.fn(),
-        quit: jest.fn()
-    }
+    default: redisMock,
+    CACHE_TTL: {
+        PRODUCTS_LIST: 300,
+        PRODUCT_DETAIL: 600,
+        PROFILE: 3600,
+        SALE: 60,
+        HOME: 300,
+        TWO_FA: 300,
+    },
+    invalidatePattern: jest.fn(),
 }));
 
 // Dynamic imports are required when using unstable_mockModule

@@ -35,17 +35,17 @@ router.put('/profile/wishlist', authenticateJWT, profileController.updateWishlis
 /* ADDRESSES */
 router.get('/profile/addresses', authenticateJWT, profileController.listAddresses);
 router.post('/profile/addresses', authenticateJWT, [
-  body('name').isString().trim().notEmpty().isLength({ max: 100 }),
+  body('fullName').isString().trim().notEmpty().isLength({ max: 100 }),
   body('phone').isString().trim().notEmpty().isLength({ min: 10, max: 15 }),
-  body('line1').isString().trim().notEmpty().isLength({ max: 200 }),
+  body('address1').isString().trim().notEmpty().isLength({ max: 200 }),
   body('city').isString().trim().notEmpty().isLength({ max: 100 }),
   body('state').isString().trim().notEmpty().isLength({ max: 100 }),
   body('pincode').isString().trim().notEmpty().isLength({ min: 4, max: 10 }),
 ], validate, profileController.addAddress);
 router.put('/profile/addresses/:id', authenticateJWT, [
-  body('name').optional().isString().trim().isLength({ max: 100 }),
+  body('fullName').optional().isString().trim().isLength({ max: 100 }),
   body('phone').optional().isString().trim().isLength({ min: 10, max: 15 }),
-  body('line1').optional().isString().trim().isLength({ max: 200 }),
+  body('address1').optional().isString().trim().isLength({ max: 200 }),
   body('city').optional().isString().trim().isLength({ max: 100 }),
   body('state').optional().isString().trim().isLength({ max: 100 }),
   body('pincode').optional().isString().trim().isLength({ min: 4, max: 10 }),

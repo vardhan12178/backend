@@ -1,15 +1,17 @@
-import { MongoMemoryServer } from 'mongodb-memory-server';
+import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 
 dotenv.config({ path: '.env.test' });
 
-let mongoServer;
+let replSet;
 
 // Connect to In-Memory MongoDB before all tests
 beforeAll(async () => {
-    mongoServer = await MongoMemoryServer.create();
-    const uri = mongoServer.getUri();
+    replSet = await MongoMemoryReplSet.create({
+        replSet: { count: 1 },
+    });
+    const uri = replSet.getUri();
 
     // Prevent re-connection errors if tests run in parallel
     if (mongoose.connection.readyState !== 0) {
@@ -29,6 +31,9 @@ afterEach(async () => {
 
 // Disconnect after all tests
 afterAll(async () => {
-    await mongoose.disconnect();
-    await mongoServer.stop();
+    // Stop the in-memory server first to avoid noisy ECONNRESET logs on teardown.
+    if (replSet) await replSet.stop();
+    if (mongoose.connection.readyState !== 0) {
+        await mongoose.disconnect();
+    }
 });

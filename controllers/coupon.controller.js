@@ -6,7 +6,21 @@ const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
 export const createCoupon = async (req, res) => {
   try {
-    const { code, description, type, value, maxDiscount, minOrder, usageLimit, perUserLimit, validFrom, validTo, isPublic } = req.body;
+    const {
+      code,
+      description,
+      maxDiscount,
+      minOrder,
+      usageLimit,
+      perUserLimit,
+      validFrom,
+      validTo,
+      isPublic,
+    } = req.body;
+
+    // Backward compatible mapping for older payload contracts.
+    const type = req.body.type || (req.body.discountType === "percentage" ? "percent" : req.body.discountType);
+    const value = req.body.value ?? req.body.discountValue;
 
     if (!code || !type || value == null || !validTo) {
       return res.status(400).json({ message: "code, type, value, and validTo are required" });
@@ -60,6 +74,15 @@ export const updateCoupon = async (req, res) => {
 
     if (updates.code) updates.code = updates.code.toUpperCase().trim();
 
+    if (updates.discountType && !updates.type) {
+      updates.type = updates.discountType === "percentage" ? "percent" : updates.discountType;
+    }
+    if (updates.discountValue != null && updates.value == null) {
+      updates.value = updates.discountValue;
+    }
+    delete updates.discountType;
+    delete updates.discountValue;
+
     if (updates.type === "percent" && updates.value != null && (updates.value < 1 || updates.value > 100)) {
       return res.status(400).json({ message: "Percent value must be between 1 and 100" });
     }
@@ -110,7 +133,8 @@ export const getPublicCoupons = async (_req, res) => {
 
 export const validateCoupon = async (req, res) => {
   try {
-    const { code, subtotal } = req.body;
+    const { code } = req.body;
+    const subtotal = req.body.subtotal ?? req.body.total;
     if (!code) return res.status(400).json({ message: "Coupon code is required" });
 
     const result = await applyCoupon(code, Number(subtotal) || 0, req.user.userId);

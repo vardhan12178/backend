@@ -2,6 +2,46 @@ import User from '../models/User.js';
 import bcrypt from 'bcryptjs';
 import redis, { CACHE_TTL } from '../utils/redis.js';
 
+const normalizeAddressRecord = (address = {}) => {
+    const source = typeof address?.toObject === 'function' ? address.toObject() : address;
+    return {
+        ...source,
+        fullName: source.fullName ?? source.name ?? '',
+        address1: source.address1 ?? source.line1 ?? '',
+        address2: source.address2 ?? source.line2 ?? '',
+        pincode: source.pincode ?? source.zip ?? '',
+    };
+};
+
+const normalizeAddressPayload = (payload = {}) => {
+    const normalized = {};
+    const assignString = (targetKey, ...sourceKeys) => {
+        for (const key of sourceKeys) {
+            if (!(key in payload)) continue;
+            const value = payload[key];
+            normalized[targetKey] = typeof value === 'string' ? value.trim() : value;
+            return;
+        }
+    };
+
+    assignString('label', 'label');
+    assignString('fullName', 'fullName', 'name');
+    assignString('phone', 'phone');
+    assignString('email', 'email');
+    assignString('address1', 'address1', 'line1');
+    assignString('address2', 'address2', 'line2');
+    assignString('city', 'city');
+    assignString('state', 'state');
+    assignString('pincode', 'pincode', 'zip');
+    assignString('country', 'country');
+
+    if ('isDefault' in payload) {
+        normalized.isDefault = Boolean(payload.isDefault);
+    }
+
+    return normalized;
+};
+
 /* GET /api/profile - Cached */
 export const getProfile = async (req, res) => {
     const userId = req.user.userId;
@@ -129,7 +169,7 @@ export const listAddresses = async (req, res) => {
     try {
         const user = await User.findById(req.user.userId).select('addresses').lean();
         if (!user) return res.status(404).json({ message: 'User not found' });
-        return res.json({ addresses: user.addresses || [] });
+        return res.json({ addresses: (user.addresses || []).map(normalizeAddressRecord) });
     } catch (err) {
         console.error('List addresses error:', err);
         return res.status(500).json({ message: 'Internal server error' });
@@ -138,7 +178,7 @@ export const listAddresses = async (req, res) => {
 
 export const addAddress = async (req, res) => {
     try {
-        const payload = req.body || {};
+        const payload = normalizeAddressPayload(req.body);
         const user = await User.findById(req.user.userId);
         if (!user) return res.status(404).json({ message: 'User not found' });
 
@@ -148,7 +188,7 @@ export const addAddress = async (req, res) => {
         user.addresses.push(payload);
         await user.save();
 
-        return res.status(201).json({ addresses: user.addresses });
+        return res.status(201).json({ addresses: user.addresses.map(normalizeAddressRecord) });
     } catch (err) {
         console.error('Add address error:', err);
         return res.status(500).json({ message: 'Internal server error' });
@@ -158,7 +198,7 @@ export const addAddress = async (req, res) => {
 export const updateAddress = async (req, res) => {
     try {
         const addrId = req.params.id;
-        const payload = req.body || {};
+        const payload = normalizeAddressPayload(req.body);
         const user = await User.findById(req.user.userId);
         if (!user) return res.status(404).json({ message: 'User not found' });
 
@@ -171,7 +211,7 @@ export const updateAddress = async (req, res) => {
         user.addresses[idx] = { ...user.addresses[idx].toObject(), ...payload };
         await user.save();
 
-        return res.json({ addresses: user.addresses });
+        return res.json({ addresses: user.addresses.map(normalizeAddressRecord) });
     } catch (err) {
         console.error('Update address error:', err);
         return res.status(500).json({ message: 'Internal server error' });
@@ -190,7 +230,7 @@ export const deleteAddress = async (req, res) => {
             return res.status(404).json({ message: 'Address not found' });
         }
         await user.save();
-        return res.json({ addresses: user.addresses });
+        return res.json({ addresses: user.addresses.map(normalizeAddressRecord) });
     } catch (err) {
         console.error('Delete address error:', err);
         return res.status(500).json({ message: 'Internal server error' });

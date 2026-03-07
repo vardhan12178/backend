@@ -16,6 +16,7 @@ export const STAGES = [
 ];
 
 const TAX_RATE = 0.18;
+const INCLUDED_TAX_RATE = TAX_RATE / (1 + TAX_RATE);
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 const AutoIncrement = mongooseSequence(mongoose);
 
@@ -210,16 +211,26 @@ orderSchema.pre("validate", function (next) {
     p.lineTotal = round2(qty * price);
   });
 
-  // Totals
-  this.subtotal = round2(safeProducts.reduce((sum, p) => sum + p.lineTotal, 0));
-  this.discount = round2(this.discount ?? 0);
-  this.saleDiscount = round2(this.saleDiscount ?? 0);
-  this.membershipDiscount = round2(this.membershipDiscount ?? 0);
-  this.shipping = round2(this.shipping ?? 0);
+  const pricingChanged =
+    this.isNew ||
+    this.isModified("products") ||
+    this.isModified("discount") ||
+    this.isModified("saleDiscount") ||
+    this.isModified("membershipDiscount") ||
+    this.isModified("shipping");
 
-  const totalDiscount = round2(this.discount + this.saleDiscount + this.membershipDiscount);
-  this.tax = round2(Math.max(0, this.subtotal - totalDiscount) * TAX_RATE);
-  this.totalPrice = round2(Math.max(0.01, this.subtotal - totalDiscount + this.tax + this.shipping));
+  if (pricingChanged) {
+    this.subtotal = round2(safeProducts.reduce((sum, p) => sum + p.lineTotal, 0));
+    this.discount = round2(this.discount ?? 0);
+    this.saleDiscount = round2(this.saleDiscount ?? 0);
+    this.membershipDiscount = round2(this.membershipDiscount ?? 0);
+    this.shipping = round2(this.shipping ?? 0);
+
+    const totalDiscount = round2(this.discount + this.membershipDiscount);
+    const taxableBase = round2(Math.max(0, this.subtotal - totalDiscount));
+    this.tax = round2(taxableBase * INCLUDED_TAX_RATE);
+    this.totalPrice = round2(Math.max(0.01, taxableBase + this.shipping));
+  }
 
   // Add initial history entry
   if (this.isNew) {

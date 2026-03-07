@@ -23,6 +23,30 @@ const createEmailVerifyToken = () => {
     return { tokenRaw, tokenHash, expiresAt };
 };
 
+export const checkAuth = async (req, res) => {
+    try {
+        if (!req.user?.userId) {
+            return res.json({ authenticated: false, user: null });
+        }
+
+        const user = await User.findById(req.user.userId)
+            .select('name username email profileImage createdAt twoFactorEnabled suppress2faPrompt membership blocked')
+            .lean();
+
+        if (!user || user.blocked) {
+            return res.json({ authenticated: false, user: null });
+        }
+
+        user.isPrime = !!(user.membership?.endDate && new Date(user.membership.endDate) > new Date());
+        delete user.blocked;
+
+        return res.json({ authenticated: true, user });
+    } catch (err) {
+        console.error('Auth check error:', err);
+        return res.status(500).json({ message: 'Internal server error' });
+    }
+};
+
 // Register
 export const register = async (req, res) => {
     let { name, username, email, password, confirmPassword } = req.body;
@@ -70,7 +94,8 @@ export const register = async (req, res) => {
         createNotification(
             'user',
             'New User Registered',
-            `User ${username} (${email}) has joined the platform.`
+            `User ${username} (${email}) has joined the platform.`,
+            '/admin/users'
         );
 
         res.status(201).json({ message: 'User registered successfully' });
@@ -309,6 +334,7 @@ export const adminGoogleAuth = async (req, res) => {
     try {
         const credential = req.body.credential || req.body.idToken;
         if (!credential) return res.status(400).json({ message: "Missing Google credential" });
+        if (!googleClient) return res.status(500).json({ message: "Google client not configured" });
 
         const ticket = await googleClient.verifyIdToken({
             idToken: credential,
@@ -346,6 +372,12 @@ export const verifyAdmin = async (req, res) => {
         const token = req.cookies.jwt_token || req.headers.authorization?.split(" ")[1];
         if (!token) return res.status(401).json({ valid: false, message: "No token" });
 
+        // Keep admin verify aligned with authenticateJWT behavior.
+        const blacklisted = await TokenBlacklist.findOne({ token });
+        if (blacklisted) {
+            return res.status(401).json({ valid: false, message: "Token invalidated" });
+        }
+
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         const roles = Array.isArray(decoded?.roles) ? decoded.roles : [];
         if (!roles.includes("admin")) {
@@ -369,10 +401,21 @@ export const logout = async (req, res) => {
     try {
         const token = req.cookies.jwt_token || req.headers.authorization?.split(" ")[1];
         if (token) {
-            await TokenBlacklist.create({
-                token,
-                expiredAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-            });
+            // Ignore malformed/forged tokens instead of storing arbitrary strings.
+            try {
+                const payload = jwt.verify(token, process.env.JWT_SECRET);
+                const expMs = Number(payload?.exp) > 0
+                    ? Number(payload.exp) * 1000
+                    : Date.now() + 30 * 24 * 60 * 60 * 1000;
+
+                await TokenBlacklist.updateOne(
+                    { token },
+                    { $set: { token, expiredAt: new Date(expMs) } },
+                    { upsert: true }
+                );
+            } catch {
+                // Nothing to blacklist if token is invalid.
+            }
         }
         res.clearCookie("jwt_token", buildClearCookieOpts(req));
         res.json({ message: "Logged out successfully" });

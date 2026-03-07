@@ -5,6 +5,8 @@ import { authenticateJWT, requireAdmin } from "../middleware/auth.js";
 import * as orderController from "../controllers/order.controller.js";
 
 const router = express.Router();
+// Express 4 needs explicit promise rejection forwarding for async handlers.
+const asyncHandler = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
 //
 // ────────────────────────────────────────────────────────────
@@ -15,31 +17,17 @@ const router = express.Router();
 const validateOrder = [
   body("products").isArray({ min: 1 }),
 
-  body("products.*.productId").optional({ nullable: true }).isMongoId(),
-  body("products.*.externalId").optional({ nullable: true }).isString(),
-
-  body("products").custom((arr) =>
-    Array.isArray(arr) && arr.every((p) => p.productId || p.externalId)
-  ),
+  body("products.*.productId").isMongoId(),
 
   body("products.*.name").isString(),
   body("products.*.image").optional({ nullable: true }).isString(),
   body("products.*.quantity").isInt({ gt: 0 }),
-  body("products.*.price").isFloat({ gt: 0 }),
+  body("products.*.price").optional().isFloat({ gt: 0 }),
+  body("products.*.selectedVariants").optional({ nullable: true }).isString(),
 
-  body("tax").optional().isFloat({ min: 0 }),
-  body("shipping").optional().isFloat({ min: 0 }),
-  body("totalPrice").optional().isFloat({ gt: 0 }),
-  body("paymentStatus").optional().isIn(["PAID", "PENDING", "FAILED"]),
-  body("paymentMethod").optional().isIn(["CARD", "UPI", "COD", "WALLET"]),
-  body("paymentId").optional().isString(),
-  body("paymentOrderId").optional().isString(),
+  body("promo").optional({ nullable: true }).isString(),
+  body("paymentVerificationToken").optional({ nullable: true }).isString(),
   body("walletUsed").optional().isFloat({ min: 0 }),
-
-  body("stage")
-    .optional()
-    .customSanitizer((v) => (typeof v === "string" ? v.toUpperCase() : v))
-    .isIn(STAGES),
 
   body("shippingAddress").isString(),
 ];
@@ -51,13 +39,13 @@ const validateOrder = [
 //
 
 /* CREATE ORDER (USER) */
-router.post("/orders", authenticateJWT, validateOrder, orderController.createOrder);
+router.post("/orders", authenticateJWT, validateOrder, asyncHandler(orderController.createOrder));
 
 /* CUSTOMER — GET ALL ORDERS */
-router.get("/profile/orders", authenticateJWT, orderController.getUserOrders);
+router.get("/profile/orders", authenticateJWT, asyncHandler(orderController.getUserOrders));
 
 /* CUSTOMER — PAGINATED ORDERS */
-router.get("/profile/orders/paged", authenticateJWT, orderController.getUserOrdersPaged);
+router.get("/profile/orders/paged", authenticateJWT, asyncHandler(orderController.getUserOrdersPaged));
 
 /* CUSTOMER — REQUEST RETURN */
 router.post(
@@ -66,7 +54,7 @@ router.post(
   body("reason").isString().isLength({ min: 3 }),
   body("returnType").optional().isIn(["REFUND", "REPLACEMENT"]),
   body("refundMethod").optional().isIn(["WALLET", "ORIGINAL"]),
-  orderController.requestReturn
+  asyncHandler(orderController.requestReturn)
 );
 
 /* CUSTOMER — CANCEL ORDER */
@@ -75,17 +63,17 @@ router.post(
   authenticateJWT,
   body("reason").isString().isLength({ min: 3 }),
   body("refundMethod").optional().isIn(["WALLET", "ORIGINAL"]),
-  orderController.cancelOrder
+  asyncHandler(orderController.cancelOrder)
 );
 
 /* CUSTOMER/ADMIN — DOWNLOAD INVOICE */
-router.get("/orders/:id/invoice", authenticateJWT, orderController.downloadInvoice);
+router.get("/orders/:id/invoice", authenticateJWT, asyncHandler(orderController.downloadInvoice));
 
 /* ADMIN — GET ALL ORDERS */
-router.get("/admin/orders", authenticateJWT, requireAdmin, orderController.getAllOrders);
+router.get("/admin/orders", authenticateJWT, requireAdmin, asyncHandler(orderController.getAllOrders));
 
 /* ADMIN — GET ORDER BY ID */
-router.get("/admin/orders/:id", authenticateJWT, requireAdmin, orderController.getOrderById);
+router.get("/admin/orders/:id", authenticateJWT, requireAdmin, asyncHandler(orderController.getOrderById));
 
 /* ADMIN — UPDATE ORDER STAGE */
 router.patch(
@@ -95,7 +83,7 @@ router.patch(
   body("stage")
     .customSanitizer((v) => v.toUpperCase())
     .isIn(STAGES),
-  orderController.updateOrderStage
+  asyncHandler(orderController.updateOrderStage)
 );
 
 /* ADMIN — UPDATE RETURN STATUS */
@@ -104,7 +92,7 @@ router.patch(
   authenticateJWT,
   requireAdmin,
   body("status").isString(),
-  orderController.updateReturnStatus
+  asyncHandler(orderController.updateReturnStatus)
 );
 
 /* ADMIN — INITIATE REFUND */
@@ -113,7 +101,7 @@ router.post(
   authenticateJWT,
   requireAdmin,
   body("method").isIn(["WALLET", "ORIGINAL"]),
-  orderController.initiateRefund
+  asyncHandler(orderController.initiateRefund)
 );
 
 /* ADMIN — CREATE REPLACEMENT ORDER */
@@ -121,7 +109,7 @@ router.post(
   "/admin/orders/:id/replacement",
   authenticateJWT,
   requireAdmin,
-  orderController.createReplacementOrder
+  asyncHandler(orderController.createReplacementOrder)
 );
 
 export default router;

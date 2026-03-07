@@ -5,7 +5,7 @@ import Product from "../models/Product.js";
 
 dotenv.config();
 
-// CHANGE 1: Super fast speed for Paid Tier
+// Keep a short delay between embedding requests.
 const BATCH_DELAY = 100;
 const EMBEDDING_MODEL = process.env.GEMINI_EMBEDDING_MODEL || "gemini-embedding-001";
 const EMBEDDING_DIM = Number(process.env.EMBEDDING_DIM || 768);
@@ -23,7 +23,7 @@ const vectorizeProducts = async () => {
     await mongoose.connect(process.env.MONGO_URI);
     console.log("[INFO] MongoDB Connected.");
 
-    // CHANGE 2: Fetch ALL products (removed 'isActive: true' just in case)
+    // Process every product so embeddings stay complete.
     const products = await Product.find({});
     console.log(`[INFO] Found ${products.length} products to vectorize...`);
 
@@ -59,7 +59,6 @@ const vectorizeProducts = async () => {
           console.log(`   [${index + 1}/${products.length}] Vectors updated...`);
         }
 
-        // Fast delay
         await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
 
       } catch (err) {

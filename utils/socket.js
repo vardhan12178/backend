@@ -4,6 +4,16 @@ import { allowOrigin } from '../middleware/security.js';
 
 let io;
 
+const getTokenFromCookie = (cookieHeader = '') => {
+    const rawToken = String(cookieHeader)
+        .split(';')
+        .map((part) => part.trim())
+        .find((part) => part.startsWith('jwt_token='))
+        ?.slice('jwt_token='.length);
+
+    return rawToken ? decodeURIComponent(rawToken) : '';
+};
+
 export const initSocket = (httpServer) => {
     io = new Server(httpServer, {
         cors: {
@@ -23,10 +33,7 @@ export const initSocket = (httpServer) => {
     io.use((socket, next) => {
         const token =
             socket.handshake.auth?.token ||
-            socket.handshake.headers?.cookie
-                ?.split('; ')
-                .find(c => c.startsWith('jwt_token='))
-                ?.split('=')?.[1];
+            getTokenFromCookie(socket.handshake.headers?.cookie);
 
         if (!token) {
             socket.user = null; // unauthenticated — allowed to connect but restricted
@@ -43,9 +50,18 @@ export const initSocket = (httpServer) => {
     });
 
     io.on('connection', (socket) => {
+        const roles = Array.isArray(socket.user?.roles) ? socket.user.roles : [];
+
+        if (socket.user?.userId) {
+            socket.join(`user_${socket.user.userId}`);
+        }
+
+        if (roles.includes('admin')) {
+            socket.join('admin_notifications');
+        }
+
         // Admin joins admin room — must be authenticated admin
         socket.on('join_admin', () => {
-            const roles = Array.isArray(socket.user?.roles) ? socket.user.roles : [];
             if (roles.includes('admin')) {
                 socket.join('admin_notifications');
             }
