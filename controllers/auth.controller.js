@@ -15,6 +15,7 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null;
 
 const APP_URL = (process.env.APP_URL || 'https://vkartshop.netlify.app').replace(/\/+$/, '');
+const AUTH_USER_SELECT = 'name username email profileImage createdAt twoFactorEnabled suppress2faPrompt membership blocked';
 
 const createEmailVerifyToken = () => {
     const tokenRaw = crypto.randomBytes(32).toString('hex');
@@ -23,24 +24,33 @@ const createEmailVerifyToken = () => {
     return { tokenRaw, tokenHash, expiresAt };
 };
 
+const buildSessionPayload = async (userId) => {
+    const user = await User.findById(userId)
+        .select(AUTH_USER_SELECT)
+        .lean();
+
+    if (!user || user.blocked) {
+        return { authenticated: false, user: null };
+    }
+
+    const { blocked, ...safeUser } = user;
+
+    return {
+        authenticated: true,
+        user: {
+            ...safeUser,
+            isPrime: !!(safeUser.membership?.endDate && new Date(safeUser.membership.endDate) > new Date()),
+        },
+    };
+};
+
 export const checkAuth = async (req, res) => {
     try {
         if (!req.user?.userId) {
             return res.json({ authenticated: false, user: null });
         }
 
-        const user = await User.findById(req.user.userId)
-            .select('name username email profileImage createdAt twoFactorEnabled suppress2faPrompt membership blocked')
-            .lean();
-
-        if (!user || user.blocked) {
-            return res.json({ authenticated: false, user: null });
-        }
-
-        user.isPrime = !!(user.membership?.endDate && new Date(user.membership.endDate) > new Date());
-        delete user.blocked;
-
-        return res.json({ authenticated: true, user });
+        return res.json(await buildSessionPayload(req.user.userId));
     } catch (err) {
         console.error('Auth check error:', err);
         return res.status(500).json({ message: 'Internal server error' });
@@ -176,7 +186,13 @@ export const login = async (req, res) => {
         { expiresIn: '30d' }
     );
     res.cookie('jwt_token', token, buildCookieOpts(req, remember));
-    res.json({ token });
+
+    const session = await buildSessionPayload(user._id);
+    if (!session.authenticated) {
+        res.clearCookie('jwt_token', buildClearCookieOpts(req));
+        return res.status(401).json({ message: 'Account unavailable' });
+    }
+    res.json({ ...session, token });
   } catch (err) {
     console.error('Login error:', err);
     res.status(500).json({ message: 'Internal server error' });
@@ -187,6 +203,7 @@ export const login = async (req, res) => {
 export const googleAuth = async (req, res) => {
     try {
         const credential = req.body.credential || req.body.idToken;
+        const remember = req.body.remember !== false;
         if (!credential)
             return res.status(400).json({ message: 'Missing Google credential' });
 
@@ -221,8 +238,14 @@ export const googleAuth = async (req, res) => {
             process.env.JWT_SECRET,
             { expiresIn: '30d' }
         );
-        res.cookie('jwt_token', token, buildCookieOpts(req, true));
-        res.json({ token });
+        res.cookie('jwt_token', token, buildCookieOpts(req, remember));
+
+        const session = await buildSessionPayload(user._id);
+        if (!session.authenticated) {
+            res.clearCookie('jwt_token', buildClearCookieOpts(req));
+            return res.status(401).json({ message: 'Account unavailable' });
+        }
+        res.json({ ...session, token });
     } catch (err) {
         console.error('Google login error:', err.message);
         res.status(401).json({ message: 'Google sign-in failed' });
