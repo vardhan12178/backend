@@ -1,5 +1,5 @@
 import jwt from "jsonwebtoken";
-import TokenBlacklist from "../models/TokenBlacklist.js";
+import { isTokenRevoked } from "../utils/tokenBlacklist.js";
 
 export const authenticateJWT = async (req, res, next) => {
   const bearer = req.headers.authorization;
@@ -10,9 +10,8 @@ export const authenticateJWT = async (req, res, next) => {
   if (!token) return res.status(401).json({ error: "unauthorized" });
 
   try {
-    // check blacklist
-    const blacklisted = await TokenBlacklist.findOne({ token });
-    if (blacklisted) {
+    // check blacklist (Redis-first, Mongo fallback)
+    if (await isTokenRevoked(token)) {
       return res.status(401).json({ error: "token invalidated" });
     }
 
@@ -47,8 +46,7 @@ export const optionalAuth = async (req, _res, next) => {
 
   try {
     // Check blacklist (same as authenticateJWT)
-    const blacklisted = await TokenBlacklist.findOne({ token });
-    if (blacklisted) return next(); // treat as unauthenticated
+    if (await isTokenRevoked(token)) return next(); // treat as unauthenticated
 
     const payload = jwt.verify(token, process.env.JWT_SECRET);
     req.user = payload;

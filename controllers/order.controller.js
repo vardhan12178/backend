@@ -13,6 +13,7 @@ import {
   getCheckoutVerificationToken,
 } from "../services/payment.session.service.js";
 import PDFDocument from "pdfkit";
+import { renderTaxInvoice } from "../utils/invoicePdf.js";
 
 const TAX_RATE = 0.18;
 const FREE_SHIPPING_THRESHOLD = 999;
@@ -662,7 +663,6 @@ export const createReplacementOrder = async (req, res) => {
     await order.save({ session });
 
     await session.commitTransaction();
-    session.endSession();
 
     createUserNotification(
       order.userId,
@@ -685,10 +685,11 @@ export const createReplacementOrder = async (req, res) => {
 
     return res.json({ message: "Replacement created", replacement });
   } catch (err) {
-    await session.abortTransaction();
-    session.endSession();
+    if (session.inTransaction()) await session.abortTransaction();
     console.error("Replacement create error:", err);
     return res.status(500).json({ message: "Internal server error" });
+  } finally {
+    session.endSession();
   }
 };
 
@@ -703,207 +704,26 @@ export const downloadInvoice = async (req, res) => {
       return res.status(403).json({ message: "Unauthorized" });
     }
 
-    // Fetch store settings for branding
     const Settings = (await import("../models/Settings.js")).default;
-    let settings = await Settings.findOne().lean();
-    if (!settings) settings = {};
-
-    const storeName = settings.storeName || "VKart";
-    const tagline = settings.tagline || "Premium Lifestyle Store";
-    const storeAddress = settings.address || "India";
-    const supportEmail = settings.supportEmail || "";
-    const supportPhone = settings.supportPhone || "";
-    const gstNumber = settings.gstNumber || "";
-
-    const doc = new PDFDocument({ margin: 50, size: "A4" });
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename=invoice-${order.invoiceNumber || order.orderId}.pdf`
-    );
-    doc.pipe(res);
-
-    const inr = (n) => `₹${(Math.round(Number(n) || 0)).toLocaleString("en-IN")}`;
+    const settings = (await Settings.findOne().lean()) || {};
     const invoiceNo = order.invoiceNumber || order.orderId || String(order._id);
-    const orderDate = new Date(order.createdAt || Date.now()).toLocaleDateString("en-IN", {
-      day: "2-digit", month: "short", year: "numeric",
+    const safeFilename = String(invoiceNo).replace(/[^a-zA-Z0-9_-]/g, "-");
+
+    const doc = new PDFDocument({
+      margin: 0,
+      size: "A4",
+      bufferPages: true,
+      info: {
+        Title: `Tax Invoice ${invoiceNo}`,
+        Author: settings.storeName || "VKart",
+        Subject: `Invoice and payment record for order ${order.orderId || order._id}`,
+      },
     });
 
-    const pageW = doc.page.width;
-    const marginL = 50;
-    const marginR = 50;
-    const contentW = pageW - marginL - marginR;
-
-    /* ── HEADER BAR ── */
-    doc.rect(0, 0, pageW, 80).fill("#111827");
-    doc.fontSize(22).fillColor("#FFFFFF").text(storeName, marginL, 22);
-    doc.fontSize(9).fillColor("#9CA3AF").text(tagline, marginL, 48);
-    doc.fontSize(18).fillColor("#FFFFFF").text("TAX INVOICE", marginL + contentW - 120, 28, {
-      width: 120, align: "right",
-    });
-
-    /* ── STORE + INVOICE META ── */
-    let curY = 100;
-    const colMid = marginL + contentW / 2;
-
-    // Left: store info
-    doc.fontSize(9).fillColor("#6B7280");
-    if (storeAddress) { doc.text(storeAddress, marginL, curY, { width: contentW / 2 }); curY = doc.y; }
-    if (supportEmail) { doc.text(supportEmail, marginL, curY); curY = doc.y; }
-    if (supportPhone) { doc.text(supportPhone, marginL, curY); curY = doc.y; }
-    if (gstNumber) { doc.text(`GSTIN: ${gstNumber}`, marginL, curY); curY = doc.y; }
-
-    // Right: invoice meta
-    const metaY = 100;
-    doc.fontSize(9).fillColor("#374151");
-    doc.text(`Invoice #:`, colMid, metaY, { width: 80, align: "right" });
-    doc.font("Helvetica-Bold").text(invoiceNo, colMid + 85, metaY);
-    doc.font("Helvetica").text("Order ID:", colMid, metaY + 14, { width: 80, align: "right" });
-    doc.font("Helvetica-Bold").text(order.orderId || String(order._id), colMid + 85, metaY + 14);
-    doc.font("Helvetica").text("Date:", colMid, metaY + 28, { width: 80, align: "right" });
-    doc.text(orderDate, colMid + 85, metaY + 28);
-    doc.font("Helvetica").text("Status:", colMid, metaY + 42, { width: 80, align: "right" });
-    doc.text(order.paymentStatus || "PENDING", colMid + 85, metaY + 42);
-
-    /* ── DIVIDER ── */
-    curY = Math.max(curY, metaY + 60) + 12;
-    doc.moveTo(marginL, curY).lineTo(marginL + contentW, curY).strokeColor("#E5E7EB").lineWidth(1).stroke();
-    curY += 12;
-
-    /* ── BILL TO / SHIP TO ── */
-    doc.font("Helvetica-Bold").fontSize(9).fillColor("#111827").text("BILL TO", marginL, curY);
-    doc.font("Helvetica-Bold").text("SHIP TO", colMid, curY);
-    curY += 14;
-    doc.font("Helvetica").fontSize(9).fillColor("#374151");
-    doc.text(order.customer?.name || "-", marginL, curY);
-    doc.text(order.customer?.name || "-", colMid, curY);
-    curY += 12;
-    doc.text(order.customer?.email || "-", marginL, curY);
-    curY += 12;
-    if (order.customer?.phone) { doc.text(order.customer.phone, marginL, curY); curY += 12; }
-    doc.text(order.shippingAddress || "-", colMid, curY - (order.customer?.phone ? 24 : 12), {
-      width: contentW / 2 - 10,
-    });
-    curY += 8;
-
-    /* ── DIVIDER ── */
-    curY = Math.max(curY, doc.y) + 8;
-    doc.moveTo(marginL, curY).lineTo(marginL + contentW, curY).strokeColor("#E5E7EB").lineWidth(1).stroke();
-    curY += 4;
-
-    /* ── ITEMS TABLE ── */
-    const col = { item: marginL, qty: 310, price: 380, total: 460 };
-
-    // Table header
-    curY += 8;
-    doc.rect(marginL, curY - 4, contentW, 18).fill("#F3F4F6");
-    doc.font("Helvetica-Bold").fontSize(8).fillColor("#374151");
-    doc.text("ITEM", col.item + 4, curY, { width: 250 });
-    doc.text("QTY", col.qty, curY, { width: 50, align: "center" });
-    doc.text("PRICE", col.price, curY, { width: 70, align: "right" });
-    doc.text("TOTAL", col.total, curY, { width: 80, align: "right" });
-    curY += 20;
-
-    // Table rows
-    doc.font("Helvetica").fontSize(9).fillColor("#111827");
-    const products = Array.isArray(order.products) ? order.products : [];
-    products.forEach((p, idx) => {
-      if (curY > 700) { doc.addPage(); curY = 50; }
-
-      const lineTotal = Math.round(p.lineTotal || p.price * p.quantity);
-      if (idx % 2 === 1) doc.rect(marginL, curY - 3, contentW, 18).fill("#F9FAFB");
-
-      doc.fillColor("#111827").fontSize(9);
-      const itemName = p.selectedVariants ? `${p.name || "-"} (${p.selectedVariants})` : (p.name || "-");
-      doc.text(itemName, col.item + 4, curY, { width: 250, ellipsis: true });
-      doc.text(String(p.quantity || 0), col.qty, curY, { width: 50, align: "center" });
-      doc.text(inr(p.price), col.price, curY, { width: 70, align: "right" });
-      doc.text(inr(lineTotal), col.total, curY, { width: 80, align: "right" });
-      curY += 18;
-    });
-
-    // Table bottom line
-    doc.moveTo(marginL, curY + 2).lineTo(marginL + contentW, curY + 2).strokeColor("#E5E7EB").lineWidth(1).stroke();
-    curY += 14;
-
-    /* ── PRICING SUMMARY ── */
-    const sumX = col.price - 30;
-    const valX = col.total;
-    const sumW = 100;
-    const valW = 80;
-
-    const summaryLine = (label, value, opts = {}) => {
-      if (curY > 740) { doc.addPage(); curY = 50; }
-      const fontSize = opts.bold ? 10 : 9;
-      const color = opts.color || (opts.bold ? "#111827" : "#374151");
-      const fontName = opts.bold ? "Helvetica-Bold" : "Helvetica";
-      doc.font(fontName).fontSize(fontSize).fillColor(color);
-      doc.text(label, sumX, curY, { width: sumW, align: "right" });
-      doc.text(value, valX, curY, { width: valW, align: "right" });
-      curY += opts.bold ? 18 : 15;
-    };
-
-    summaryLine("Subtotal", inr(order.subtotal));
-
-    // Discount breakdown
-    if (order.discount > 0) {
-      const couponLabel = order.promo ? `Coupon (${order.promo})` : "Coupon Discount";
-      summaryLine(couponLabel, `- ${inr(order.discount)}`, { color: "#059669" });
-    }
-    if (order.saleDiscount > 0) {
-      const saleLabel = order.saleName ? `Sale (${order.saleName})` : "Sale Discount";
-      summaryLine(saleLabel, `- ${inr(order.saleDiscount)}`, { color: "#059669" });
-    }
-    if (order.membershipDiscount > 0) {
-      summaryLine("Prime Discount", `- ${inr(order.membershipDiscount)}`, { color: "#7C3AED" });
-    }
-
-    summaryLine("Tax (18% GST)", inr(order.tax));
-    summaryLine("Shipping", order.shipping > 0 ? inr(order.shipping) : "FREE", {
-      color: order.shipping > 0 ? "#374151" : "#059669",
-    });
-
-    // Total separator
-    doc.moveTo(sumX, curY - 4).lineTo(marginL + contentW, curY - 4).strokeColor("#D1D5DB").lineWidth(0.5).stroke();
-    curY += 2;
-    summaryLine("Total", inr(order.totalPrice), { bold: true });
-
-    if (order.walletUsed > 0) {
-      summaryLine("Wallet Used", `- ${inr(order.walletUsed)}`, { color: "#D97706" });
-      const netPayable = Math.max(0, Math.round((order.totalPrice || 0) - (order.walletUsed || 0)));
-      summaryLine("Net Payable", inr(netPayable), { bold: true });
-    }
-
-    /* ── PAYMENT INFO ── */
-    curY += 8;
-    if (curY > 700) { doc.addPage(); curY = 50; }
-    doc.moveTo(marginL, curY).lineTo(marginL + contentW, curY).strokeColor("#E5E7EB").lineWidth(1).stroke();
-    curY += 12;
-    doc.font("Helvetica-Bold").fontSize(9).fillColor("#111827").text("PAYMENT DETAILS", marginL, curY);
-    curY += 14;
-    doc.font("Helvetica").fontSize(9).fillColor("#374151");
-    doc.text(`Method: ${order.paymentMethod || "-"}`, marginL, curY);
-    curY += 12;
-    doc.text(`Status: ${order.paymentStatus || "PENDING"}`, marginL, curY);
-    if (order.paymentId) {
-      curY += 12;
-      doc.text(`Transaction ID: ${order.paymentId}`, marginL, curY);
-    }
-
-    /* ── FOOTER ── */
-    curY = Math.max(curY + 30, 720);
-    if (curY > 770) { doc.addPage(); curY = 720; }
-    doc.moveTo(marginL, curY).lineTo(marginL + contentW, curY).strokeColor("#E5E7EB").lineWidth(0.5).stroke();
-    curY += 8;
-    doc.font("Helvetica").fontSize(8).fillColor("#9CA3AF");
-    doc.text("This is a computer-generated invoice and does not require a signature.", marginL, curY, {
-      width: contentW, align: "center",
-    });
-    curY += 12;
-    doc.text(`Thank you for shopping with ${storeName}!`, marginL, curY, {
-      width: contentW, align: "center",
-    });
-
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename=invoice-${safeFilename}.pdf`);
+    doc.pipe(res);
+    renderTaxInvoice({ doc, order, settings });
     doc.end();
   } catch (err) {
     console.error("Invoice error:", err);

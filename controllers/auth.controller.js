@@ -6,7 +6,7 @@ import { OAuth2Client } from 'google-auth-library';
 import speakeasy from 'speakeasy';
 
 import User from '../models/User.js';
-import TokenBlacklist from "../models/TokenBlacklist.js";
+import { revokeToken, isTokenRevoked } from "../utils/tokenBlacklist.js";
 import { buildCookieOpts, buildClearCookieOpts } from '../utils/cookies.js';
 import { decrypt, HAS_VALID_KEY } from '../utils/crypto.js';
 import { createNotification } from './admin.notifications.controller.js';
@@ -396,8 +396,7 @@ export const verifyAdmin = async (req, res) => {
         if (!token) return res.status(401).json({ valid: false, message: "No token" });
 
         // Keep admin verify aligned with authenticateJWT behavior.
-        const blacklisted = await TokenBlacklist.findOne({ token });
-        if (blacklisted) {
+        if (await isTokenRevoked(token)) {
             return res.status(401).json({ valid: false, message: "Token invalidated" });
         }
 
@@ -431,11 +430,7 @@ export const logout = async (req, res) => {
                     ? Number(payload.exp) * 1000
                     : Date.now() + 30 * 24 * 60 * 60 * 1000;
 
-                await TokenBlacklist.updateOne(
-                    { token },
-                    { $set: { token, expiredAt: new Date(expMs) } },
-                    { upsert: true }
-                );
+                await revokeToken(token, expMs);
             } catch {
                 // Nothing to blacklist if token is invalid.
             }
