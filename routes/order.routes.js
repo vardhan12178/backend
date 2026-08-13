@@ -1,7 +1,8 @@
 import express from "express";
 import { body } from "express-validator";
 import { STAGES } from "../models/Order.js";
-import { authenticateJWT, requireAdmin } from "../middleware/auth.js";
+import { authenticateJWT } from "../middleware/auth.js";
+import { requirePermission } from "../middleware/permissions.js";
 import * as orderController from "../controllers/order.controller.js";
 
 const router = express.Router();
@@ -70,16 +71,16 @@ router.post(
 router.get("/orders/:id/invoice", authenticateJWT, asyncHandler(orderController.downloadInvoice));
 
 /* ADMIN — GET ALL ORDERS */
-router.get("/admin/orders", authenticateJWT, requireAdmin, asyncHandler(orderController.getAllOrders));
+router.get("/admin/orders", authenticateJWT, requirePermission("orders", "read"), asyncHandler(orderController.getAllOrders));
 
 /* ADMIN — GET ORDER BY ID */
-router.get("/admin/orders/:id", authenticateJWT, requireAdmin, asyncHandler(orderController.getOrderById));
+router.get("/admin/orders/:id", authenticateJWT, requirePermission("orders", "read"), asyncHandler(orderController.getOrderById));
 
 /* ADMIN — UPDATE ORDER STAGE */
 router.patch(
   "/admin/orders/:id/stage",
   authenticateJWT,
-  requireAdmin,
+  requirePermission("orders", "write"),
   body("stage")
     .customSanitizer((v) => v.toUpperCase())
     .isIn(STAGES),
@@ -90,7 +91,7 @@ router.patch(
 router.patch(
   "/admin/orders/:id/return",
   authenticateJWT,
-  requireAdmin,
+  requirePermission("orders", "write"),
   body("status").isString(),
   asyncHandler(orderController.updateReturnStatus)
 );
@@ -99,7 +100,7 @@ router.patch(
 router.post(
   "/admin/orders/:id/refund",
   authenticateJWT,
-  requireAdmin,
+  requirePermission("orders", "write"),
   body("method").isIn(["WALLET", "ORIGINAL"]),
   asyncHandler(orderController.initiateRefund)
 );
@@ -108,7 +109,7 @@ router.post(
 router.post(
   "/admin/orders/:id/replacement",
   authenticateJWT,
-  requireAdmin,
+  requirePermission("orders", "write"),
   asyncHandler(orderController.createReplacementOrder)
 );
 

@@ -2,30 +2,19 @@ import User from '../models/User.js';
 import Settings from '../models/Settings.js';
 
 /**
- * Get all settings: Global Store Config + Current Admin Profile
+ * Get global store settings.
+ * Admin identity (name/email/avatar/role) lives on GET /api/admin/verify
+ * instead — that endpoint is reachable by every admin regardless of module
+ * permissions, whereas this one is gated behind settings:read.
  */
 export const getSettings = async (req, res) => {
     try {
-        // 1. Fetch Global Settings (or create default if not exists)
         let settings = await Settings.findOne();
         if (!settings) {
             settings = await Settings.create({});
         }
 
-        // 2. Fetch Current Admin Profile
-        // req.user is populated by authenticateJWT middleware
-        const admin = await User.findById(req.user.userId);
-
-        res.json({
-            store: settings,
-            admin: {
-                name: admin.name,
-                username: admin.username,
-                email: admin.email,
-                profileImage: admin.profileImage,
-                role: 'admin' // Implicit, since this route is admin-protected
-            }
-        });
+        res.json({ store: settings });
     } catch (error) {
         console.error('[ERROR] Get Settings:', error);
         res.status(500).json({ message: 'Failed to fetch settings' });
@@ -50,10 +39,6 @@ export const updateStoreSettings = async (req, res) => {
         if (supportPhone) settings.supportPhone = supportPhone;
         if (freeShippingThreshold !== undefined) settings.freeShippingThreshold = Number(freeShippingThreshold);
         if (primeEnabled !== undefined) settings.primeEnabled = Boolean(primeEnabled);
-
-        if (req.file) {
-            settings.storeLogo = req.file.location;
-        }
 
         await settings.save();
         res.json({ message: 'Store settings updated', settings });
@@ -93,17 +78,22 @@ export const updateAnnouncements = async (req, res) => {
 };
 
 /**
- * Update Admin Profile (Name, Password, Avatar)
+ * Update Admin Profile (Name, Avatar)
+ *
+ * Email is intentionally not editable here — it's the account's login
+ * identifier (checked via $or on username/email at /admin/login), unique
+ * and required on the User model, and changing it safely needs its own
+ * verify-before-switch flow (confirm new address, handle collisions, etc.).
+ * Until that exists, email stays read-only to avoid a self-lockout footgun.
  */
 export const updateAdminProfile = async (req, res) => {
     try {
-        const { name, email } = req.body;
+        const { name } = req.body;
         const user = await User.findById(req.user.userId);
 
         if (!user) return res.status(404).json({ message: 'User not found' });
 
         if (name) user.name = name;
-        if (email) user.email = email; // Might strictly checking this later
 
         // Handle Avatar Upload
         if (req.file) {

@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import mongooseSequence from "mongoose-sequence";
+import { round2 } from "../utils/calc.js";
 
 // -----------------------------------------------------------------------------
 // ORDER STAGES (Modern E-Commerce Pipeline)
@@ -17,7 +18,6 @@ export const STAGES = [
 
 const TAX_RATE = 0.18;
 const INCLUDED_TAX_RATE = TAX_RATE / (1 + TAX_RATE);
-const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 const AutoIncrement = mongooseSequence(mongoose);
 
 // -----------------------------------------------------------------------------

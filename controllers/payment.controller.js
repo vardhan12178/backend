@@ -1,4 +1,3 @@
-import Razorpay from "razorpay";
 import crypto from "crypto";
 import {
     consumeCheckoutOrderSession,
@@ -6,30 +5,9 @@ import {
     issueCheckoutVerificationToken,
     saveCheckoutOrderSession,
 } from "../services/payment.session.service.js";
-
-const razorpay = new Razorpay({
-    key_id: process.env.RAZORPAY_KEY_ID,
-    key_secret: process.env.RAZORPAY_KEY_SECRET,
-});
-
-const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
-const toIdString = (v) => {
-    if (!v) return "";
-    if (typeof v === "string") return v;
-    if (typeof v === "object") {
-        if (typeof v.toHexString === "function") return v.toHexString();
-        if (typeof v.$oid === "string") return v.$oid;
-        if (typeof v.id === "string") return v.id;
-        if (v._id) return toIdString(v._id);
-    }
-    return String(v);
-};
-
-const secureEqual = (a, b) => {
-    const aBuf = Buffer.from(String(a || ""), "utf8");
-    const bBuf = Buffer.from(String(b || ""), "utf8");
-    return aBuf.length === bBuf.length && crypto.timingSafeEqual(aBuf, bBuf);
-};
+import razorpay from "../utils/razorpay.js";
+import { round2 } from "../utils/calc.js";
+import { toIdString, secureEqual } from "../utils/helpers.js";
 
 /* Create Order */
 export const createOrder = async (req, res) => {

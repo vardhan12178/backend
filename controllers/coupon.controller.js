@@ -1,6 +1,5 @@
 import Coupon from "../models/Coupon.js";
-
-const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+import { round2 } from "../utils/calc.js";
 
 // ── Admin CRUD ───────────────────────────────────────────────────────────────
 

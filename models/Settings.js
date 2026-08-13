@@ -21,9 +21,6 @@ const settingsSchema = new Schema({
     supportEmail: { type: String, default: 'support@vkartshop.in', trim: true },
     supportPhone: { type: String, default: '+91 99999 12345', trim: true },
 
-    // Store Branding
-    storeLogo: { type: String, default: '' },
-
     // Billing & Legal
     gstNumber: { type: String, default: '', trim: true },
     address: { type: String, default: '', trim: true },

@@ -1,7 +1,8 @@
 import express from "express";
 import { body } from "express-validator";
 import validate from "../middleware/validate.js";
-import { authenticateJWT, requireAdmin } from "../middleware/auth.js";
+import { authenticateJWT } from "../middleware/auth.js";
+import { requirePermission } from "../middleware/permissions.js";
 import * as memberCtrl from "../controllers/membership.controller.js";
 
 const router = express.Router();
@@ -22,17 +23,17 @@ router.post("/verify", authenticateJWT, [
   body("planId").optional().isMongoId(),
 ], validate, memberCtrl.verifyAndActivate);
 
-router.get("/admin/plans", authenticateJWT, requireAdmin, memberCtrl.adminListPlans);
+router.get("/admin/plans", authenticateJWT, requirePermission("membership", "read"), memberCtrl.adminListPlans);
 
 
-router.post("/admin/plans", authenticateJWT, requireAdmin, [
+router.post("/admin/plans", authenticateJWT, requirePermission("membership", "write"), [
   body("name").isString().trim().notEmpty(),
   body("price").isFloat({ gt: 0 }),
   body("durationDays").isInt({ gt: 0 }),
 ], validate, memberCtrl.adminCreatePlan);
 
-router.put("/admin/plans/:id", authenticateJWT, requireAdmin, memberCtrl.adminUpdatePlan);
+router.put("/admin/plans/:id", authenticateJWT, requirePermission("membership", "write"), memberCtrl.adminUpdatePlan);
 
-router.delete("/admin/plans/:id", authenticateJWT, requireAdmin, memberCtrl.adminDeletePlan);
+router.delete("/admin/plans/:id", authenticateJWT, requirePermission("membership", "write"), memberCtrl.adminDeletePlan);
 
 export default router;

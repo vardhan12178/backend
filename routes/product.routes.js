@@ -1,7 +1,8 @@
 import express from "express";
 import { body } from "express-validator";
 import validate from "../middleware/validate.js";
-import { authenticateJWT, requireAdmin, optionalAuth } from "../middleware/auth.js";
+import { authenticateJWT, optionalAuth } from "../middleware/auth.js";
+import { requirePermission } from "../middleware/permissions.js";
 import multer from "multer";
 import multerS3 from "multer-s3";
 import path from "path";
@@ -76,22 +77,22 @@ router.get("/products/:id", optionalAuth, productController.getProductById);
 //
 
 /* Create Product */
-router.post("/admin/products", authenticateJWT, requireAdmin, productController.createProduct);
+router.post("/admin/products", authenticateJWT, requirePermission("products", "write"), productController.createProduct);
 
 /* Update Product */
-router.put("/admin/products/:id", authenticateJWT, requireAdmin, productController.updateProduct);
+router.put("/admin/products/:id", authenticateJWT, requirePermission("products", "write"), productController.updateProduct);
 
 /* Delete Product */
-router.delete("/admin/products/:id", authenticateJWT, requireAdmin, productController.deleteProduct);
+router.delete("/admin/products/:id", authenticateJWT, requirePermission("products", "write"), productController.deleteProduct);
 
 /* Admin List */
-router.get("/admin/products", authenticateJWT, requireAdmin, productController.getAdminProducts);
+router.get("/admin/products", authenticateJWT, requirePermission("products", "read"), productController.getAdminProducts);
 
 /* Upload Image */
 router.post(
   "/admin/products/upload",
   authenticateJWT,
-  requireAdmin,
+  requirePermission("products", "write"),
   uploadProductImage.single("image"),
   uploadProductError,
   productController.uploadProductImageHandler

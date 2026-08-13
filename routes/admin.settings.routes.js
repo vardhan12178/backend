@@ -1,5 +1,6 @@
 import express from 'express';
 import { authenticateJWT, requireAdmin } from '../middleware/auth.js';
+import { requirePermission } from '../middleware/permissions.js';
 import { profileUpload } from '../utils/upload.js';
 import {
     getSettings,
@@ -14,20 +15,23 @@ const router = express.Router();
 // Public: active announcements (no auth)
 router.get('/announcements/public', getAnnouncements);
 
-// All remaining routes require Admin Auth
-router.use(authenticateJWT, requireAdmin);
+// All remaining routes require admin auth
+router.use(authenticateJWT);
 
 // GET /api/admin/settings
-router.get('/', getSettings);
+router.get('/', requirePermission('settings', 'read'), getSettings);
 
-// PUT /api/admin/settings/store (supports logo upload)
-router.put('/store', profileUpload.single('storeLogo'), updateStoreSettings);
+// PUT /api/admin/settings/store
+router.put('/store', requirePermission('settings', 'write'), updateStoreSettings);
 
 // PUT /api/admin/settings/profile (supports avatar upload)
-router.put('/profile', profileUpload.single('profileImage'), updateAdminProfile);
+// Note: this updates the acting admin's own profile — allowed for any admin
+// account regardless of module permissions (not module-gated), but still
+// requires a valid admin JWT.
+router.put('/profile', requireAdmin, profileUpload.single('profileImage'), updateAdminProfile);
 
 // Announcements
-router.get('/announcements', getAnnouncements);
-router.put('/announcements', updateAnnouncements);
+router.get('/announcements', requirePermission('settings', 'read'), getAnnouncements);
+router.put('/announcements', requirePermission('settings', 'write'), updateAnnouncements);
 
 export default router;

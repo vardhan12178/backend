@@ -56,6 +56,26 @@ const userSchema = new Schema(
       default: ["user"],
     },
 
+    /* ---------- Admin RBAC (employee role + per-module permissions) ---------- */
+    adminRole: {
+      type: String,
+      enum: [
+        "super_admin",
+        "product_manager",
+        "customer_service",
+        "reviewer",
+        "order_manager",
+        "sales_manager",
+        null,
+      ],
+      default: null,
+    },
+    permissions: {
+      type: Map,
+      of: { type: String, enum: ["read", "write"] },
+      default: {},
+    },
+
     /* ---------- Cart & Wishlist ---------- */
     cart: [
       {
@@ -137,6 +157,7 @@ const userSchema = new Schema(
     versionKey: false,
     toJSON: {
       virtuals: true,
+      flattenMaps: true,
       transform(doc, ret) {
         delete ret.password;
         delete ret.resetPasswordTokenHash;
@@ -149,6 +170,7 @@ const userSchema = new Schema(
     },
     toObject: {
       virtuals: true,
+      flattenMaps: true,
       transform(doc, ret) {
         delete ret.password;
         delete ret.resetPasswordTokenHash;

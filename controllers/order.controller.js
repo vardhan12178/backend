@@ -14,23 +14,13 @@ import {
 } from "../services/payment.session.service.js";
 import PDFDocument from "pdfkit";
 import { renderTaxInvoice } from "../utils/invoicePdf.js";
+import { round2 } from "../utils/calc.js";
+import { toIdString } from "../utils/helpers.js";
 
 const TAX_RATE = 0.18;
 const FREE_SHIPPING_THRESHOLD = 999;
 const FLAT_SHIPPING_FEE = 50;
-const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 const INCLUDED_TAX_RATE = TAX_RATE / (1 + TAX_RATE);
-const toIdString = (v) => {
-  if (!v) return "";
-  if (typeof v === "string") return v;
-  if (typeof v === "object") {
-    if (typeof v.toHexString === "function") return v.toHexString();
-    if (typeof v.$oid === "string") return v.$oid;
-    if (typeof v.id === "string") return v.id;
-    if (v._id) return toIdString(v._id);
-  }
-  return String(v);
-};
 
 /* CREATE ORDER */
 export const createOrder = async (req, res) => {

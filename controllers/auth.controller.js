@@ -343,7 +343,14 @@ export const adminLogin = async (req, res) => {
         return res.status(403).json({ message: "Access denied: Not an admin" });
     }
 
-    const token = jwt.sign({ userId: user._id, roles }, process.env.JWT_SECRET, { expiresIn: "30d" });
+    // adminRole is carried in the token for display/UX only — every
+    // permission-gated route re-checks the DB (see middleware/permissions.js),
+    // so this never needs to be trusted for authorization.
+    const token = jwt.sign(
+        { userId: user._id, roles, adminRole: user.adminRole || null },
+        process.env.JWT_SECRET,
+        { expiresIn: "30d" }
+    );
     res.cookie("jwt_token", token, buildCookieOpts(req, true));
     res.json({ token, role: "admin" });
   } catch (err) {
@@ -380,7 +387,11 @@ export const adminGoogleAuth = async (req, res) => {
             return res.status(403).json({ message: "Access denied: Not an admin" });
         }
 
-        const token = jwt.sign({ userId: user._id, roles }, process.env.JWT_SECRET, { expiresIn: "30d" });
+        const token = jwt.sign(
+            { userId: user._id, roles, adminRole: user.adminRole || null },
+            process.env.JWT_SECRET,
+            { expiresIn: "30d" }
+        );
         res.cookie("jwt_token", token, buildCookieOpts(req, true));
         res.json({ token, role: "admin" });
     } catch (err) {
@@ -411,7 +422,26 @@ export const verifyAdmin = async (req, res) => {
             return res.status(401).json({ valid: false, message: "Invalid user" });
         }
 
-        res.json({ valid: true });
+        // Always read fresh from the DB (not the token) so the header, sidebar
+        // and route-guards reflect any access/profile change immediately.
+        // This is the one endpoint every logged-in admin can hit regardless of
+        // their module permissions, so it also carries basic identity — pages
+        // like "My Profile" shouldn't need a settings-gated call just to know
+        // who's logged in.
+        const permissions = user.permissions
+            ? Object.fromEntries(user.permissions)
+            : {};
+
+        res.json({
+            valid: true,
+            adminRole: user.adminRole || null,
+            permissions,
+            name: user.name || "",
+            email: user.email,
+            username: user.username,
+            profileImage: user.profileImage || null,
+            createdAt: user.createdAt,
+        });
     } catch (err) {
         console.error("Admin verify error:", err.message);
         res.status(401).json({ valid: false, message: "Invalid token" });
