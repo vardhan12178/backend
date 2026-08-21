@@ -30,8 +30,10 @@ router.put('/store', requirePermission('settings', 'write'), updateStoreSettings
 // requires a valid admin JWT.
 router.put('/profile', requireAdmin, profileUpload.single('profileImage'), updateAdminProfile);
 
-// Announcements
-router.get('/announcements', requirePermission('settings', 'read'), getAnnouncements);
-router.put('/announcements', requirePermission('settings', 'write'), updateAnnouncements);
+// Announcements — a marketing/banners concern, kept separate from store
+// config + legal/GST settings so sales_manager can own it without needing
+// full `settings` access.
+router.get('/announcements', requirePermission('marketing', 'read'), getAnnouncements);
+router.put('/announcements', requirePermission('marketing', 'write'), updateAnnouncements);
 
 export default router;

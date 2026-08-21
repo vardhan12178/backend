@@ -12,6 +12,7 @@ export const MODULES = [
   "users",
   "reviews",
   "settings",
+  "marketing",
   "notifications",
   "employees",
 ];
@@ -32,13 +33,16 @@ export const ASSIGNABLE_ROLES_FOR_NON_SUPER_ADMIN = ADMIN_ROLES.filter(
   (r) => r !== "super_admin"
 );
 
+// Every non-super-admin role gets read access to its own notification feed
+// by default — otherwise the admin-header bell 403s for every employee, since
+// nothing else grants the `notifications` module.
 export const ROLE_PRESETS = {
   super_admin: {}, // irrelevant — super_admin bypasses the permissions map entirely
-  product_manager: { products: "write" },
-  customer_service: { users: "write" },
-  reviewer: { reviews: "write" },
-  order_manager: { orders: "write" },
-  sales_manager: { coupons: "write", sales: "write", membership: "write" },
+  product_manager: { products: "write", notifications: "read" },
+  customer_service: { users: "write", notifications: "read" },
+  reviewer: { reviews: "write", notifications: "read" },
+  order_manager: { orders: "write", notifications: "read" },
+  sales_manager: { coupons: "write", sales: "write", membership: "write", marketing: "write", notifications: "read" },
 };
 
 export function isValidModule(module) {

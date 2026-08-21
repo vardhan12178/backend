@@ -61,16 +61,28 @@ export function requirePermission(module, level = "read") {
 /**
  * Extra guard stacked alongside requirePermission("employees", "write") on
  * any route that can assign/change an employee's adminRole. Blocks anyone
- * who isn't already super_admin from granting super_admin to someone else
- * (or themselves), even though they may otherwise have write access to the
- * Employees module.
+ * who isn't already super_admin from:
+ *   - granting super_admin to someone else (or themselves), and
+ *   - granting the `employees` module itself via the freeform permissions
+ *     object — otherwise anyone holding Employees:write could hand a new
+ *     hire the ability to manage employees under an unrelated role label,
+ *     even though no role preset actually grants that module.
+ * The rest of the permissions object is intentionally left uncapped: an
+ * admin with Employees:write can still freely grant/adjust every other
+ * module beyond a role's default preset — that flexibility is by design.
  *
  * Relies on req.adminUser, populated by requirePermission — must run after it.
  */
 export function requireSuperAdminForRoleAssignment(req, res, next) {
   const requestedRole = req.body?.adminRole;
-  if (requestedRole === "super_admin" && req.adminUser?.adminRole !== "super_admin") {
+  const requestedEmployeesLevel = req.body?.permissions?.employees;
+  const isSuperAdmin = req.adminUser?.adminRole === "super_admin";
+
+  if (requestedRole === "super_admin" && !isSuperAdmin) {
     return res.status(403).json({ message: "Only a super admin can grant super admin access" });
+  }
+  if (requestedEmployeesLevel && !isSuperAdmin) {
+    return res.status(403).json({ message: "Only a super admin can grant Employees module access" });
   }
   next();
 }
