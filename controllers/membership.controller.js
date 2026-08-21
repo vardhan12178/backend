@@ -4,6 +4,7 @@ import MembershipPlan from "../models/MembershipPlan.js";
 import redis from "../utils/redis.js";
 import {
   consumeMembershipOrderSession,
+  consumeWebhookConfirmation,
   getMembershipOrderSession,
   saveMembershipOrderSession,
 } from "../services/payment.session.service.js";
@@ -102,7 +103,17 @@ export const verifyAndActivate = async (req, res) => {
       return res.status(400).json({ message: "Invalid signature" });
     }
 
-    const pending = await getMembershipOrderSession(razorpay_order_id);
+    let pending = await getMembershipOrderSession(razorpay_order_id);
+
+    // Fallback: the browser's own handler callback can miss (tab closed,
+    // network drop right after a successful payment). If the webhook
+    // already confirmed this same order independently, use that record
+    // instead of failing outright.
+    if (!pending) {
+      const webhookConfirmed = await consumeWebhookConfirmation(razorpay_order_id);
+      if (webhookConfirmed?.planId) pending = webhookConfirmed;
+    }
+
     if (!pending) {
       return res.status(400).json({ message: "Membership payment session expired or invalid" });
     }

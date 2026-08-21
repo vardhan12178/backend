@@ -3,6 +3,7 @@ import {
     consumeCheckoutOrderSession,
     consumeWebhookConfirmation,
     getCheckoutOrderSession,
+    getMembershipOrderSession,
     issueCheckoutVerificationToken,
     saveCheckoutOrderSession,
     saveWebhookConfirmation,
@@ -192,16 +193,24 @@ export const handleWebhook = async (req, res) => {
         }
 
         if (event === "payment.captured" && payment?.order_id) {
-            // Read-only: never consumes the client's own checkout session, so
-            // this can't race a browser callback that fires around the same
-            // moment. It only ever gets used as a fallback in verifyPayment.
-            const pending = await getCheckoutOrderSession(payment.order_id);
+            // Read-only: never consumes the client's own checkout/membership
+            // session, so this can't race a browser callback that fires
+            // around the same moment. It only ever gets used as a fallback
+            // in verifyPayment / verifyAndActivate. One Razorpay order can
+            // only ever be either a checkout or a membership purchase, so
+            // trying both lookups and taking whichever resolves is safe.
+            const [checkoutPending, membershipPending] = await Promise.all([
+                getCheckoutOrderSession(payment.order_id),
+                getMembershipOrderSession(payment.order_id),
+            ]);
+            const pending = checkoutPending || membershipPending;
             await saveWebhookConfirmation(payment.order_id, {
                 userId: pending?.userId || null,
                 amount: payment.amount,
                 currency: payment.currency || pending?.currency || "INR",
                 paymentId: payment.id,
                 receipt: pending?.receipt,
+                planId: membershipPending?.planId,
                 confirmedAt: new Date().toISOString(),
             });
             console.log(`Razorpay webhook: payment.captured for order ${payment.order_id} (${payment.id})`);
