@@ -194,7 +194,11 @@ export const createOrder = async (req, res) => {
       }
 
       paymentStatus = "PAID";
-      paymentMethod = verifiedPayment.method === "upi" ? "UPI" : "CARD";
+      // Razorpay's own reported method (upi/card/netbanking/wallet/paylater/
+      // emi) — bucket the ones we don't have a distinct enum value for
+      // (wallet, emi) under CARD rather than losing the real method entirely.
+      const rzpMethodMap = { upi: "UPI", netbanking: "NETBANKING", paylater: "PAYLATER" };
+      paymentMethod = rzpMethodMap[verifiedPayment.method] || "CARD";
       paymentId = verifiedPayment.paymentId;
       paymentOrderId = verifiedPayment.paymentOrderId;
       paymentTokenToConsume = paymentVerificationToken;
