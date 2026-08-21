@@ -15,6 +15,7 @@ export const MODULES = [
   "marketing",
   "notifications",
   "employees",
+  "support",
 ];
 
 export const ADMIN_ROLES = [
@@ -24,6 +25,7 @@ export const ADMIN_ROLES = [
   "reviewer",
   "order_manager",
   "sales_manager",
+  "customer_support",
 ];
 
 // Roles an employee-with-write-access-to-Employees is allowed to assign.
@@ -43,6 +45,11 @@ export const ROLE_PRESETS = {
   reviewer: { reviews: "write", notifications: "read" },
   order_manager: { orders: "write", notifications: "read" },
   sales_manager: { coupons: "write", sales: "write", membership: "write", marketing: "write", notifications: "read" },
+  // Scoped to the support inbox plus read-only order context — distinct
+  // from order_manager (which can write orders but has no support access)
+  // and from customer_service (which is really account moderation:
+  // users:write, not customer-facing support).
+  customer_support: { support: "write", orders: "read", notifications: "read" },
 };
 
 export function isValidModule(module) {

@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
+import { ADMIN_ROLES } from "../config/permissions.js";
 
 const { Schema } = mongoose;
 
@@ -59,15 +60,11 @@ const userSchema = new Schema(
     /* ---------- Admin RBAC (employee role + per-module permissions) ---------- */
     adminRole: {
       type: String,
-      enum: [
-        "super_admin",
-        "product_manager",
-        "customer_service",
-        "reviewer",
-        "order_manager",
-        "sales_manager",
-        null,
-      ],
+      // Sourced from config/permissions.js so a new role only needs to be
+      // added in one place — this previously duplicated the list by hand
+      // and silently fell out of sync (customer_support was addable via
+      // ADMIN_ROLES but rejected here until this fix).
+      enum: [...ADMIN_ROLES, null],
       default: null,
     },
     permissions: {
