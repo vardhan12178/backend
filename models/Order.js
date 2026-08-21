@@ -163,6 +163,10 @@ const orderSchema = new mongoose.Schema(
     refundMethod: { type: String, enum: ["WALLET", "ORIGINAL"] },
     refundAmount: { type: Number, min: 0, default: 0 },
     refundDueAt: { type: Date },
+    // Razorpay's own refund id, set when refundMethod is ORIGINAL and a real
+    // gateway refund was initiated. Lets the webhook look the order back up
+    // when Razorpay confirms/fails it asynchronously.
+    refundId: { type: String, trim: true },
 
     cancelReason: { type: String, trim: true },
 

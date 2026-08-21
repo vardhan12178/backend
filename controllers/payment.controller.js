@@ -1,11 +1,18 @@
 import crypto from "crypto";
 import {
     consumeCheckoutOrderSession,
+    consumeWebhookConfirmation,
     getCheckoutOrderSession,
     issueCheckoutVerificationToken,
     saveCheckoutOrderSession,
+    saveWebhookConfirmation,
 } from "../services/payment.session.service.js";
 import razorpay from "../utils/razorpay.js";
+import redis from "../utils/redis.js";
+import Order from "../models/Order.js";
+import { createNotification } from "./admin.notifications.controller.js";
+import { createUserNotification } from "./user.notifications.controller.js";
+import { sendEmail, emailTemplate } from "../services/email.service.js";
 import { round2 } from "../utils/calc.js";
 import { toIdString, secureEqual } from "../utils/helpers.js";
 
@@ -67,7 +74,22 @@ export const verifyPayment = async (req, res) => {
             return res.status(400).json({ success: false, message: "Invalid signature" });
         }
 
-        const pending = await getCheckoutOrderSession(razorpay_order_id);
+        let pending = await getCheckoutOrderSession(razorpay_order_id);
+
+        // Fallback: the browser's own handler callback can miss (tab closed,
+        // network drop right after a successful payment). If the webhook
+        // already confirmed this same order independently, use that record
+        // instead of failing outright — this is the whole point of running
+        // a webhook alongside the client-driven flow.
+        let viaWebhookFallback = false;
+        if (!pending) {
+            const webhookConfirmed = await consumeWebhookConfirmation(razorpay_order_id);
+            if (webhookConfirmed) {
+                pending = webhookConfirmed;
+                viaWebhookFallback = true;
+            }
+        }
+
         if (!pending) {
             return res.status(400).json({ success: false, message: "Payment session expired or invalid" });
         }
@@ -112,6 +134,10 @@ export const verifyPayment = async (req, res) => {
             amountPaise: expectedPaise,
             amount: round2(expectedPaise / 100),
             currency: pending.currency || "INR",
+            // Razorpay's own record of how this was actually paid (upi/card/
+            // netbanking/wallet/emi) — lets the order carry the real method
+            // instead of assuming CARD for every online payment.
+            method: rzpPayment.method || null,
             verifiedAt: new Date().toISOString(),
         });
 
@@ -123,5 +149,121 @@ export const verifyPayment = async (req, res) => {
     } catch (err) {
         console.error("Razorpay verify error:", err);
         res.status(500).json({ success: false, message: "Verification failed" });
+    }
+};
+
+/* Razorpay Webhook — server-to-server confirmation, independent of the
+   client's own handler callback. Razorpay retries on anything but a 2xx
+   response, so once the signature checks out we always ack quickly and log
+   problems rather than triggering a retry storm. */
+export const handleWebhook = async (req, res) => {
+    try {
+        const signature = req.headers["x-razorpay-signature"];
+        const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
+
+        if (!signature || !secret || !req.rawBody) {
+            return res.status(400).json({ success: false, message: "Missing signature" });
+        }
+
+        const expectedSignature = crypto
+            .createHmac("sha256", secret)
+            .update(req.rawBody)
+            .digest("hex");
+
+        if (!secureEqual(expectedSignature, signature)) {
+            console.warn("Razorpay webhook: signature mismatch");
+            return res.status(400).json({ success: false, message: "Invalid signature" });
+        }
+
+        const { event, payload } = req.body || {};
+        const payment = payload?.payment?.entity;
+        const refund = payload?.refund?.entity;
+        const entityId = payment?.id || refund?.id;
+
+        // Razorpay resends the identical payload on retry with no dedicated
+        // event id of its own — dedupe on (event, entity id) for a window
+        // comfortably longer than its retry schedule.
+        if (event && entityId) {
+            const seenKey = `webhook:seen:${event}:${entityId}`;
+            const firstSeen = await redis.set(seenKey, "1", "EX", 24 * 60 * 60, "NX");
+            if (firstSeen !== "OK") {
+                return res.status(200).json({ received: true, duplicate: true });
+            }
+        }
+
+        if (event === "payment.captured" && payment?.order_id) {
+            // Read-only: never consumes the client's own checkout session, so
+            // this can't race a browser callback that fires around the same
+            // moment. It only ever gets used as a fallback in verifyPayment.
+            const pending = await getCheckoutOrderSession(payment.order_id);
+            await saveWebhookConfirmation(payment.order_id, {
+                userId: pending?.userId || null,
+                amount: payment.amount,
+                currency: payment.currency || pending?.currency || "INR",
+                paymentId: payment.id,
+                receipt: pending?.receipt,
+                confirmedAt: new Date().toISOString(),
+            });
+            console.log(`Razorpay webhook: payment.captured for order ${payment.order_id} (${payment.id})`);
+        } else if (event === "payment.failed" && payment?.order_id) {
+            console.warn(
+                `Razorpay webhook: payment.failed for order ${payment.order_id} — ${payment.error_description || "no reason given"}`
+            );
+        } else if (event === "refund.processed" && refund) {
+            const order = await Order.findOne({
+                $or: [{ refundId: refund.id }, { paymentId: refund.payment_id }],
+            });
+            if (order && order.refundStatus !== "COMPLETED") {
+                order.refundStatus = "COMPLETED";
+                order.refundId = order.refundId || refund.id;
+                if (["REQUESTED", "APPROVED", "PICKED", "RECEIVED"].includes(order.returnStatus)) {
+                    order.returnStatus = "CLOSED";
+                }
+                await order.save();
+
+                createUserNotification(
+                    order.userId,
+                    "refund",
+                    "Refund completed",
+                    "Your refund to the original payment method is completed.",
+                    `/orders/${order.orderId}`
+                );
+                if (order.customer?.email) {
+                    await sendEmail({
+                        to: order.customer.email,
+                        subject: "Refund completed",
+                        html: emailTemplate({
+                            title: "Refund completed",
+                            body: "Your refund to the original payment method is completed.",
+                        }),
+                    });
+                }
+                console.log(`Razorpay webhook: refund.processed for order ${order.orderId} (refund ${refund.id})`);
+            }
+        } else if (event === "refund.failed" && refund) {
+            const order = await Order.findOne({
+                $or: [{ refundId: refund.id }, { paymentId: refund.payment_id }],
+            });
+            if (order && order.refundStatus !== "FAILED") {
+                order.refundStatus = "FAILED";
+                order.refundId = order.refundId || refund.id;
+                await order.save();
+
+                createNotification(
+                    "refund",
+                    `Refund failed for ${order.orderId || order._id}`,
+                    "Razorpay reported a failed refund — needs manual follow-up.",
+                    "/admin/orders"
+                );
+                console.warn(`Razorpay webhook: refund.failed for order ${order.orderId} (refund ${refund.id})`);
+            }
+        }
+
+        res.status(200).json({ received: true });
+    } catch (err) {
+        console.error("Razorpay webhook error:", err);
+        // Already signature-verified at this point — ack anyway so Razorpay
+        // doesn't hammer retries for an error that's now logged for follow-up.
+        res.status(200).json({ received: true });
     }
 };

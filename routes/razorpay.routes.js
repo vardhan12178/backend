@@ -17,4 +17,8 @@ router.post("/razorpay/verify", authenticateJWT, [
     body("razorpay_signature").isString().notEmpty(),
 ], validate, paymentController.verifyPayment);
 
+// Server-to-server call from Razorpay itself — no user session, authenticity
+// is enforced by the x-razorpay-signature check inside the controller.
+router.post("/razorpay/webhook", paymentController.handleWebhook);
+
 export default router;

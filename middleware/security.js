@@ -92,6 +92,10 @@ export const csrfGuard = (req, res, next) => {
     '/api/razorpay/verify',
     '/api/wallet/verify',
     '/api/membership/verify',
+    // Server-to-server call from Razorpay — no browser cookies/CSRF token to
+    // present. Authenticity is instead enforced by the webhook signature
+    // check inside the controller.
+    '/api/razorpay/webhook',
   ];
   
   if (exemptPaths.some(path => req.path === path || req.originalUrl === path)) {
@@ -124,6 +128,7 @@ export const forgotLimiter = rateLimit({ windowMs: 60 * 1000, max: 5, standardHe
 export const resetLimiter = rateLimit({ windowMs: 60 * 1000, max: 5, standardHeaders: true });
 export const googleLimiter = rateLimit({ windowMs: 60 * 1000, max: 10, standardHeaders: true });
 export const aiChatLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, standardHeaders: true, message: { error: 'Too many requests, please slow down' } });
+export const aiReviewSummaryLimiter = rateLimit({ windowMs: 60 * 1000, max: 20, standardHeaders: true, message: { error: 'Too many requests, please slow down' } });
 
 // Global API rate limiter — 200 requests per minute per IP
 export const globalApiLimiter = rateLimit({

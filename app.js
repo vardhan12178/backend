@@ -31,7 +31,10 @@ const app = express();
 
 app.set('trust proxy', 1);
 app.use(helmetMiddleware);
-app.use(express.json({ limit: '100kb' }));
+// `verify` stashes the raw request bytes on req.rawBody — needed to check the
+// Razorpay webhook's HMAC signature, which is computed over the exact raw
+// payload rather than the re-serialized parsed body.
+app.use(express.json({ limit: '100kb', verify: (req, res, buf) => { req.rawBody = buf; } }));
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(commonSecurity);

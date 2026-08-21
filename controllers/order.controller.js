@@ -12,6 +12,7 @@ import {
   consumeCheckoutVerificationToken,
   getCheckoutVerificationToken,
 } from "../services/payment.session.service.js";
+import { refundPaymentViaRazorpay } from "../services/refund.service.js";
 import PDFDocument from "pdfkit";
 import { renderTaxInvoice } from "../utils/invoicePdf.js";
 import { round2 } from "../utils/calc.js";
@@ -193,7 +194,7 @@ export const createOrder = async (req, res) => {
       }
 
       paymentStatus = "PAID";
-      paymentMethod = "CARD";
+      paymentMethod = verifiedPayment.method === "upi" ? "UPI" : "CARD";
       paymentId = verifiedPayment.paymentId;
       paymentOrderId = verifiedPayment.paymentOrderId;
       paymentTokenToConsume = paymentVerificationToken;
@@ -563,17 +564,36 @@ export const initiateRefund = async (req, res) => {
       console.error("Refund wallet error:", err);
       return res.status(500).json({ message: "Internal server error" });
     }
+  } else if (order.paymentId) {
+    try {
+      const refund = await refundPaymentViaRazorpay(order, { reason: order.returnReason || "Return refund" });
+      order.refundId = refund.id;
+      order.refundStatus = refund.status === "processed" ? "COMPLETED" : "INITIATED";
+      if (order.refundStatus === "COMPLETED") order.returnStatus = "CLOSED";
+      await order.save();
+    } catch (err) {
+      console.error("Razorpay refund error:", err.message);
+      order.refundStatus = "FAILED";
+      await order.save();
+    }
   } else {
+    // No real gateway payment on record (legacy/COD order) — fall back to
+    // the manual placeholder the nightly scheduler resolves.
     order.refundStatus = "INITIATED";
     order.refundDueAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     await order.save();
   }
 
+  const refundStatusCopy =
+    order.refundStatus === "COMPLETED" ? "completed"
+    : order.refundStatus === "FAILED" ? "could not be processed — our team will follow up"
+    : "initiated";
+
   createUserNotification(
     order.userId,
     "refund",
-    "Refund initiated",
-    `Your refund has been ${order.refundStatus === "COMPLETED" ? "completed" : "initiated"}.`,
+    order.refundStatus === "FAILED" ? "Refund issue" : "Refund initiated",
+    `Your refund has been ${refundStatusCopy}.`,
     `/orders/${order.orderId}`
   );
 
@@ -590,7 +610,7 @@ export const initiateRefund = async (req, res) => {
       subject: "Refund update",
       html: emailTemplate({
         title: "Refund update",
-        body: `Your refund has been ${order.refundStatus === "COMPLETED" ? "completed" : "initiated"}.`,
+        body: `Your refund has been ${refundStatusCopy}.`,
       }),
     });
   }
@@ -689,9 +709,28 @@ export const downloadInvoice = async (req, res) => {
     const order = await Order.findById(req.params.id).lean();
     if (!order) return res.status(404).json({ message: "Order not found" });
 
-    const isAdmin = Array.isArray(req.user?.roles) && req.user.roles.includes("admin");
-    if (!isAdmin && String(order.userId) !== String(req.user.userId)) {
-      return res.status(403).json({ message: "Unauthorized" });
+    const isOwner = String(order.userId) === String(req.user?.userId);
+    if (!isOwner) {
+      // Not the customer themselves — re-check admin access fresh from the DB
+      // (not the JWT's baked-in roles) and require actual orders:read/write,
+      // matching requirePermission's behavior so revocation takes effect
+      // immediately and access is scoped to the orders module specifically.
+      const adminUser = await User.findById(req.user?.userId).select(
+        "roles adminRole permissions blocked"
+      );
+      const roles = Array.isArray(adminUser?.roles) ? adminUser.roles : [];
+      const granted = adminUser?.permissions?.get
+        ? adminUser.permissions.get("orders")
+        : adminUser?.permissions?.["orders"];
+      const isAuthorizedAdmin =
+        adminUser &&
+        !adminUser.blocked &&
+        roles.includes("admin") &&
+        (adminUser.adminRole === "super_admin" || granted === "read" || granted === "write");
+
+      if (!isAuthorizedAdmin) {
+        return res.status(403).json({ message: "Unauthorized" });
+      }
     }
 
     const Settings = (await import("../models/Settings.js")).default;
@@ -772,10 +811,10 @@ export const cancelOrder = async (req, res) => {
           await user.save({ session });
         }
         order.refundStatus = "COMPLETED";
-      } else {
-        order.refundStatus = "INITIATED";
-        order.refundDueAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
       }
+      // ORIGINAL-method refund is deliberately NOT attempted inside this
+      // transaction — an external Razorpay API call has no place holding a
+      // DB transaction open. It's handled just below, after commit.
     }
 
     await order.save({ session });
@@ -786,6 +825,26 @@ export const cancelOrder = async (req, res) => {
     return res.status(500).json({ message: "Internal server error" });
   } finally {
     session.endSession();
+  }
+
+  if (order.paymentStatus === "PAID" && order.refundMethod === "ORIGINAL" && order.refundStatus !== "COMPLETED") {
+    if (order.paymentId) {
+      try {
+        const refund = await refundPaymentViaRazorpay(order, { reason: "Order cancellation refund" });
+        order.refundId = refund.id;
+        order.refundStatus = refund.status === "processed" ? "COMPLETED" : "INITIATED";
+        if (order.refundStatus === "COMPLETED") order.returnStatus = "CLOSED";
+      } catch (err) {
+        console.error("Razorpay refund error (cancel):", err.message);
+        order.refundStatus = "FAILED";
+      }
+    } else {
+      // No real gateway payment on record (legacy/COD order) — fall back to
+      // the manual placeholder the nightly scheduler resolves.
+      order.refundStatus = "INITIATED";
+      order.refundDueAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    }
+    await order.save();
   }
 
   createUserNotification(
