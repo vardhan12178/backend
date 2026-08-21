@@ -39,31 +39,46 @@ const vectorizeProducts = async () => {
         Brand: ${product.brand || "Generic"}
       `.trim();
 
-      try {
-        const payload = {
-          content: { parts: [{ text: textToEmbed }] },
-        };
-        if (Number.isFinite(EMBEDDING_DIM) && EMBEDDING_DIM > 0) {
-          payload.outputDimensionality = EMBEDDING_DIM;
+      const payload = {
+        content: { parts: [{ text: textToEmbed }] },
+      };
+      if (Number.isFinite(EMBEDDING_DIM) && EMBEDDING_DIM > 0) {
+        payload.outputDimensionality = EMBEDDING_DIM;
+      }
+
+      let retries = 0;
+      const MAX_RETRIES = 5;
+      let done = false;
+      while (!done && retries <= MAX_RETRIES) {
+        try {
+          const result = await model.embedContent(payload);
+          const vector = result.embedding.values;
+
+          product.embedding = vector;
+          await product.save();
+
+          successCount++;
+          if (successCount % 10 === 0) {
+            console.log(`   [${index + 1}/${products.length}] Vectors updated...`);
+          }
+          done = true;
+          await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
+        } catch (err) {
+          if (err.message.includes("429")) {
+            retries++;
+            const waitTime = 1000 * retries;
+            console.log(`  [WARN] Rate limit on "${product.title.substring(0, 30)}" (attempt ${retries}). Waiting ${waitTime / 1000}s...`);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+          } else {
+            errorCount++;
+            console.error(`[ERROR] Error on "${product.title.substring(0, 15)}...":`, err.message);
+            done = true;
+          }
         }
-
-        const result = await model.embedContent(payload);
-        const vector = result.embedding.values;
-
-        product.embedding = vector;
-        await product.save();
-
-        successCount++;
-        // Log progress every 10 items to keep console clean
-        if (successCount % 10 === 0) {
-          console.log(`   [${index + 1}/${products.length}] Vectors updated...`);
-        }
-
-        await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
-
-      } catch (err) {
+      }
+      if (!done) {
         errorCount++;
-        console.error(`[ERROR] Error on "${product.title.substring(0, 15)}...":`, err.message);
+        console.error(`[ERROR] Gave up on "${product.title.substring(0, 30)}" after ${MAX_RETRIES} retries`);
       }
     }
 

@@ -47,8 +47,10 @@ async function indianizeProducts() {
             // 2. Generate Prompt for Content Refinement
             // ---------------------------------------------------------
             const prompt = `
-            You are an expert Content Manager for an Indian E-commerce Giant (VKart).
+            You are an expert Content Manager for an Indian E-commerce marketplace (VKart) that sells third-party branded products, similar to Amazon or Flipkart.
             Refine this product data to look professional, realistic, and optimized for search.
+
+            CRITICAL: Do NOT invent "VKart" as the product's brand or prefix the title with "VKart" anything. VKart is the marketplace/seller, not the manufacturer. Keep or infer the real/original manufacturer brand (e.g. Apple, Samsung, Nike). If no real brand applies (e.g. raw groceries), omit a brand prefix entirely rather than substituting VKart.
 
             INPUT DATA:
             Title: "${product.title}"
