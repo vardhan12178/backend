@@ -51,6 +51,7 @@ export const initSocket = (httpServer) => {
 
     io.on('connection', (socket) => {
         const roles = Array.isArray(socket.user?.roles) ? socket.user.roles : [];
+        const isSupportAgent = socket.user?.adminRole === 'super_admin' || socket.user?.adminRole === 'customer_support';
 
         if (socket.user?.userId) {
             socket.join(`user_${socket.user.userId}`);
@@ -58,6 +59,10 @@ export const initSocket = (httpServer) => {
 
         if (roles.includes('admin')) {
             socket.join('admin_notifications');
+        }
+
+        if (isSupportAgent) {
+            socket.join('support_agents');
         }
 
         // Admin joins admin room — must be authenticated admin
@@ -71,6 +76,24 @@ export const initSocket = (httpServer) => {
         socket.on('join_user', (userId) => {
             if (userId && socket.user?.userId && String(socket.user.userId) === String(userId)) {
                 socket.join(`user_${userId}`);
+            }
+        });
+
+        // Support chat typing indicator — ephemeral, never persisted. A
+        // customer's keystroke relays to every support agent (they'll only
+        // show it if that conversation is the one currently open); an
+        // agent's keystroke relays to that one customer's personal room.
+        socket.on('support:typing', ({ conversationId, isTyping, customerId } = {}) => {
+            if (!conversationId) return;
+            if (isSupportAgent && customerId) {
+                io.to(`user_${customerId}`).emit('support:typing', { conversationId, isTyping, from: 'AGENT' });
+            } else if (socket.user?.userId) {
+                io.to('support_agents').emit('support:typing', {
+                    conversationId,
+                    isTyping,
+                    from: 'USER',
+                    customerId: socket.user.userId,
+                });
             }
         });
     });
