@@ -338,6 +338,67 @@ export async function generateReviewSummary(product, reviews) {
   };
 }
 
+/**
+ * Generates an AI verdict for a 2-4 product comparison: an overall pick plus
+ * a short "best for" reasoning per product where there's a real
+ * differentiator. Grounded strictly on the products' own stored fields
+ * (price/rating/brand/description) — never invents a spec not present.
+ */
+export async function generateComparisonSummary(products) {
+  const productBlocks = products
+    .map(
+      (p, i) => `
+    Product ${i + 1} (id: ${p._id}):
+      Title: ${p.title}
+      Brand: ${p.brand || "Generic"}
+      Category: ${p.category}
+      Price: ₹${p.price}
+      Rating: ${p.rating ?? "N/A"} (${p.reviews?.length || 0} reviews)
+      Description: ${(p.description || "").slice(0, 500)}
+  `
+    )
+    .join("\n");
+
+  const prompt = `
+    You are an impartial shopping assistant comparing products for an Indian e-commerce store.
+
+    ${productBlocks}
+
+    Directives:
+    - Base every claim strictly on the fields given above. Do not invent specs, features, or
+      comparisons not supported by this data.
+    - "overallPickId" must be one of the exact product ids listed above.
+    - Every product must get a short "bestFor" line — if two products don't clearly differ,
+      it's fine for the reasoning to be about price/rating rather than invented features.
+    - Keep bestFor to one short sentence each. Keep the overall reason to 1-2 sentences.
+
+    Required Output JSON Format:
+    {
+      "overallPickId": "the id of the best overall pick",
+      "overallReason": "1-2 sentences on why, grounded in the data above",
+      "perProduct": [
+        { "id": "product id", "bestFor": "one short sentence" }
+      ]
+    }
+  `;
+
+  const result = await withTimeout(chatModel.generateContent(prompt));
+  const parsed = JSON.parse(result.response.text());
+
+  const validIds = new Set(products.map((p) => String(p._id)));
+  const perProduct = Array.isArray(parsed.perProduct)
+    ? parsed.perProduct
+        .filter((row) => row && validIds.has(String(row.id)))
+        .map((row) => ({ id: String(row.id), bestFor: typeof row.bestFor === "string" ? row.bestFor : "" }))
+    : [];
+
+  return {
+    overallPickId: validIds.has(String(parsed.overallPickId)) ? String(parsed.overallPickId) : null,
+    overallReason: typeof parsed.overallReason === "string" ? parsed.overallReason : "",
+    perProduct,
+  };
+}
+
 const SORT_VALUES = new Set(["price_asc", "price_desc", "rating_desc", "newest"]);
 
 /**

@@ -1,5 +1,5 @@
 import express from "express";
-import { aiChatLimiter } from "../middleware/security.js";
+import { aiChatLimiter, aiCompareLimiter } from "../middleware/security.js";
 import { optionalAuth } from "../middleware/auth.js";
 import * as aiController from "../controllers/ai.controller.js";
 
@@ -13,5 +13,8 @@ router.post("/chat", optionalAuth, aiChatLimiter, aiController.chat);
 
 // Natural language search -> structured filters, rate limited
 router.post("/parse-search", aiChatLimiter, aiController.parseSearch);
+
+// AI verdict for a 2-4 product comparison, rate limited
+router.post("/compare", aiCompareLimiter, aiController.compareProducts);
 
 export default router;
