@@ -17,8 +17,16 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 const embeddingModel = genAI.getGenerativeModel({ model: EMBEDDING_MODEL });
 
+// Using the "lite" alias rather than a pinned version: gemini-2.5-flash has
+// only a 20 requests/day free-tier cap (shared across chat, query expansion,
+// review summaries, and search parsing - was getting exhausted fast), and
+// lite-tier models carry a materially higher free daily quota by design.
+// The "-latest" alias also avoids re-breaking when Google deprecates a
+// specific pinned version (already happened once this session to
+// gemini-2.0-flash-lite/gemini-2.5-flash-lite).
+const CHAT_MODEL = process.env.GEMINI_CHAT_MODEL || "gemini-flash-lite-latest";
 const chatModel = genAI.getGenerativeModel({
-  model: "gemini-2.5-flash",
+  model: CHAT_MODEL,
   generationConfig: {
     responseMimeType: "application/json",
   }
@@ -72,7 +80,8 @@ const PRODUCT_PROJECTION = {
   description: 1,
   brand: 1,
   category: 1,
-  thumbnail: 1
+  thumbnail: 1,
+  stock: 1
 };
 
 const escapeRegex = (value = "") => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -102,7 +111,7 @@ async function keywordFallbackSearch(query, limit = 4) {
 
   try {
     const textMatches = await Product.find(
-      { isActive: true, $text: { $search: cleaned } },
+      { isActive: true, stock: { $gt: 0 }, $text: { $search: cleaned } },
       { ...PRODUCT_PROJECTION, score: { $meta: "textScore" } }
     )
       .sort({ score: { $meta: "textScore" } })
@@ -121,6 +130,7 @@ async function keywordFallbackSearch(query, limit = 4) {
 
   return Product.find({
     isActive: true,
+    stock: { $gt: 0 },
     $or: [{ title: rx }, { description: rx }, { category: rx }, { brand: rx }]
   })
     .select(PRODUCT_PROJECTION)
@@ -195,6 +205,7 @@ async function searchProducts(query, limit = 4) {
       {
         $match: {
           isActive: true,
+          stock: { $gt: 0 },
           score: { $gte: VECTOR_MIN_SCORE }
         }
       },
@@ -280,6 +291,102 @@ async function generateSmartReply(userQuery, products, conversationHistory = [])
       followUp: "Would you like to refine your search?"
     };
   }
+}
+
+/**
+ * Summarizes a product's reviews into structured pros/cons via Gemini.
+ * Grounded strictly in the supplied review text - reviewsAnalyzed is set
+ * from the actual array length server-side, never trusted from the model.
+ */
+export async function generateReviewSummary(product, reviews) {
+  const sample = reviews.slice(0, 40);
+  const reviewText = sample
+    .map((r, i) => `${i + 1}. [${r.rating}/5] ${(r.comment || "").slice(0, 300)}`)
+    .join("\n");
+
+  const prompt = `
+    You are summarizing real customer reviews for an Indian e-commerce product.
+
+    Product: ${product.title} (${product.category})
+
+    Directives:
+    - Base every point strictly on the reviews below. Do not invent details not present in the reviews.
+    - If reviews disagree, reflect that in "sentiment" (use "mixed").
+    - Keep each pro/con to a short phrase, not a full sentence.
+
+    Reviews (${sample.length} of ${reviews.length} total):
+    ${reviewText}
+
+    Required Output JSON Format:
+    {
+      "sentiment": "positive" | "mixed" | "negative",
+      "pros": ["short phrase", "..."],
+      "cons": ["short phrase", "..."],
+      "bestFor": "One short sentence on who this product suits, based only on the reviews."
+    }
+  `;
+
+  const result = await withTimeout(chatModel.generateContent(prompt));
+  const parsed = JSON.parse(result.response.text());
+
+  return {
+    sentiment: ["positive", "mixed", "negative"].includes(parsed.sentiment) ? parsed.sentiment : "mixed",
+    pros: Array.isArray(parsed.pros) ? parsed.pros.slice(0, 5) : [],
+    cons: Array.isArray(parsed.cons) ? parsed.cons.slice(0, 5) : [],
+    bestFor: typeof parsed.bestFor === "string" ? parsed.bestFor : "",
+    reviewsAnalyzed: reviews.length,
+  };
+}
+
+const SORT_VALUES = new Set(["price_asc", "price_desc", "rating_desc", "newest"]);
+
+/**
+ * Parses a free-text search query into structured filters matching the
+ * exact params getProducts() already accepts. Grounded against the real
+ * category list so the model can't invent a category that doesn't exist.
+ * Every field is validated/clamped server-side before returning.
+ */
+export async function parseSearchQuery(nlQuery, categories) {
+  const prompt = `
+    You are a search-query parser for an Indian e-commerce store (prices in INR, ₹).
+
+    Valid categories (choose exactly one of these, or null if none clearly match):
+    ${categories.join(", ")}
+
+    User query: "${nlQuery}"
+
+    Extract structured search filters. Only include a value if the user's text actually implies it -
+    do not guess a price range or rating if the user didn't mention one.
+
+    Required Output JSON Format:
+    {
+      "q": "residual free-text keywords to still search on (brand/product terms), or empty string",
+      "category": "<one value from the valid categories list, or null>",
+      "minPrice": number or null,
+      "maxPrice": number or null,
+      "minRating": number (1-5) or null,
+      "sort": "price_asc" | "price_desc" | "rating_desc" | "newest" | null
+    }
+  `;
+
+  const result = await withTimeout(chatModel.generateContent(prompt));
+  const parsed = JSON.parse(result.response.text());
+
+  const category = typeof parsed.category === "string" && categories.includes(parsed.category)
+    ? parsed.category
+    : null;
+  const sort = SORT_VALUES.has(parsed.sort) ? parsed.sort : null;
+  const clampRating = (n) => (Number.isFinite(n) ? Math.min(5, Math.max(1, Math.round(n))) : null);
+  const positiveOrNull = (n) => (Number.isFinite(n) && n >= 0 ? n : null);
+
+  return {
+    q: typeof parsed.q === "string" ? parsed.q.trim() : "",
+    category,
+    minPrice: positiveOrNull(Number(parsed.minPrice)),
+    maxPrice: positiveOrNull(Number(parsed.maxPrice)),
+    minRating: clampRating(Number(parsed.minRating)),
+    sort,
+  };
 }
 
 /**

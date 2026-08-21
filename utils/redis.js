@@ -21,6 +21,7 @@ export const CACHE_TTL = {
   SALE: 60,             // 1 min  – active sale
   HOME: 300,            // 5 min  – home page data
   TWO_FA: 300,          // 5 min  – 2FA challenge
+  REVIEW_SUMMARY: 3600, // 1 hr   – AI-generated review summary
 };
 
 /**

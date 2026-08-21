@@ -3,6 +3,7 @@ import { body } from "express-validator";
 import validate from "../middleware/validate.js";
 import { authenticateJWT, optionalAuth } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/permissions.js";
+import { aiReviewSummaryLimiter } from "../middleware/security.js";
 import multer from "multer";
 import multerS3 from "multer-s3";
 import path from "path";
@@ -112,6 +113,9 @@ router.post("/products/:id/reviews", authenticateJWT, [
 
 /* List Reviews */
 router.get("/products/:id/reviews", productController.getReviews);
+
+/* AI-generated review summary (pros/cons/sentiment) */
+router.get("/products/:id/review-summary", aiReviewSummaryLimiter, productController.getReviewSummary);
 
 /* Delete Review */
 router.delete("/products/:id/reviews/:reviewId", authenticateJWT, productController.deleteReview);

@@ -11,4 +11,7 @@ router.get("/health", aiController.getHealth);
 // Chat Endpoint — optionalAuth to identify user, rate limited
 router.post("/chat", optionalAuth, aiChatLimiter, aiController.chat);
 
+// Natural language search -> structured filters, rate limited
+router.post("/parse-search", aiChatLimiter, aiController.parseSearch);
+
 export default router;

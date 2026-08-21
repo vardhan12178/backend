@@ -1,7 +1,7 @@
 import Product from "../models/Product.js";
 import User from "../models/User.js";
 import redis, { CACHE_TTL, invalidatePattern } from "../utils/redis.js";
-import { vectorizeProduct } from "../services/ai.service.js";
+import { vectorizeProduct, generateReviewSummary } from "../services/ai.service.js";
 import { getActiveSale, overlaySalePricing } from "./sale.controller.js";
 import path from "path";
 
@@ -592,6 +592,12 @@ const pickFields = (body) => {
     return data;
 };
 
+/* Fields that feed the embedding text in ai.service.js's vectorizeProduct() -
+   re-vectorize whenever any of these change, not just title/description,
+   otherwise a price/brand/category-only edit leaves a stale embedding. */
+const EMBED_TRIGGER_FIELDS = ['title', 'description', 'brand', 'category', 'tags', 'price'];
+const needsReindex = (body) => EMBED_TRIGGER_FIELDS.some((key) => body[key] !== undefined);
+
 /* POST /api/admin/products - Create */
 export const createProduct = async (req, res) => {
     try {
@@ -604,7 +610,9 @@ export const createProduct = async (req, res) => {
         await invalidatePattern("products:*");
 
         // Real-time Vectorization (Fire and forget to keep UI fast)
-        vectorizeProduct(product);
+        vectorizeProduct(product).catch((err) =>
+            console.error(`[ERROR] vectorizeProduct failed for ${product._id}:`, err.message)
+        );
 
         res.status(201).json({ message: "Product created", product });
     } catch (err) {
@@ -632,9 +640,11 @@ export const updateProduct = async (req, res) => {
             invalidatePattern("products:*"),
         ]);
 
-        // Re-vectorize if title or description changed (Fire and forget)
-        if (req.body.title || req.body.description) {
-            vectorizeProduct(updated);
+        // Re-vectorize if any field feeding the embedding text changed (Fire and forget)
+        if (needsReindex(req.body)) {
+            vectorizeProduct(updated).catch((err) =>
+                console.error(`[ERROR] vectorizeProduct failed for ${updated._id}:`, err.message)
+            );
         }
 
         res.json({ message: "Product updated", product: updated });
@@ -694,6 +704,45 @@ export const uploadProductImageHandler = (req, res) => {
     }
 };
 
+/* GET /api/products/:id/review-summary - AI-generated review summary */
+export const getReviewSummary = async (req, res) => {
+    const productId = req.params.id;
+    const cacheKey = `review-summary:${productId}`;
+
+    try {
+        const cached = await redis.get(cacheKey);
+        if (cached) return res.json(JSON.parse(cached));
+    } catch (err) {
+        console.warn(`Redis Get Error (review-summary): ${err.message}`);
+    }
+
+    try {
+        const product = await Product.findById(productId).select("title category reviews");
+        if (!product) return res.status(404).json({ error: "Product not found" });
+
+        const reviews = product.reviews.filter((r) => !r.isHidden && r.comment);
+
+        // Not enough signal to summarize meaningfully - degrade gracefully, don't call Gemini.
+        if (reviews.length < 3) {
+            return res.json({ available: false, reason: "not-enough-reviews", reviewsAnalyzed: reviews.length });
+        }
+
+        const summary = await generateReviewSummary(product, reviews);
+        const response = { available: true, ...summary };
+
+        try {
+            await redis.set(cacheKey, JSON.stringify(response), "EX", CACHE_TTL.REVIEW_SUMMARY);
+        } catch (err) {
+            console.warn(`Redis Set Error (review-summary): ${err.message}`);
+        }
+
+        res.json(response);
+    } catch (err) {
+        console.error("Review summary error:", err.message);
+        res.status(503).json({ available: false, reason: "ai-unavailable" });
+    }
+};
+
 /* POST /api/products/:id/reviews - Add Review */
 export const addReview = async (req, res) => {
     try {
@@ -744,8 +793,11 @@ export const addReview = async (req, res) => {
 
         await product.save();
 
-        // Invalidate product detail cache so new review shows immediately
-        await redis.del(`product:${req.params.id}`);
+        // Invalidate product detail + AI review-summary caches so the new review shows immediately
+        await Promise.all([
+            redis.del(`product:${req.params.id}`),
+            redis.del(`review-summary:${req.params.id}`),
+        ]);
 
         res.status(201).json({
             message: "Review added successfully",
@@ -828,6 +880,12 @@ export const deleteReview = async (req, res) => {
         }
 
         await product.save();
+
+        // Invalidate product detail + AI review-summary caches (previously only addReview did this)
+        await Promise.all([
+            redis.del(`product:${req.params.id}`),
+            redis.del(`review-summary:${req.params.id}`),
+        ]);
 
         res.json({
             message: "Review deleted",
