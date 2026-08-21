@@ -485,6 +485,13 @@ export const updateReturnStatus = async (req, res) => {
   const order = await Order.findById(req.params.id);
   if (!order) return res.status(404).json({ message: "Order not found" });
 
+  // Nothing to progress if the customer never actually requested a return —
+  // without this, an admin could e.g. click "Set RECEIVED" on an untouched
+  // order and have it restore stock for an item that was never returned.
+  if (order.returnStatus === "NONE") {
+    return res.status(400).json({ message: "No return has been requested for this order yet." });
+  }
+
   order.returnStatus = status;
   order.returnHistory.push({ status });
 
@@ -533,6 +540,18 @@ export const initiateRefund = async (req, res) => {
 
   if (order.refundStatus !== "NONE" && order.refundStatus !== "FAILED") {
     return res.status(400).json({ message: "Refund already initiated" });
+  }
+
+  // A refund needs an actual reason on record: the order was cancelled, or
+  // the customer's return has been approved and is on its way back (or
+  // already received). Without this, nothing stopped an admin from issuing
+  // a refund on any order — including one that was never cancelled or
+  // returned at all.
+  const eligible = order.stage === "CANCELLED" || ["APPROVED", "PICKED", "RECEIVED"].includes(order.returnStatus);
+  if (!eligible) {
+    return res.status(400).json({
+      message: "This order isn't eligible for a refund yet — it must be cancelled, or have an approved return.",
+    });
   }
 
   order.refundMethod = method;
