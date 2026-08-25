@@ -231,6 +231,9 @@ export const googleAuth = async (req, res) => {
                 password: await bcrypt.hash(crypto.randomBytes(10).toString('hex'), 11),
                 emailVerified: true,
             });
+        } else if (payload.picture && (!user.profileImage || user.profileImage.includes('googleusercontent.com'))) {
+            user.profileImage = payload.picture;
+            await user.save();
         }
 
         const token = jwt.sign(

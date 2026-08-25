@@ -843,7 +843,17 @@ export const cancelOrder = async (req, res) => {
     await order.save({ session });
     await session.commitTransaction();
   } catch (err) {
-    await session.abortTransaction();
+    // Mirrors createOrder/createReplacementOrder: only abort if the session
+    // is still in a transaction. Calling abortTransaction() unconditionally
+    // is wrong when the error came from commitTransaction() itself (e.g. a
+    // transient commit failure) — the driver rejects an abort attempted
+    // after a commit was already attempted, which previously masked the
+    // real error behind a confusing "Cannot call abortTransaction after
+    // calling commitTransaction" crash that bypassed this handler's own
+    // 500 response entirely.
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
     console.error("Cancel order error:", err);
     return res.status(500).json({ message: "Internal server error" });
   } finally {

@@ -12,6 +12,11 @@ const twoFAVerifyLimiter = rateLimit({
   max: 5,               // 5 attempts per minute
   standardHeaders: true,
   message: { message: "Too many 2FA attempts. Please try again later." },
+  // A single test file drives many login-verify attempts (valid/invalid/
+  // expired/replay cases) against one shared app instance — not testing
+  // rate-limiting itself, so skip enforcement under test like the other
+  // limiters in middleware/security.js.
+  skip: () => process.env.NODE_ENV === 'test',
 });
 
 // Middleware to fetch full user document (Used by 2FA setup/toggle routes)

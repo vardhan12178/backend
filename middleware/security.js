@@ -122,15 +122,26 @@ export const csrfGuard = (req, res, next) => {
   next();
 };
 
-export const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 30, standardHeaders: true });
-export const registerLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, standardHeaders: true });
-export const forgotLimiter = rateLimit({ windowMs: 60 * 1000, max: 5, standardHeaders: true });
-export const resetLimiter = rateLimit({ windowMs: 60 * 1000, max: 5, standardHeaders: true });
-export const googleLimiter = rateLimit({ windowMs: 60 * 1000, max: 10, standardHeaders: true });
-export const aiChatLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, standardHeaders: true, message: { error: 'Too many requests, please slow down' } });
-export const aiReviewSummaryLimiter = rateLimit({ windowMs: 60 * 1000, max: 20, standardHeaders: true, message: { error: 'Too many requests, please slow down' } });
-export const aiCompareLimiter = rateLimit({ windowMs: 60 * 1000, max: 15, standardHeaders: true, message: { error: 'Too many requests, please slow down' } });
-export const supportMessageLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, standardHeaders: true, message: { error: 'Too many requests, please slow down' } });
+// Rate limiters below intentionally skip enforcement under NODE_ENV=test —
+// a single test file drives one shared Express app instance through dozens
+// of register/login/forgot/reset calls across many `it()` blocks, which
+// would otherwise trip these limiters well before the suite's window closes
+// (they're not testing rate-limiting behavior itself). Mirrors csrfGuard's
+// existing test-env bypass just above.
+const skipInTest = () => process.env.NODE_ENV === 'test';
+
+export const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 30, standardHeaders: true, skip: skipInTest });
+export const registerLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, standardHeaders: true, skip: skipInTest });
+export const forgotLimiter = rateLimit({ windowMs: 60 * 1000, max: 5, standardHeaders: true, skip: skipInTest });
+export const resetLimiter = rateLimit({ windowMs: 60 * 1000, max: 5, standardHeaders: true, skip: skipInTest });
+export const googleLimiter = rateLimit({ windowMs: 60 * 1000, max: 10, standardHeaders: true, skip: skipInTest });
+// Also skipped in test — same rationale as above: a single test file can
+// legitimately drive more calls through one of these routes than the real
+// per-minute cap within a shared app instance across many `it()` blocks.
+export const aiChatLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, standardHeaders: true, message: { error: 'Too many requests, please slow down' }, skip: skipInTest });
+export const aiReviewSummaryLimiter = rateLimit({ windowMs: 60 * 1000, max: 20, standardHeaders: true, message: { error: 'Too many requests, please slow down' }, skip: skipInTest });
+export const aiCompareLimiter = rateLimit({ windowMs: 60 * 1000, max: 15, standardHeaders: true, message: { error: 'Too many requests, please slow down' }, skip: skipInTest });
+export const supportMessageLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, standardHeaders: true, message: { error: 'Too many requests, please slow down' }, skip: skipInTest });
 
 // Global API rate limiter — 200 requests per minute per IP
 export const globalApiLimiter = rateLimit({
@@ -139,5 +150,5 @@ export const globalApiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later' },
-  skip: (req) => req.path === '/health' || req.path === '/ready',
+  skip: (req) => req.path === '/health' || req.path === '/ready' || skipInTest(),
 });

@@ -77,16 +77,20 @@ export const getHomeData = async (req, res) => {
         if (catResult[i]) featured.push(catResult[i]);
       }
     }
-    const newArrivals = latestProducts.slice(0, 8);
+    let newArrivals = latestProducts.slice(0, 8);
 
-    // Apply sale pricing overlays
+    // Apply sale pricing overlays. overlaySalePricing() is a pure function
+    // (it returns a new mapped array, it does not mutate its input) — the
+    // return value must be captured, otherwise the home page silently never
+    // shows sale pricing on featured/newArrivals despite an active sale.
     const sale = activeSale || null;
+    let featuredResult = featured;
     if (sale) {
-      overlaySalePricing(featured, sale);
-      overlaySalePricing(newArrivals, sale);
+      featuredResult = overlaySalePricing(featured, sale);
+      newArrivals = overlaySalePricing(newArrivals, sale);
     }
 
-    const payload = { featured, newArrivals, activeSale: sale, stats };
+    const payload = { featured: featuredResult, newArrivals, activeSale: sale, stats };
 
     // Cache for 5 minutes
     try {

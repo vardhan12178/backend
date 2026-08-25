@@ -250,7 +250,24 @@ orderSchema.post("save", async function (doc) {
   if (!doc.invoiceNumber && doc.invoiceSeq) {
     const year = new Date(doc.createdAt || Date.now()).getFullYear();
     const invoice = `INV-${year}-${String(doc.invoiceSeq).padStart(6, "0")}`;
-    await doc.constructor.updateOne({ _id: doc._id }, { invoiceNumber: invoice });
+    // Must run inside the same session/transaction as the save that
+    // triggered this hook (doc.$session() carries it over automatically).
+    // Previously this ran un-sessioned: on the very first (in-transaction)
+    // creation save the update targeted a document not yet visible outside
+    // that uncommitted transaction and silently matched nothing, so
+    // invoiceNumber never actually persisted to the DB despite appearing
+    // set on the in-memory doc returned to the caller. Worse, any *later*
+    // transactional re-save of that same order (e.g. order cancellation)
+    // would re-trigger this branch (invoiceNumber still falsy in the DB)
+    // and its un-sessioned update would then deadlock against the lock the
+    // enclosing transaction already held on that document, hanging the
+    // request for up to transactionLifetimeLimitSeconds (60s) before
+    // MongoDB force-aborted the transaction.
+    await doc.constructor.updateOne(
+      { _id: doc._id },
+      { invoiceNumber: invoice },
+      { session: doc.$session() }
+    );
     doc.invoiceNumber = invoice;
   }
 });
