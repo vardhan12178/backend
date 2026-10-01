@@ -1,5 +1,5 @@
 import { Server } from 'socket.io';
-import jwt from 'jsonwebtoken';
+import { resolveAuthToken } from '../middleware/auth.js';
 import { allowOrigin } from '../middleware/security.js';
 
 let io;
@@ -29,20 +29,20 @@ export const initSocket = (httpServer) => {
         }
     });
 
-    // Authenticate socket connections via JWT
-    io.use((socket, next) => {
+    // Authenticate socket connections via JWT. Same resolver as the HTTP
+    // middleware: revoked tokens and blocked users connect as anonymous, and
+    // admin rooms are granted from the *current* DB role, not the token's.
+    io.use(async (socket, next) => {
         const token =
             socket.handshake.auth?.token ||
             getTokenFromCookie(socket.handshake.headers?.cookie);
 
-        if (!token) {
-            socket.user = null; // unauthenticated — allowed to connect but restricted
-            return next();
-        }
+        socket.user = null; // unauthenticated — allowed to connect but restricted
+        if (!token) return next();
 
         try {
-            const payload = jwt.verify(token, process.env.JWT_SECRET);
-            socket.user = payload;
+            const result = await resolveAuthToken(token);
+            socket.user = result.user || null;
         } catch {
             socket.user = null;
         }
