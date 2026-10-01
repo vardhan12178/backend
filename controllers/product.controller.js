@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import Product from "../models/Product.js";
 import User from "../models/User.js";
 import redis, { CACHE_TTL, invalidatePattern } from "../utils/redis.js";
@@ -525,6 +526,9 @@ export const suggestProducts = async (req, res) => {
 /* GET /api/products/:id - Details */
 export const getProductById = async (req, res) => {
     const productId = req.params.id;
+    if (!mongoose.isValidObjectId(productId)) {
+        return res.status(404).json({ error: "Product not found" });
+    }
     const cacheKey = `product:${productId}`;
 
     // 1. Attempt to retrieve from Cache (Fail-safe)
@@ -556,6 +560,13 @@ export const getProductById = async (req, res) => {
             } catch (err) {
                 console.warn(`Redis Set Error: ${err.message}`);
             }
+        }
+
+        // Deactivated products are hidden from shoppers (they can't be bought
+        // anyway — createOrder rejects them). Admins can still open them.
+        const isAdmin = Array.isArray(req.user?.roles) && req.user.roles.includes("admin");
+        if (product.isActive === false && !isAdmin) {
+            return res.status(404).json({ error: "Product not found" });
         }
 
         // Always apply sale overlay (even on cache hit)

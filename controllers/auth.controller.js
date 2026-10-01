@@ -17,6 +17,41 @@ const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : nul
 const APP_URL = (process.env.APP_URL || 'https://vkartshop.netlify.app').replace(/\/+$/, '');
 const AUTH_USER_SELECT = 'name username email profileImage createdAt twoFactorEnabled suppress2faPrompt membership blocked';
 
+// Username for a new Google account: the email's local part, cleaned to the
+// characters the User schema allows, with a random suffix when it's taken.
+// (Previously `email.split('@')[0]` as-is: "jane+shop" failed validation and
+// a second "jane@other.com" hit the unique index — both surfaced as an opaque
+// "Google sign-in failed".)
+export const googleUsernameCandidate = (email, attempt = 0) => {
+    let base = String(email || '').split('@')[0].toLowerCase().replace(/[^a-z0-9._-]/g, '');
+    if (base.length < 3) base = `${base}user`.slice(0, 8).padEnd(3, '0');
+    base = base.slice(0, 50);
+    return attempt === 0 ? base : `${base}${crypto.randomBytes(3).toString('hex')}`;
+};
+
+const createGoogleUser = async (payload, email) => {
+    const password = await bcrypt.hash(crypto.randomBytes(10).toString('hex'), 11);
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+        const username = googleUsernameCandidate(email, attempt);
+        if (attempt === 0 && (await User.exists({ username }))) continue;
+        try {
+            return await User.create({
+                name: payload.name,
+                username,
+                email,
+                profileImage: payload.picture || '',
+                password,
+                emailVerified: true,
+            });
+        } catch (err) {
+            // Lost a race for this username (or, rarely, the random suffix).
+            if (err?.code === 11000 && err?.keyPattern?.username) continue;
+            throw err;
+        }
+    }
+    throw new Error('Could not allocate a username for Google sign-up');
+};
+
 const createEmailVerifyToken = () => {
     const tokenRaw = crypto.randomBytes(32).toString('hex');
     const tokenHash = crypto.createHash('sha256').update(tokenRaw).digest('hex');
@@ -223,14 +258,7 @@ export const googleAuth = async (req, res) => {
         let user = await User.findOne({ email });
 
         if (!user) {
-            user = await User.create({
-                name: payload.name,
-                username: email.split('@')[0],
-                email,
-                profileImage: payload.picture || '',
-                password: await bcrypt.hash(crypto.randomBytes(10).toString('hex'), 11),
-                emailVerified: true,
-            });
+            user = await createGoogleUser(payload, email);
         } else if (payload.picture && (!user.profileImage || user.profileImage.includes('googleusercontent.com'))) {
             user.profileImage = payload.picture;
             await user.save();
