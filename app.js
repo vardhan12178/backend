@@ -27,6 +27,7 @@ import membershipRoutes from './routes/membership.routes.js';
 import homeRoutes from './routes/home.routes.js';
 import blogRoutes from './routes/blog.routes.js';
 import newsletterRoutes from './routes/newsletter.routes.js';
+import vitalsRoutes from './routes/vitals.routes.js';
 import { getSitemap } from './controllers/sitemap.controller.js';
 
 const app = express();
@@ -61,6 +62,8 @@ app.use((req, res, next) => {
 app.get('/health', (req, res) => res.status(200).send('ok'));
 
 // routes
+// Mounted first so no router-level auth on a later bare '/api' mount can gate the public beacon.
+app.use('/api', vitalsRoutes);
 app.use('/api', authRoutes);
 app.use('/api', profileRoutes);
 app.use('/api', orderRoutes);

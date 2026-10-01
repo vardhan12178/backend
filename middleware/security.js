@@ -96,6 +96,9 @@ export const csrfGuard = (req, res, next) => {
     // present. Authenticity is instead enforced by the webhook signature
     // check inside the controller.
     '/api/razorpay/webhook',
+    // Web-vitals beacon (navigator.sendBeacon can't attach the CSRF header).
+    // Write-only anonymous telemetry, validated and rate limited per IP.
+    '/api/vitals',
   ];
   
   if (exemptPaths.some(path => req.path === path || req.originalUrl === path)) {
@@ -142,6 +145,8 @@ export const aiChatLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, standardH
 export const aiReviewSummaryLimiter = rateLimit({ windowMs: 60 * 1000, max: 20, standardHeaders: true, message: { error: 'Too many requests, please slow down' }, skip: skipInTest });
 export const aiCompareLimiter = rateLimit({ windowMs: 60 * 1000, max: 15, standardHeaders: true, message: { error: 'Too many requests, please slow down' }, skip: skipInTest });
 export const supportMessageLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, standardHeaders: true, message: { error: 'Too many requests, please slow down' }, skip: skipInTest });
+// ~5 beacons per page view (one per metric).
+export const vitalsLimiter = rateLimit({ windowMs: 60 * 1000, max: 120, standardHeaders: true, message: { error: 'Too many requests, please slow down' }, skip: skipInTest });
 
 // Global API rate limiter — 200 requests per minute per IP
 export const globalApiLimiter = rateLimit({

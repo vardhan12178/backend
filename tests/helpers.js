@@ -82,6 +82,21 @@ export function createStatefulRedisMock(jest) {
       }
       return count;
     }),
+    lpush: jest.fn(async (key, ...values) => {
+      const list = store.get(key) || [];
+      list.unshift(...values.reverse());
+      store.set(key, list);
+      return list.length;
+    }),
+    ltrim: jest.fn(async (key, start, stop) => {
+      const list = store.get(key) || [];
+      store.set(key, list.slice(start, stop === -1 ? undefined : stop + 1));
+      return 'OK';
+    }),
+    lrange: jest.fn(async (key, start, stop) => {
+      const list = store.get(key) || [];
+      return list.slice(start, stop === -1 ? undefined : stop + 1);
+    }),
     scan: jest.fn().mockResolvedValue(['0', []]),
     on: jest.fn(),
     quit: jest.fn(),
