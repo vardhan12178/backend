@@ -141,7 +141,8 @@ export const googleLimiter = rateLimit({ windowMs: 60 * 1000, max: 10, standardH
 // Also skipped in test — same rationale as above: a single test file can
 // legitimately drive more calls through one of these routes than the real
 // per-minute cap within a shared app instance across many `it()` blocks.
-export const aiChatLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, standardHeaders: true, message: { error: 'Too many requests, please slow down' }, skip: skipInTest });
+// Guests get a third of a signed-in user's per-minute allowance.
+export const aiChatLimiter = rateLimit({ windowMs: 60 * 1000, max: (req) => (req.user?.userId ? 30 : 10), standardHeaders: true, message: { error: 'Too many requests, please slow down' }, skip: skipInTest });
 export const aiReviewSummaryLimiter = rateLimit({ windowMs: 60 * 1000, max: 20, standardHeaders: true, message: { error: 'Too many requests, please slow down' }, skip: skipInTest });
 export const aiCompareLimiter = rateLimit({ windowMs: 60 * 1000, max: 15, standardHeaders: true, message: { error: 'Too many requests, please slow down' }, skip: skipInTest });
 export const supportMessageLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, standardHeaders: true, message: { error: 'Too many requests, please slow down' }, skip: skipInTest });
