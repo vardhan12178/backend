@@ -190,18 +190,39 @@ export async function applyCoupon(code, subtotal, userId) {
   return { valid: true, coupon, discount };
 }
 
-// Track usage after order is placed successfully
-export async function recordCouponUsage(code, userId) {
-  if (!code) return;
-  const coupon = await Coupon.findOne({ code: code.toUpperCase().trim() });
-  if (!coupon) return;
+// Atomically claim one use of a coupon for a user, inside the caller's order
+// transaction. The limit checks live in the update filters themselves, so two
+// concurrent orders can never both take the last use (the old flow checked
+// limits in applyCoupon, then recorded usage fire-and-forget after commit).
+// Returns { ok: true } or { ok: false, reason }.
+export async function reserveCouponUsage(couponId, userId, session) {
+  const underGlobalLimit = {
+    $or: [{ usageLimit: null }, { $expr: { $lt: ["$usedCount", "$usageLimit"] } }],
+  };
+  const coupon = await Coupon.findById(couponId).select("perUserLimit").session(session).lean();
+  if (!coupon) return { ok: false, reason: "Coupon not found" };
+  const perUserLimit = coupon.perUserLimit ?? null;
 
-  const userEntry = coupon.usedBy.find((u) => u.userId.toString() === userId.toString());
-  if (userEntry) {
-    userEntry.count += 1;
-  } else {
-    coupon.usedBy.push({ userId, count: 1 });
+  // Existing per-user entry: bump it if still under that user's limit.
+  const entryMatch = perUserLimit == null ? { userId } : { userId, count: { $lt: perUserLimit } };
+  const bumped = await Coupon.updateOne(
+    { _id: couponId, ...underGlobalLimit, usedBy: { $elemMatch: entryMatch } },
+    { $inc: { usedCount: 1, "usedBy.$.count": 1 } },
+    { session }
+  );
+  if (bumped.modifiedCount === 1) return { ok: true };
+
+  // First use by this user.
+  const added = await Coupon.updateOne(
+    { _id: couponId, ...underGlobalLimit, "usedBy.userId": { $ne: userId } },
+    { $inc: { usedCount: 1 }, $push: { usedBy: { userId, count: 1 } } },
+    { session }
+  );
+  if (added.modifiedCount === 1) return { ok: true };
+
+  const current = await Coupon.findById(couponId).select("usageLimit usedCount").session(session).lean();
+  if (current?.usageLimit != null && current.usedCount >= current.usageLimit) {
+    return { ok: false, reason: "Coupon usage limit reached" };
   }
-  coupon.usedCount += 1;
-  await coupon.save();
+  return { ok: false, reason: "You have already used this coupon" };
 }

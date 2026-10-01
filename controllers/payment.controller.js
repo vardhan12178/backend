@@ -2,37 +2,69 @@ import crypto from "crypto";
 import {
     consumeCheckoutOrderSession,
     consumeWebhookConfirmation,
+    discardCheckoutVerificationToken,
     getCheckoutOrderSession,
+    getCheckoutVerificationToken,
     getMembershipOrderSession,
+    getVerifiedCheckoutToken,
     issueCheckoutVerificationToken,
+    rememberVerifiedCheckout,
     saveCheckoutOrderSession,
     saveWebhookConfirmation,
 } from "../services/payment.session.service.js";
 import razorpay from "../utils/razorpay.js";
 import redis from "../utils/redis.js";
 import Order from "../models/Order.js";
+import User from "../models/User.js";
+import { quoteCheckout } from "../services/checkout.pricing.service.js";
 import { createNotification } from "./admin.notifications.controller.js";
 import { createUserNotification } from "./user.notifications.controller.js";
 import { sendEmail, emailTemplate } from "../services/email.service.js";
 import { round2 } from "../utils/calc.js";
 import { toIdString, secureEqual } from "../utils/helpers.js";
 
-/* Create Order */
+/* Create Order — the amount is priced server-side from the cart (same
+   quoteCheckout() that places the real order), so what the shopper is asked
+   to pay can never be chosen by the client. */
 export const createOrder = async (req, res) => {
     try {
-        const { amount, currency = "INR" } = req.body;
-        const amountNum = Number(amount);
+        let amountPaise;
 
-        if (!amountNum || amountNum <= 0) {
-            return res.status(400).json({ success: false, message: "Amount is required" });
+        if (Array.isArray(req.body.products) && req.body.products.length > 0) {
+            const user = await User.findById(req.user.userId);
+            if (!user) return res.status(404).json({ success: false, message: "User not found" });
+
+            const quote = await quoteCheckout({
+                user,
+                products: req.body.products,
+                promoCode: typeof req.body.promo === "string" ? req.body.promo.trim() || null : null,
+                walletRequested: req.body.walletUsed,
+            });
+            if (quote.error) {
+                return res.status(quote.error.status).json({ success: false, message: quote.error.message });
+            }
+            if (quote.netPayable <= 0) {
+                return res.status(400).json({ success: false, message: "Nothing to pay online for this order" });
+            }
+            amountPaise = Math.round(quote.netPayable * 100);
+        } else {
+            // Legacy storefront bundle that still sends a bare `amount` (an
+            // older cached build during a deploy). Kept for one release so
+            // checkout doesn't break mid-rollout; order placement re-prices
+            // the cart and rejects any mismatch, so this can't underpay.
+            const amountNum = Number(req.body.amount);
+            if (!amountNum || amountNum <= 0) {
+                return res.status(400).json({ success: false, message: "Cart is required" });
+            }
+            console.warn("[checkout] legacy client-priced create-order request");
+            amountPaise = Math.round(amountNum * 100);
         }
 
-        const normalizedAmount = Math.round(amountNum * 100);
         const receipt = `co_${String(req.user.userId).slice(-8)}_${Date.now()}`;
 
         const order = await razorpay.orders.create({
-            amount: normalizedAmount,
-            currency,
+            amount: amountPaise,
+            currency: "INR",
             receipt,
             payment_capture: 1,
         });
@@ -73,6 +105,17 @@ export const verifyPayment = async (req, res) => {
 
         if (!secureEqual(expectedSignature, razorpay_signature)) {
             return res.status(400).json({ success: false, message: "Invalid signature" });
+        }
+
+        // Idempotent repeat: this Razorpay order was already verified (double
+        // click, client retry after a dropped response) — hand back the same
+        // token rather than minting a second one for the same payment.
+        const priorToken = await getVerifiedCheckoutToken(razorpay_order_id);
+        if (priorToken) {
+            const prior = await getCheckoutVerificationToken(priorToken);
+            if (prior && toIdString(prior.userId) === toIdString(req.user.userId) && prior.paymentId === razorpay_payment_id) {
+                return res.json({ success: true, message: "Payment verified", verificationToken: priorToken });
+            }
         }
 
         let pending = await getCheckoutOrderSession(razorpay_order_id);
@@ -126,9 +169,7 @@ export const verifyPayment = async (req, res) => {
             return res.status(400).json({ success: false, message: "Payment is not captured" });
         }
 
-        await consumeCheckoutOrderSession(razorpay_order_id);
-
-        const verificationToken = await issueCheckoutVerificationToken({
+        const candidateToken = await issueCheckoutVerificationToken({
             userId: toIdString(req.user.userId),
             paymentId: razorpay_payment_id,
             paymentOrderId: razorpay_order_id,
@@ -141,6 +182,14 @@ export const verifyPayment = async (req, res) => {
             method: rzpPayment.method || null,
             verifiedAt: new Date().toISOString(),
         });
+
+        // Two concurrent verifies for the same payment: exactly one token wins,
+        // the other request returns that same token and drops its own.
+        const verificationToken = await rememberVerifiedCheckout(razorpay_order_id, candidateToken);
+        if (verificationToken !== candidateToken) {
+            await discardCheckoutVerificationToken(candidateToken);
+        }
+        await consumeCheckoutOrderSession(razorpay_order_id);
 
         return res.json({
             success: true,

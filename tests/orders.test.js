@@ -47,6 +47,11 @@ jest.unstable_mockModule('../services/payment.session.service.js', () => ({
     saveWebhookConfirmation: jest.fn(),
     getWebhookConfirmation: jest.fn(),
     consumeWebhookConfirmation: jest.fn(),
+    claimCheckoutVerificationToken: jest.fn().mockResolvedValue(true),
+    releaseCheckoutVerificationClaim: jest.fn().mockResolvedValue(undefined),
+    discardCheckoutVerificationToken: jest.fn().mockResolvedValue(undefined),
+    rememberVerifiedCheckout: jest.fn(async (_orderId, token) => token),
+    getVerifiedCheckoutToken: jest.fn().mockResolvedValue(null),
 }));
 
 const { default: request } = await import('supertest');

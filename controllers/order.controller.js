@@ -6,22 +6,25 @@ import User from "../models/User.js";
 import { createNotification } from "./admin.notifications.controller.js";
 import { createUserNotification } from "./user.notifications.controller.js";
 import { sendEmail, emailTemplate } from "../services/email.service.js";
-import { applyCoupon, recordCouponUsage } from "./coupon.controller.js";
-import { getActiveSale, overlaySalePricing } from "./sale.controller.js";
+import { reserveCouponUsage } from "./coupon.controller.js";
 import {
+  claimCheckoutVerificationToken,
   consumeCheckoutVerificationToken,
   getCheckoutVerificationToken,
+  releaseCheckoutVerificationClaim,
 } from "../services/payment.session.service.js";
+import { quoteCheckout } from "../services/checkout.pricing.service.js";
 import { refundPaymentViaRazorpay } from "../services/refund.service.js";
 import PDFDocument from "pdfkit";
 import { renderTaxInvoice } from "../utils/invoicePdf.js";
 import { round2 } from "../utils/calc.js";
 import { toIdString } from "../utils/helpers.js";
 
-const TAX_RATE = 0.18;
-const FREE_SHIPPING_THRESHOLD = 999;
-const FLAT_SHIPPING_FEE = 50;
-const INCLUDED_TAX_RATE = TAX_RATE / (1 + TAX_RATE);
+// Mongo transaction write conflicts (two checkouts touching the same stock
+// row / coupon / wallet at once) — safe for the client to simply retry.
+const isTransientTxnError = (err) =>
+  err?.code === 112 || err?.errorLabels?.includes?.("TransientTransactionError") ||
+  (typeof err?.hasErrorLabel === "function" && err.hasErrorLabel("TransientTransactionError"));
 
 /* CREATE ORDER */
 export const createOrder = async (req, res) => {
@@ -36,14 +39,16 @@ export const createOrder = async (req, res) => {
       ? req.body.paymentVerificationToken.trim()
       : "";
   const authUserId = toIdString(req.user.userId);
-  let paymentTokenToConsume = "";
+  let claimedToken = "";
+  let paymentRefs = null;
 
   const session = await mongoose.startSession();
   session.startTransaction();
 
   const abortWith = async (status, payload) => {
-    await session.abortTransaction();
+    if (session.inTransaction()) await session.abortTransaction();
     session.endSession();
+    if (claimedToken) await releaseCheckoutVerificationClaim(claimedToken).catch(() => {});
     return res.status(status).json(payload);
   };
 
@@ -51,98 +56,30 @@ export const createOrder = async (req, res) => {
     const user = await User.findById(authUserId).session(session);
     if (!user) return abortWith(404, { message: "User not found" });
 
-    const activeSale = await getActiveSale();
-    const isPrime =
-      !!(user.membership?.endDate && new Date() < new Date(user.membership.endDate));
+    // Prices, stock, coupon, shipping and wallet — all from the DB.
+    const quote = await quoteCheckout({
+      user,
+      products,
+      promoCode,
+      walletRequested,
+      session,
+    });
+    if (quote.error) return abortWith(quote.error.status, { message: quote.error.message });
 
-    // Inventory + canonical product prices come from DB.
-    const normalizedProducts = [];
-    let saleApplied = false;
-    let saleId = null;
-    let saleName = null;
-
-    for (const p of products) {
-      const qty = Math.max(1, Math.trunc(Number(p.quantity) || 0));
-      const product = await Product.findById(p.productId)
-        .select("title thumbnail images category price discountPercentage stock isActive")
-        .session(session);
-
-      if (!product || !product.isActive) {
-        return abortWith(400, { message: "Product unavailable" });
-      }
-      if (product.stock < qty) {
-        return abortWith(400, { message: `Insufficient stock for ${product.title}` });
-      }
-
+    for (const { product, qty } of quote.lines) {
       product.stock -= qty;
       await product.save({ session });
-
-      const productSnapshot = {
-        _id: product._id,
-        title: product.title,
-        thumbnail: product.thumbnail,
-        images: product.images,
-        category: product.category,
-        price: product.price,
-        discountPercentage: Number(product.discountPercentage) || 0,
-      };
-
-      const overlaidProduct = activeSale
-        ? overlaySalePricing([productSnapshot], activeSale, isPrime)[0]
-        : productSnapshot;
-
-      const unitPrice = round2(overlaidProduct?.price ?? product.price);
-      if (activeSale && unitPrice !== round2(product.price)) {
-        saleApplied = true;
-        saleId = activeSale._id;
-        saleName = activeSale.name;
-      }
-
-      normalizedProducts.push({
-        productId: product._id,
-        name: product.title,
-        image: p.image || product.thumbnail || product.images?.[0] || "",
-        quantity: qty,
-        price: unitPrice,
-        ...(p.selectedVariants ? { selectedVariants: String(p.selectedVariants) } : {}),
-      });
     }
 
-    const lineSubtotal = round2(
-      normalizedProducts.reduce(
-        (sum, p) => sum + round2(Number(p.price) * Number(p.quantity)),
-        0
-      )
-    );
-
-    // Validate coupon server-side.
-    let discount = 0;
-    let couponId = null;
-    if (promoCode) {
-      const couponResult = await applyCoupon(promoCode, lineSubtotal, authUserId);
-      if (!couponResult.valid) {
-        return abortWith(400, { message: couponResult.reason });
-      }
-      discount = couponResult.discount;
-      couponId = couponResult.coupon._id;
+    // Claim one use of the coupon inside this transaction, with the limits
+    // enforced atomically by the update itself.
+    if (quote.couponId) {
+      const reserved = await reserveCouponUsage(quote.couponId, user._id, session);
+      if (!reserved.ok) return abortWith(400, { message: reserved.reason });
     }
 
-    // Sale pricing is already baked into normalizedProducts to match the cart.
-    const saleDiscount = 0;
-
-    // Membership discount placeholder.
-    const membershipDiscount = 0;
-    const totalDiscount = round2(discount + membershipDiscount);
-    const taxableBase = round2(Math.max(0, lineSubtotal - totalDiscount));
-    const tax = round2(taxableBase * INCLUDED_TAX_RATE);
-    const effectiveShipping = taxableBase >= FREE_SHIPPING_THRESHOLD ? 0 : FLAT_SHIPPING_FEE;
-    const grossTotal = round2(Math.max(0.01, taxableBase + effectiveShipping));
-
-    const walletUsed = round2(Math.min(walletRequested, grossTotal));
+    const { walletUsed, netPayable } = quote;
     if (walletUsed > 0) {
-      if ((user.walletBalance || 0) < walletUsed) {
-        return abortWith(400, { message: "Insufficient wallet balance" });
-      }
       user.walletBalance = round2(user.walletBalance - walletUsed);
       user.walletTransactions.push({
         type: "DEBIT",
@@ -151,7 +88,6 @@ export const createOrder = async (req, res) => {
       });
     }
 
-    const netPayable = round2(Math.max(0, grossTotal - walletUsed));
     let paymentStatus = "PENDING";
     let paymentMethod = "COD";
     let paymentId;
@@ -172,6 +108,13 @@ export const createOrder = async (req, res) => {
       if (toIdString(verifiedPayment.userId) !== authUserId) {
         return abortWith(403, { message: "Payment verification does not belong to user" });
       }
+
+      // Only one request at a time may turn this payment into an order.
+      if (!(await claimCheckoutVerificationToken(paymentVerificationToken))) {
+        return abortWith(409, { message: "This payment is already being used to place an order" });
+      }
+      claimedToken = paymentVerificationToken;
+      paymentRefs = { paymentId: verifiedPayment.paymentId, paymentOrderId: verifiedPayment.paymentOrderId };
 
       const duplicateOrder = await Order.findOne({
         $or: [
@@ -201,7 +144,6 @@ export const createOrder = async (req, res) => {
       paymentMethod = rzpMethodMap[verifiedPayment.method] || "CARD";
       paymentId = verifiedPayment.paymentId;
       paymentOrderId = verifiedPayment.paymentOrderId;
-      paymentTokenToConsume = paymentVerificationToken;
     } else {
       paymentStatus = "PAID";
       paymentMethod = "WALLET";
@@ -214,16 +156,16 @@ export const createOrder = async (req, res) => {
         email: user.email,
         phone: user.phone || "",
       },
-      products: normalizedProducts,
-      discount,
-      saleDiscount,
-      saleId: saleId || undefined,
-      saleName: saleName || undefined,
-      membershipDiscount,
-      shipping: effectiveShipping,
+      products: quote.normalizedProducts,
+      discount: quote.discount,
+      saleDiscount: quote.saleDiscount,
+      saleId: quote.saleId || undefined,
+      saleName: quote.saleName || undefined,
+      membershipDiscount: quote.membershipDiscount,
+      shipping: quote.shipping,
       shippingAddress,
       promo: promoCode || undefined,
-      couponId: couponId || undefined,
+      couponId: quote.couponId || undefined,
       paymentStatus,
       paymentMethod,
       paymentId,
@@ -239,16 +181,11 @@ export const createOrder = async (req, res) => {
     await session.commitTransaction();
     session.endSession();
 
-    if (paymentTokenToConsume) {
-      consumeCheckoutVerificationToken(paymentTokenToConsume).catch((err) =>
+    // The order now exists (and the unique index pins this payment to it),
+    // so the token can go. The claim lock is left to expire on its own.
+    if (claimedToken) {
+      await consumeCheckoutVerificationToken(claimedToken).catch((err) =>
         console.error("Payment token consume failed:", err)
-      );
-    }
-
-    // Record coupon usage after successful commit.
-    if (promoCode && couponId) {
-      recordCouponUsage(promoCode, user._id).catch((err) =>
-        console.error("Coupon usage tracking failed:", err)
       );
     }
 
@@ -276,6 +213,22 @@ export const createOrder = async (req, res) => {
       await session.abortTransaction();
     }
     session.endSession();
+    if (claimedToken) await releaseCheckoutVerificationClaim(claimedToken).catch(() => {});
+
+    // Unique index on paymentId/paymentOrderId: another request already
+    // turned this payment into an order.
+    if (err?.code === 11000 && paymentRefs) {
+      const existing = await Order.findOne({
+        $or: [{ paymentId: paymentRefs.paymentId }, { paymentOrderId: paymentRefs.paymentOrderId }],
+      }).select("_id orderId");
+      return res.status(409).json({
+        message: "Order already exists for this payment",
+        orderId: existing ? existing.orderId || String(existing._id) : undefined,
+      });
+    }
+    if (isTransientTxnError(err)) {
+      return res.status(409).json({ message: "Checkout is busy right now, please try again" });
+    }
     console.error("Create order error:", err);
     return res.status(500).json({ message: "Internal server error" });
   }

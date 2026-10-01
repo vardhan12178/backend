@@ -97,6 +97,23 @@ export function createStatefulRedisMock(jest) {
       const list = store.get(key) || [];
       return list.slice(start, stop === -1 ? undefined : stop + 1);
     }),
+    // Minimal MULTI: queues get/del and runs them back-to-back on exec(),
+    // returning ioredis-style [[err, result], ...] pairs.
+    multi: jest.fn(() => {
+      const ops = [];
+      const chain = {
+        get: (key) => { ops.push(() => (store.has(key) ? store.get(key) : null)); return chain; },
+        del: (key) => { ops.push(() => (store.delete(key) ? 1 : 0)); return chain; },
+        exec: async () => ops.map((op) => [null, op()]),
+      };
+      return chain;
+    }),
+    incr: jest.fn(async (key) => {
+      const next = Number(store.get(key) || 0) + 1;
+      store.set(key, String(next));
+      return next;
+    }),
+    expire: jest.fn(async () => 1),
     scan: jest.fn().mockResolvedValue(['0', []]),
     on: jest.fn(),
     quit: jest.fn(),

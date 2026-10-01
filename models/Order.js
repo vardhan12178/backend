@@ -189,6 +189,19 @@ orderSchema.index({ userId: 1, createdAt: -1 });
 orderSchema.index({ stage: 1 });
 orderSchema.index({ createdAt: -1 });
 
+// One order per Razorpay payment. Partial (only where the field is a real
+// string) so COD/wallet orders without a payment id don't collide. This is
+// the hard guarantee against two concurrent requests turning one payment
+// into two paid orders; the second insert fails with E11000.
+orderSchema.index(
+  { paymentId: 1 },
+  { unique: true, partialFilterExpression: { paymentId: { $type: "string" } } }
+);
+orderSchema.index(
+  { paymentOrderId: 1 },
+  { unique: true, partialFilterExpression: { paymentOrderId: { $type: "string" } } }
+);
+
 // -----------------------------------------------------------------------------
 // PRE-VALIDATION HOOK (AUTO-CALCULATIONS)
 // -----------------------------------------------------------------------------
