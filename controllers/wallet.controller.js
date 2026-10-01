@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import mongoose from "mongoose";
 import User from "../models/User.js";
 import {
   consumeWalletOrderSession,
@@ -7,6 +8,7 @@ import {
 } from "../services/payment.session.service.js";
 import razorpay from "../utils/razorpay.js";
 import { toIdString, secureEqual } from "../utils/helpers.js";
+import { round2 } from "../utils/calc.js";
 
 export const getWallet = async (req, res) => {
   try {
@@ -110,23 +112,43 @@ export const verifyTopup = async (req, res) => {
 
     await consumeWalletOrderSession(razorpay_order_id);
 
-    const creditAmount = Math.max(0, (rzpPayment.amount || 0) / 100);
-    const user = await User.findById(req.user.userId);
+    const creditAmount = round2(Math.max(0, (rzpPayment.amount || 0) / 100));
+
+    // Credit and record in ONE conditional update: the filter only matches if
+    // this payment id hasn't been credited yet, so two concurrent verifies of
+    // the same payment can't both add money (the old read-check-save could).
+    const credited = await User.findOneAndUpdate(
+      { _id: req.user.userId, "walletTransactions.paymentId": { $ne: razorpay_payment_id } },
+      [
+        {
+          $set: {
+            walletBalance: { $round: [{ $add: [{ $ifNull: ["$walletBalance", 0] }, creditAmount] }, 2] },
+            walletTransactions: {
+              $concatArrays: [
+                { $ifNull: ["$walletTransactions", []] },
+                [
+                  {
+                    _id: new mongoose.Types.ObjectId(),
+                    type: "CREDIT",
+                    amount: creditAmount,
+                    reason: "Wallet top-up",
+                    paymentId: razorpay_payment_id,
+                    createdAt: new Date(),
+                  },
+                ],
+              ],
+            },
+          },
+        },
+      ],
+      { new: true, projection: { walletBalance: 1 } }
+    );
+
+    if (credited) return res.json({ success: true, balance: credited.walletBalance });
+
+    // Already credited (or user gone) — answer idempotently.
+    const user = await User.findById(req.user.userId).select("walletBalance");
     if (!user) return res.status(404).json({ message: "User not found" });
-
-    // Prevent double credit for same payment id
-    const exists = (user.walletTransactions || []).some((t) => t.paymentId === razorpay_payment_id);
-    if (exists) return res.json({ success: true, balance: user.walletBalance });
-
-    user.walletBalance = Math.round((user.walletBalance + creditAmount) * 100) / 100;
-    user.walletTransactions.push({
-      type: "CREDIT",
-      amount: creditAmount,
-      reason: "Wallet top-up",
-      paymentId: razorpay_payment_id,
-    });
-
-    await user.save();
     return res.json({ success: true, balance: user.walletBalance });
   } catch (err) {
     console.error("Wallet verify error:", err);

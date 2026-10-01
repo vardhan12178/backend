@@ -158,52 +158,74 @@ export const verifyAndActivate = async (req, res) => {
     const plan = await MembershipPlan.findById(pending.planId);
     if (!plan) return res.status(404).json({ message: "Plan not found" });
 
-    const user = await User.findById(req.user.userId);
-    if (!user) return res.status(404).json({ message: "User not found" });
+    // Compare-and-set on the current endDate: each attempt only applies if no
+    // other activation changed the membership since we read it, and never if
+    // this payment was already applied. Two concurrent verifies of the same
+    // payment can't both extend Prime, and two different payments landing at
+    // once can't overwrite each other's days.
+    let user = null;
+    let settled = false;
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      user = await User.findById(req.user.userId).select("membership");
+      if (!user) return res.status(404).json({ message: "User not found" });
 
-    const alreadyUsed = (user.membership?.history || []).some(
-      (h) => h.paymentId === razorpay_payment_id
-    );
-    if (alreadyUsed) {
-      return res.json({
-        success: true,
-        membership: user.membership,
-        isPrime: user.isPrime,
-      });
+      const alreadyUsed = (user.membership?.history || []).some(
+        (h) => h.paymentId === razorpay_payment_id
+      );
+      if (alreadyUsed) {
+        settled = true;
+        break;
+      }
+
+      const now = new Date();
+      const previousEnd = user.membership?.endDate ? new Date(user.membership.endDate) : null;
+      const currentEnd = previousEnd && previousEnd > now ? previousEnd : now;
+      const newEnd = new Date(
+        currentEnd.getTime() + plan.durationDays * 24 * 60 * 60 * 1000
+      );
+
+      const membership = {
+        plan: plan.name,
+        planId: plan._id,
+        startDate:
+          user.membership?.startDate &&
+          new Date(user.membership.startDate) <= now
+            ? user.membership.startDate
+            : now,
+        endDate: newEnd,
+        paymentId: razorpay_payment_id,
+        history: [
+          ...(user.membership?.history || []).map((h) => (h.toObject ? h.toObject() : h)),
+          {
+            plan: plan.name,
+            startDate: currentEnd,
+            endDate: newEnd,
+            paymentId: razorpay_payment_id,
+            amount: plan.price,
+          },
+        ],
+      };
+
+      const applied = await User.updateOne(
+        {
+          _id: user._id,
+          "membership.endDate": previousEnd ?? null,
+          "membership.history.paymentId": { $ne: razorpay_payment_id },
+        },
+        { $set: { membership } }
+      );
+      if (applied.modifiedCount === 1) {
+        user = await User.findById(user._id).select("membership");
+        settled = true;
+        break;
+      }
     }
 
-    const now = new Date();
-    const currentEnd =
-      user.membership?.endDate && new Date(user.membership.endDate) > now
-        ? new Date(user.membership.endDate)
-        : now;
-    const newEnd = new Date(
-      currentEnd.getTime() + plan.durationDays * 24 * 60 * 60 * 1000
-    );
-
-    user.membership = {
-      plan: plan.name,
-      planId: plan._id,
-      startDate:
-        user.membership?.startDate &&
-        new Date(user.membership.startDate) <= now
-          ? user.membership.startDate
-          : now,
-      endDate: newEnd,
-      paymentId: razorpay_payment_id,
-      history: [
-        ...(user.membership?.history || []),
-        {
-          plan: plan.name,
-          startDate: currentEnd,
-          endDate: newEnd,
-          paymentId: razorpay_payment_id,
-          amount: plan.price,
-        },
-      ],
-    };
-
-    await user.save();
+    if (!settled) {
+      // Kept losing the compare-and-set to other concurrent updates. The
+      // payment is captured and its id is not recorded, so a retry is safe.
+      return res.status(409).json({ message: "Membership update is busy, please retry" });
+    }
 
     // Clear profile cache so isPrime updates immediately
     try {
