@@ -1,7 +1,7 @@
 import express from 'express';
 import mongoose from 'mongoose';
 import cookieParser from 'cookie-parser';
-import { helmetMiddleware, corsMiddleware, commonSecurity, csrfMiddleware, csrfGuard, globalApiLimiter } from './middleware/security.js';
+import { helmetMiddleware, corsMiddleware, commonSecurity, csrfMiddleware, csrfGuard, globalApiLimiter, queryParser } from './middleware/security.js';
 import { notFound, errorHandler } from './middleware/errors.js';
 
 import authRoutes from './routes/auth.routes.js';
@@ -33,6 +33,8 @@ import { getSitemap } from './controllers/sitemap.controller.js';
 const app = express();
 
 app.set('trust proxy', 1);
+// Sanitised once at parse time (see middleware/security.js queryParser).
+app.set('query parser', queryParser);
 app.use(helmetMiddleware);
 // `verify` stashes the raw request bytes on req.rawBody — needed to check the
 // Razorpay webhook's HMAC signature, which is computed over the exact raw
@@ -42,7 +44,7 @@ app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(commonSecurity);
 app.use(corsMiddleware);
-app.options('*', corsMiddleware);
+app.options('/{*splat}', corsMiddleware);
 app.use(globalApiLimiter);
 app.use(csrfMiddleware);
 // Note: csrfGuard is now applied with exemptions for auth routes (see middleware/security.js)

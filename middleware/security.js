@@ -1,7 +1,6 @@
 import helmet from 'helmet';
 import cors from 'cors';
-import mongoSanitize from 'express-mongo-sanitize';
-import hpp from 'hpp';
+import querystring from 'node:querystring';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import crypto from 'crypto';
@@ -39,10 +38,56 @@ export const helmetMiddleware = helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
 });
 
+// ── Request sanitising ─────────────────────────────────────────────────────
+// Replaces express-mongo-sanitize + hpp, which both reassign req.query — not
+// possible in Express 5, where req.query is a getter re-parsed on every
+// access. Query strings are cleaned once, at parse time, by queryParser
+// (registered with app.set('query parser', ...)); bodies and route params are
+// cleaned in place by sanitizeRequest.
+
+// Drop keys that could smuggle MongoDB operators ($gt, $where, ...) or
+// dotted paths into a query/update. Mutates and returns `value`.
+export function stripMongoOperators(value, depth = 0) {
+  if (depth > 20 || value === null || typeof value !== 'object') return value;
+  if (Array.isArray(value)) {
+    value.forEach((item) => stripMongoOperators(item, depth + 1));
+    return value;
+  }
+  for (const key of Object.keys(value)) {
+    if (key.startsWith('$') || key.includes('.')) {
+      delete value[key];
+    } else {
+      stripMongoOperators(value[key], depth + 1);
+    }
+  }
+  return value;
+}
+
+// Flat key=value parsing (Express 5's default "simple" parser), minus
+// operator-looking keys, with repeated parameters collapsed to their last
+// value (hpp's behaviour) so ?sort=a&sort=b can't turn into an array.
+export function queryParser(str) {
+  const parsed = querystring.parse(str || '');
+  const clean = Object.create(null);
+  for (const [key, value] of Object.entries(parsed)) {
+    if (key.startsWith('$') || key.includes('.')) continue;
+    clean[key] = Array.isArray(value) ? value[value.length - 1] : value;
+  }
+  return { ...clean };
+}
+
+export const sanitizeRequest = (req, _res, next) => {
+  // Express 5 leaves req.body undefined when a request has no parsable body
+  // (Express 4 gave {}); controllers destructure it freely, so keep the old shape.
+  if (req.body === undefined) req.body = {};
+  if (req.body && typeof req.body === 'object') stripMongoOperators(req.body);
+  if (req.params && typeof req.params === 'object') stripMongoOperators(req.params);
+  next();
+};
+
 export const commonSecurity = [
   compression(),
-  mongoSanitize(),
-  hpp(),
+  sanitizeRequest,
 ];
 
 const getCookieOpts = (req) => {
