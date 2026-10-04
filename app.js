@@ -1,4 +1,5 @@
 import express from 'express';
+import * as Sentry from '@sentry/node';
 import mongoose from 'mongoose';
 import cookieParser from 'cookie-parser';
 import { helmetMiddleware, corsMiddleware, commonSecurity, csrfMiddleware, csrfGuard, globalApiLimiter, queryParser } from './middleware/security.js';
@@ -98,7 +99,8 @@ app.get('/ready', async (req, res) => {
   catch { res.status(500).send('not-ready'); }
 });
 
-// 404 + errors
+// 404 + errors (5xx are reported to Sentry when SENTRY_DSN is configured)
+if (process.env.SENTRY_DSN) Sentry.setupExpressErrorHandler(app);
 app.use(notFound);
 app.use(errorHandler);
 

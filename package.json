@@ -24,6 +24,7 @@
     "@google/generative-ai": "^0.24.1",
     "@langchain/core": "^1.1.0",
     "@langchain/google-genai": "^2.0.0",
+    "@sentry/node": "^11.4.0",
     "bcryptjs": "^2.4.3",
     "compression": "^1.8.1",
     "compromise": "^14.14.4",
