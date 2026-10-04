@@ -58,7 +58,7 @@ Tracked from a code review (Jul 2026). Portfolio/demo context — not blocking, 
 ## Known follow-ups (not in scope of Phase 2)
 
 - Coupon uses are not returned when an order is cancelled (unchanged behaviour).
-- If a sale starts or ends between "Pay" and order placement, the re-priced order no longer matches the payment and is rejected (the customer was charged). Phase 3 could honour the quoted price for the life of the Razorpay order.
+- ~~If a sale starts or ends between "Pay" and order placement, the re-priced order no longer matches the payment and is rejected.~~ Fixed in Phase 3: the create-order session snapshots the quote, and `createOrder` honours it when the cart, promo and wallet match what was paid (`honourQuotedPrices` in `services/checkout.pricing.service.js`).
 
 ---
 
