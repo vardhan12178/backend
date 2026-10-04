@@ -44,6 +44,9 @@ const { default: request } = await import('supertest');
 const { default: app } = await import('../app.js');
 
 const sign = (orderId, paymentId) => signRazorpaySignature(orderId, paymentId, RAZORPAY_KEY_SECRET);
+const { default: Product } = await import('../models/Product.js');
+const createProduct = (overrides = {}) =>
+    Product.create({ title: 'Test Item', description: 'Desc', category: 'test', price: 100, stock: 10, thumbnail: 'img.jpg', ...overrides });
 
 describe('Payment: create Razorpay order', () => {
     let token;
@@ -58,28 +61,35 @@ describe('Payment: create Razorpay order', () => {
         }));
     });
 
+    const cart = (productId, quantity = 1) => ({ products: [{ productId, quantity }] });
+
     it('rejects unauthenticated order creation', async () => {
-        const res = await request(app).post('/api/razorpay/create-order').send({ amount: 100 });
+        const product = await createProduct();
+        const res = await request(app).post('/api/razorpay/create-order').send(cart(product.id));
         expect(res.statusCode).toBe(401);
     });
 
-    it('rejects a zero/negative amount', async () => {
+    it('requires a cart; a bare client amount is no longer accepted', async () => {
+        for (const body of [{ amount: 250 }, { products: [] }, {}]) {
+            const res = await request(app)
+                .post('/api/razorpay/create-order')
+                .set('Authorization', `Bearer ${token}`)
+                .send(body);
+            expect(res.statusCode).toBe(400);
+        }
+        expect(ordersCreateMock).not.toHaveBeenCalled();
+    });
+
+    it('rejects a malformed cart line', async () => {
         const res = await request(app)
             .post('/api/razorpay/create-order')
             .set('Authorization', `Bearer ${token}`)
-            .send({ amount: 0 });
+            .send({ products: [{ productId: 'nope', quantity: 0 }] });
         expect(res.statusCode).toBe(400);
     });
 
-    it('rejects a non-3-letter currency', async () => {
-        const res = await request(app)
-            .post('/api/razorpay/create-order')
-            .set('Authorization', `Bearer ${token}`)
-            .send({ amount: 100, currency: 'INDIANRUPEES' });
-        expect(res.statusCode).toBe(400);
-    });
-
-    it('creates an order, converting rupees to paise, and never leaks the real razorpay key', async () => {
+    it('creates an order priced on the server, in paise, and never leaks the real razorpay key', async () => {
+        const product = await createProduct({ price: 200 });
         ordersCreateMock.mockResolvedValueOnce({
             id: 'order_created_1',
             amount: 25000,
@@ -90,23 +100,26 @@ describe('Payment: create Razorpay order', () => {
         const res = await request(app)
             .post('/api/razorpay/create-order')
             .set('Authorization', `Bearer ${token}`)
-            .send({ amount: 250 });
+            .send(cart(product.id));
 
         expect(res.statusCode).toBe(200);
         expect(res.body.success).toBe(true);
         expect(res.body.orderId).toBe('order_created_1');
         expect(res.body.amount).toBe(25000);
+        // 200 + 50 shipping (below the free-shipping threshold)
         expect(ordersCreateMock).toHaveBeenCalledWith(
             expect.objectContaining({ amount: 25000, currency: 'INR', payment_capture: 1 })
         );
+        expect(JSON.stringify(res.body)).not.toContain('dummy_secret');
     });
 
     it('returns 500 when the Razorpay API itself fails', async () => {
         ordersCreateMock.mockRejectedValueOnce(new Error('razorpay down'));
+        const product = await createProduct();
         const res = await request(app)
             .post('/api/razorpay/create-order')
             .set('Authorization', `Bearer ${token}`)
-            .send({ amount: 100 });
+            .send(cart(product.id));
         expect(res.statusCode).toBe(500);
         expect(res.body.success).toBe(false);
     });
@@ -132,10 +145,12 @@ describe('Payment: verify signature (security-critical)', () => {
             currency: 'INR',
             receipt: 'co_test',
         });
+        // The session records whatever amount Razorpay echoes back.
+        const product = await createProduct();
         const res = await request(app)
             .post('/api/razorpay/create-order')
             .set('Authorization', `Bearer ${token}`)
-            .send({ amount: amountPaise / 100 });
+            .send({ products: [{ productId: product.id, quantity: 1 }] });
         return res.body.orderId;
     };
 

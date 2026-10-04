@@ -16,7 +16,7 @@ import razorpay from "../utils/razorpay.js";
 import redis from "../utils/redis.js";
 import Order from "../models/Order.js";
 import User from "../models/User.js";
-import { quoteCheckout } from "../services/checkout.pricing.service.js";
+import { quoteCheckout, snapshotQuote } from "../services/checkout.pricing.service.js";
 import { createNotification } from "./admin.notifications.controller.js";
 import { createUserNotification } from "./user.notifications.controller.js";
 import { sendEmail, emailTemplate } from "../services/email.service.js";
@@ -28,37 +28,23 @@ import { toIdString, secureEqual } from "../utils/helpers.js";
    to pay can never be chosen by the client. */
 export const createOrder = async (req, res) => {
     try {
-        let amountPaise;
+        const user = await User.findById(req.user.userId);
+        if (!user) return res.status(404).json({ success: false, message: "User not found" });
 
-        if (Array.isArray(req.body.products) && req.body.products.length > 0) {
-            const user = await User.findById(req.user.userId);
-            if (!user) return res.status(404).json({ success: false, message: "User not found" });
-
-            const quote = await quoteCheckout({
-                user,
-                products: req.body.products,
-                promoCode: typeof req.body.promo === "string" ? req.body.promo.trim() || null : null,
-                walletRequested: req.body.walletUsed,
-            });
-            if (quote.error) {
-                return res.status(quote.error.status).json({ success: false, message: quote.error.message });
-            }
-            if (quote.netPayable <= 0) {
-                return res.status(400).json({ success: false, message: "Nothing to pay online for this order" });
-            }
-            amountPaise = Math.round(quote.netPayable * 100);
-        } else {
-            // Legacy storefront bundle that still sends a bare `amount` (an
-            // older cached build during a deploy). Kept for one release so
-            // checkout doesn't break mid-rollout; order placement re-prices
-            // the cart and rejects any mismatch, so this can't underpay.
-            const amountNum = Number(req.body.amount);
-            if (!amountNum || amountNum <= 0) {
-                return res.status(400).json({ success: false, message: "Cart is required" });
-            }
-            console.warn("[checkout] legacy client-priced create-order request");
-            amountPaise = Math.round(amountNum * 100);
+        const promo = typeof req.body.promo === "string" ? req.body.promo.trim() || null : null;
+        const quote = await quoteCheckout({
+            user,
+            products: req.body.products,
+            promoCode: promo,
+            walletRequested: req.body.walletUsed,
+        });
+        if (quote.error) {
+            return res.status(quote.error.status).json({ success: false, message: quote.error.message });
         }
+        if (quote.netPayable <= 0) {
+            return res.status(400).json({ success: false, message: "Nothing to pay online for this order" });
+        }
+        const amountPaise = Math.round(quote.netPayable * 100);
 
         const receipt = `co_${String(req.user.userId).slice(-8)}_${Date.now()}`;
 
@@ -74,6 +60,10 @@ export const createOrder = async (req, res) => {
             amount: order.amount,
             currency: order.currency,
             receipt: order.receipt,
+            // The exact prices the shopper agreed to pay. If a sale starts or
+            // ends while they're in the Razorpay window, order placement
+            // honours this quote instead of rejecting a payment already made.
+            quote: snapshotQuote(quote, { promo, walletRequested: req.body.walletUsed }),
             createdAt: new Date().toISOString(),
         });
 
@@ -180,6 +170,7 @@ export const verifyPayment = async (req, res) => {
             // netbanking/wallet/emi) — lets the order carry the real method
             // instead of assuming CARD for every online payment.
             method: rzpPayment.method || null,
+            quote: pending.quote || null,
             verifiedAt: new Date().toISOString(),
         });
 

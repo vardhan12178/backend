@@ -127,3 +127,77 @@ export async function quoteCheckout({ user, products, promoCode, walletRequested
     netPayable,
   };
 }
+
+const lineKey = (productId, quantity, selectedVariants) =>
+  `${String(productId)}|${Math.max(1, Math.trunc(Number(quantity) || 0))}|${selectedVariants ? String(selectedVariants) : ""}`;
+
+const normPromo = (promo) => (typeof promo === "string" && promo.trim() ? promo.trim().toUpperCase() : null);
+
+/**
+ * The part of a quote worth remembering while the shopper is in the Razorpay
+ * window: per-line prices and the totals they produced.
+ */
+export function snapshotQuote(quote, { promo = null, walletRequested = 0 } = {}) {
+  return {
+    lines: quote.normalizedProducts.map((p) => ({
+      productId: String(p.productId),
+      quantity: p.quantity,
+      price: p.price,
+      selectedVariants: p.selectedVariants || null,
+    })),
+    promo: normPromo(promo),
+    walletRequested: round2(Math.max(0, Number(walletRequested) || 0)),
+    discount: quote.discount,
+    couponId: quote.couponId ? String(quote.couponId) : null,
+    shipping: quote.shipping,
+    tax: quote.tax,
+    saleId: quote.saleId ? String(quote.saleId) : null,
+    saleName: quote.saleName || null,
+    walletUsed: quote.walletUsed,
+    netPayable: quote.netPayable,
+  };
+}
+
+/**
+ * When the fresh price of a cart no longer matches what the shopper already
+ * paid (a sale started/ended or a price was edited during payment), return a
+ * quote that honours the prices from the snapshot taken when the Razorpay
+ * order was created — but only if the cart, coupon and wallet request are
+ * exactly what was quoted and the snapshot's total is what was paid.
+ * Stock, availability and the coupon's limits are still checked fresh.
+ * Returns null when the snapshot doesn't apply.
+ */
+export function honourQuotedPrices(freshQuote, snapshot, { products, promoCode, walletRequested, amountPaise }) {
+  if (!snapshot?.lines?.length) return null;
+  if (Math.round(Number(snapshot.netPayable) * 100) !== Number(amountPaise)) return null;
+  if (normPromo(promoCode) !== snapshot.promo) return null;
+  if (round2(Math.max(0, Number(walletRequested) || 0)) !== snapshot.walletRequested) return null;
+
+  const requested = products.map((p) => lineKey(p.productId, p.quantity, p.selectedVariants)).sort();
+  const quoted = snapshot.lines.map((l) => lineKey(l.productId, l.quantity, l.selectedVariants)).sort();
+  if (requested.length !== quoted.length || requested.some((k, i) => k !== quoted[i])) return null;
+
+  const quotedPrice = new Map(
+    snapshot.lines.map((l) => [lineKey(l.productId, l.quantity, l.selectedVariants), l.price])
+  );
+  const normalizedProducts = freshQuote.normalizedProducts.map((p) => ({
+    ...p,
+    price: quotedPrice.get(lineKey(p.productId, p.quantity, p.selectedVariants)),
+  }));
+  const lineSubtotal = round2(normalizedProducts.reduce((sum, p) => sum + round2(p.price * p.quantity), 0));
+
+  return {
+    ...freshQuote,
+    normalizedProducts,
+    lineSubtotal,
+    discount: snapshot.discount,
+    couponId: snapshot.couponId || null,
+    shipping: snapshot.shipping,
+    tax: snapshot.tax,
+    saleId: snapshot.saleId || null,
+    saleName: snapshot.saleName || null,
+    walletUsed: snapshot.walletUsed,
+    netPayable: snapshot.netPayable,
+    honoured: true,
+  };
+}

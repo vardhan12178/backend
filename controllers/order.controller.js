@@ -13,7 +13,7 @@ import {
   getCheckoutVerificationToken,
   releaseCheckoutVerificationClaim,
 } from "../services/payment.session.service.js";
-import { quoteCheckout } from "../services/checkout.pricing.service.js";
+import { honourQuotedPrices, quoteCheckout } from "../services/checkout.pricing.service.js";
 import { refundPaymentViaRazorpay } from "../services/refund.service.js";
 import PDFDocument from "pdfkit";
 import { renderTaxInvoice } from "../utils/invoicePdf.js";
@@ -66,6 +66,32 @@ export const createOrder = async (req, res) => {
     });
     if (quote.error) return abortWith(quote.error.status, { message: quote.error.message });
 
+    // A sale or price edit between "Pay" and now would make the fresh total
+    // differ from what was charged. If the cart is exactly what was quoted
+    // when the Razorpay order was created, honour those prices instead of
+    // rejecting an order the shopper has already paid for.
+    let verifiedPayment = null;
+    let effective = quote;
+    if (paymentVerificationToken) {
+      verifiedPayment = await getCheckoutVerificationToken(paymentVerificationToken);
+      if (
+        verifiedPayment &&
+        toIdString(verifiedPayment.userId) === authUserId &&
+        Math.round(quote.netPayable * 100) !== Number(verifiedPayment.amountPaise)
+      ) {
+        effective =
+          honourQuotedPrices(quote, verifiedPayment.quote, {
+            products,
+            promoCode,
+            walletRequested,
+            amountPaise: verifiedPayment.amountPaise,
+          }) || quote;
+        if (effective.walletUsed > 0 && (user.walletBalance || 0) < effective.walletUsed) {
+          return abortWith(400, { message: "Insufficient wallet balance" });
+        }
+      }
+    }
+
     for (const { product, qty } of quote.lines) {
       product.stock -= qty;
       await product.save({ session });
@@ -73,12 +99,12 @@ export const createOrder = async (req, res) => {
 
     // Claim one use of the coupon inside this transaction, with the limits
     // enforced atomically by the update itself.
-    if (quote.couponId) {
-      const reserved = await reserveCouponUsage(quote.couponId, user._id, session);
+    if (effective.couponId) {
+      const reserved = await reserveCouponUsage(effective.couponId, user._id, session);
       if (!reserved.ok) return abortWith(400, { message: reserved.reason });
     }
 
-    const { walletUsed, netPayable } = quote;
+    const { walletUsed, netPayable } = effective;
     if (walletUsed > 0) {
       user.walletBalance = round2(user.walletBalance - walletUsed);
       user.walletTransactions.push({
@@ -100,7 +126,6 @@ export const createOrder = async (req, res) => {
         });
       }
 
-      const verifiedPayment = await getCheckoutVerificationToken(paymentVerificationToken);
       if (!verifiedPayment) {
         return abortWith(400, { message: "Invalid or expired payment verification token" });
       }
@@ -156,16 +181,16 @@ export const createOrder = async (req, res) => {
         email: user.email,
         phone: user.phone || "",
       },
-      products: quote.normalizedProducts,
-      discount: quote.discount,
-      saleDiscount: quote.saleDiscount,
-      saleId: quote.saleId || undefined,
-      saleName: quote.saleName || undefined,
-      membershipDiscount: quote.membershipDiscount,
-      shipping: quote.shipping,
+      products: effective.normalizedProducts,
+      discount: effective.discount,
+      saleDiscount: effective.saleDiscount,
+      saleId: effective.saleId || undefined,
+      saleName: effective.saleName || undefined,
+      membershipDiscount: effective.membershipDiscount,
+      shipping: effective.shipping,
       shippingAddress,
       promo: promoCode || undefined,
-      couponId: quote.couponId || undefined,
+      couponId: effective.couponId || undefined,
       paymentStatus,
       paymentMethod,
       paymentId,
