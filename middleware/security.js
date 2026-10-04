@@ -178,7 +178,8 @@ export const csrfGuard = (req, res, next) => {
 // existing test-env bypass just above.
 const skipInTest = () => process.env.NODE_ENV === 'test';
 
-export const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 30, standardHeaders: true, skip: skipInTest });
+// Only failed sign-ins count, so a shared IP (office, CI) isn't locked out by successful logins.
+export const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 30, standardHeaders: true, skipSuccessfulRequests: true, message: { message: 'Too many sign-in attempts. Please wait a few minutes and try again.' }, skip: skipInTest });
 export const registerLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, standardHeaders: true, skip: skipInTest });
 export const forgotLimiter = rateLimit({ windowMs: 60 * 1000, max: 5, standardHeaders: true, skip: skipInTest });
 export const resetLimiter = rateLimit({ windowMs: 60 * 1000, max: 5, standardHeaders: true, skip: skipInTest });
@@ -194,10 +195,11 @@ export const supportMessageLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, s
 // ~5 beacons per page view (one per metric).
 export const vitalsLimiter = rateLimit({ windowMs: 60 * 1000, max: 120, standardHeaders: true, message: { error: 'Too many requests, please slow down' }, skip: skipInTest });
 
-// Global API rate limiter — 200 requests per minute per IP
+// Global API rate limiter — 200 requests per minute per IP by default.
+// API_RATE_LIMIT_PER_MIN raises it where every client shares one IP (E2E runs).
 export const globalApiLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 200,
+  max: Number(process.env.API_RATE_LIMIT_PER_MIN) || 200,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later' },

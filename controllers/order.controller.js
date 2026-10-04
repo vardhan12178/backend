@@ -201,6 +201,11 @@ export const createOrder = async (req, res) => {
     await newOrder.save({ session });
 
     user.orders.push(newOrder._id);
+    // The client also empties the bag, but through a debounced sync that is
+    // lost if the tab closes or navigates right after ordering; without this
+    // the purchased items come back on the next sign-in.
+    const purchased = new Set(quote.lines.map(({ product }) => String(product._id)));
+    user.cart = (user.cart || []).filter((item) => !purchased.has(String(item.productId || item._id)));
     await user.save({ session });
 
     await session.commitTransaction();

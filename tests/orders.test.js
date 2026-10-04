@@ -232,6 +232,31 @@ describe('Orders: create (wallet-funded path — no gateway needed)', () => {
         expect(user.walletTransactions.some((t) => t.type === 'DEBIT' && t.reason === 'Order payment')).toBe(true);
     });
 
+    it('removes the purchased items from the saved bag and keeps the rest', async () => {
+        const otherId = (await createProduct({ price: 50, stock: 5 })).id;
+        await User.updateOne({ username }, {
+            $set: {
+                cart: [
+                    { _id: productId, title: 'Test Item', price: 100, quantity: 1 },
+                    { _id: otherId, title: 'Saved for later', price: 50, quantity: 2 },
+                ],
+            },
+        });
+
+        const res = await request(app)
+            .post('/api/orders')
+            .set('Authorization', `Bearer ${token}`)
+            .send({
+                products: [{ productId, name: 'Test Item', quantity: 1, price: 100 }],
+                shippingAddress: '123 Fake St',
+                walletUsed: 1000,
+            });
+        expect(res.statusCode).toBe(201);
+
+        const user = await User.findOne({ username }).lean();
+        expect(user.cart.map((item) => String(item._id))).toEqual([String(otherId)]);
+    });
+
     it('rejects when the requested wallet usage exceeds the actual balance', async () => {
         await User.updateOne({ username }, { $set: { walletBalance: 1 } });
         const res = await request(app)
