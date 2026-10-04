@@ -48,6 +48,7 @@ const { issueCheckoutVerificationToken, saveWalletOrderSession, saveMembershipOr
     await import('../services/payment.session.service.js');
 const { googleUsernameCandidate } = await import('../controllers/auth.controller.js');
 const { flagDueManualRefunds } = await import('../services/refund.scheduler.js');
+const { queryParser, stripMongoOperators } = await import('../middleware/security.js');
 const { default: Notification } = await import('../models/Notification.js');
 
 const auth = (token) => ({ Authorization: `Bearer ${token}` });
@@ -164,7 +165,6 @@ describe('Checkout: Razorpay order is priced on the server', () => {
 
         const res = await request(app).post('/api/razorpay/create-order').set(auth(token)).send({
             products: [{ productId: product.id, quantity: 2, price: 1 }],
-            amount: 1,
         });
 
         expect(res.statusCode).toBe(200);
@@ -180,6 +180,51 @@ describe('Checkout: Razorpay order is priced on the server', () => {
         });
         expect(res.statusCode).toBe(400);
         expect(ordersCreateMock).not.toHaveBeenCalled();
+    });
+});
+
+describe('Checkout: prices quoted at payment time are honoured', () => {
+    const payFor = async (token, productId, quantity, orderId, paymentId) => {
+        ordersCreateMock.mockImplementationOnce(async ({ amount }) => ({ id: orderId, amount, currency: 'INR', receipt: 'r' }));
+        const created = await request(app).post('/api/razorpay/create-order').set(auth(token))
+            .send({ products: [{ productId, quantity }] });
+        expect(created.statusCode).toBe(200);
+        mockCapturedPayment({ orderId, paymentId, amount: created.body.amount });
+        const verified = await request(app).post('/api/razorpay/verify').set(auth(token))
+            .send({ razorpay_order_id: orderId, razorpay_payment_id: paymentId, razorpay_signature: sign(orderId, paymentId) });
+        expect(verified.statusCode).toBe(200);
+        return verified.body.verificationToken;
+    };
+
+    it('places the order at the paid price when the price changed during payment', async () => {
+        const { token } = await registerAndLogin(request, app, { username: 'pricechange', email: 'pricechange@test.com' });
+        const product = await createProduct({ price: 400, stock: 5 });
+        const verificationToken = await payFor(token, product.id, 1, 'order_honour_1', 'pay_honour_1');
+
+        await Product.updateOne({ _id: product._id }, { $set: { price: 600 } }); // repriced mid-payment
+
+        const res = await request(app).post('/api/orders').set(auth(token)).send({
+            products: [{ productId: product.id, name: 'Test Item', quantity: 1 }],
+            shippingAddress: '123 Fake St',
+            paymentVerificationToken: verificationToken,
+        });
+        expect(res.statusCode).toBe(201);
+        expect(res.body.products[0].price).toBe(400);
+        expect(res.body.paymentStatus).toBe('PAID');
+    });
+
+    it('still rejects the payment if the cart itself changed', async () => {
+        const { token } = await registerAndLogin(request, app, { username: 'cartchange', email: 'cartchange@test.com' });
+        const product = await createProduct({ price: 400, stock: 5 });
+        const verificationToken = await payFor(token, product.id, 1, 'order_honour_2', 'pay_honour_2');
+
+        const res = await request(app).post('/api/orders').set(auth(token)).send({
+            products: [{ productId: product.id, name: 'Test Item', quantity: 2 }],
+            shippingAddress: '123 Fake St',
+            paymentVerificationToken: verificationToken,
+        });
+        expect(res.statusCode).toBe(400);
+        expect(res.body.message).toMatch(/amount mismatch/i);
     });
 });
 
@@ -359,6 +404,32 @@ describe('Refund scheduler', () => {
 
         // Flagged once only.
         expect(await flagDueManualRefunds()).toBe(0);
+    });
+});
+
+describe('Request sanitising (Express 5 replacement for mongo-sanitize + hpp)', () => {
+    it('strips operator and dotted keys from bodies, deeply', () => {
+        const body = { username: { $gt: '' }, nested: { ok: 1, 'a.b': 2, list: [{ $where: 'x', keep: true }] } };
+        expect(stripMongoOperators(body)).toEqual({ username: {}, nested: { ok: 1, list: [{ keep: true }] } });
+    });
+
+    it('drops operator keys from query strings and collapses repeated params', () => {
+        expect(queryParser('sort=a&sort=b&$where=1&a.b=2&q=red%20shoes')).toEqual({ sort: 'b', q: 'red shoes' });
+        expect(queryParser('')).toEqual({});
+    });
+
+    it('an operator-injection login attempt is not a login', async () => {
+        await registerAndLogin(request, app, { username: 'injectme', email: 'injectme@test.com' });
+        const res = await request(app).post('/api/login').send({ username: { $gt: '' }, password: { $gt: '' } });
+        expect(res.statusCode).not.toBe(200);
+        expect(res.body.token).toBeUndefined();
+    });
+
+    it('?sort given twice reaches the API as a single value', async () => {
+        await createProduct({ title: 'Alpha', price: 10 });
+        await createProduct({ title: 'Beta', price: 20 });
+        const res = await request(app).get('/api/products?sort=price-desc&sort=price-asc');
+        expect(res.statusCode).toBe(200);
     });
 });
 
