@@ -261,7 +261,7 @@
   },
   "variants": [
     {
-      "sku": "OPL-15R-12256-MB",
+      "sku": "OPL-15R-12256-MIBR",
       "mpn": "5011118355",
       "options": {
         "Storage": "12GB + 256GB",
@@ -277,7 +277,7 @@
       }
     },
     {
-      "sku": "OPL-15R-12256-CB",
+      "sku": "OPL-15R-12256-CHBL",
       "mpn": "5011118356",
       "options": {
         "Storage": "12GB + 256GB",
@@ -293,7 +293,7 @@
       }
     },
     {
-      "sku": "OPL-15R-12256-EV",
+      "sku": "OPL-15R-12256-ELVI",
       "mpn": "5011118357",
       "options": {
         "Storage": "12GB + 256GB",
@@ -309,7 +309,7 @@
       }
     },
     {
-      "sku": "OPL-15R-12512-MB",
+      "sku": "OPL-15R-12512-MIBR",
       "mpn": "5011118358",
       "options": {
         "Storage": "12GB + 512GB",
@@ -325,7 +325,7 @@
       }
     },
     {
-      "sku": "OPL-15R-12512-CB",
+      "sku": "OPL-15R-12512-CHBL",
       "mpn": "5011118352",
       "options": {
         "Storage": "12GB + 512GB",
@@ -341,7 +341,7 @@
       }
     },
     {
-      "sku": "OPL-15R-16512-MB",
+      "sku": "OPL-15R-16512-MIBR",
       "mpn": "5011122094",
       "options": {
         "Storage": "16GB + 512GB",
@@ -357,7 +357,7 @@
       }
     },
     {
-      "sku": "OPL-15R-16512-CB",
+      "sku": "OPL-15R-16512-CHBL",
       "mpn": "5011122095",
       "options": {
         "Storage": "16GB + 512GB",

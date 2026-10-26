@@ -285,7 +285,7 @@
   },
   "variants": [
     {
-      "sku": "OPL-N6-8256-FM",
+      "sku": "OPL-N6-8256-FRMI",
       "mpn": "5011118854",
       "options": {
         "Storage": "8GB + 256GB",
@@ -301,7 +301,7 @@
       }
     },
     {
-      "sku": "OPL-N6-8256-QS",
+      "sku": "OPL-N6-8256-QUSI",
       "mpn": "5011118856",
       "options": {
         "Storage": "8GB + 256GB",
@@ -317,7 +317,7 @@
       }
     },
     {
-      "sku": "OPL-N6-8256-PB",
+      "sku": "OPL-N6-8256-PIBL",
       "mpn": "5011118851",
       "options": {
         "Storage": "8GB + 256GB",
@@ -333,7 +333,7 @@
       }
     },
     {
-      "sku": "OPL-N6-12256-FM",
+      "sku": "OPL-N6-12256-FRMI",
       "mpn": "5011118853",
       "options": {
         "Storage": "12GB + 256GB",
@@ -349,7 +349,7 @@
       }
     },
     {
-      "sku": "OPL-N6-12256-QS",
+      "sku": "OPL-N6-12256-QUSI",
       "mpn": "5011118855",
       "options": {
         "Storage": "12GB + 256GB",
@@ -365,7 +365,7 @@
       }
     },
     {
-      "sku": "OPL-N6-12256-PB",
+      "sku": "OPL-N6-12256-PIBL",
       "mpn": "5011118852",
       "options": {
         "Storage": "12GB + 256GB",

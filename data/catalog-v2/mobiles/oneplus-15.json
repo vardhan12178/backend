@@ -292,7 +292,7 @@
   },
   "variants": [
     {
-      "sku": "OPL-15-12256-SS",
+      "sku": "OPL-15-12256-SAST",
       "mpn": "5011116579",
       "options": {
         "Storage": "12GB + 256GB",
@@ -308,7 +308,7 @@
       }
     },
     {
-      "sku": "OPL-15-12256-IB",
+      "sku": "OPL-15-12256-INBL",
       "mpn": "5011116576",
       "options": {
         "Storage": "12GB + 256GB",
@@ -324,7 +324,7 @@
       }
     },
     {
-      "sku": "OPL-15-12256-UV",
+      "sku": "OPL-15-12256-ULVI",
       "mpn": "5011116575",
       "options": {
         "Storage": "12GB + 256GB",
@@ -340,7 +340,7 @@
       }
     },
     {
-      "sku": "OPL-15-16512-SS",
+      "sku": "OPL-15-16512-SAST",
       "mpn": "5011116574",
       "options": {
         "Storage": "16GB + 512GB",
@@ -356,7 +356,7 @@
       }
     },
     {
-      "sku": "OPL-15-16512-IB",
+      "sku": "OPL-15-16512-INBL",
       "mpn": "5011116580",
       "options": {
         "Storage": "16GB + 512GB",

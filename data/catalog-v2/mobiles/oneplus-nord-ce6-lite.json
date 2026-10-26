@@ -241,7 +241,7 @@
   },
   "variants": [
     {
-      "sku": "OPL-NCE6L-6128-VM",
+      "sku": "OPL-NCE6L-6128-VIMI",
       "mpn": "5011121840",
       "options": {
         "Storage": "6GB + 128GB",
@@ -257,7 +257,7 @@
       }
     },
     {
-      "sku": "OPL-NCE6L-6128-HB",
+      "sku": "OPL-NCE6L-6128-HYBL",
       "mpn": "5011121835",
       "options": {
         "Storage": "6GB + 128GB",

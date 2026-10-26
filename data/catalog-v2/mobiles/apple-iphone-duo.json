@@ -176,7 +176,7 @@
   },
   "variants": [
     {
-      "sku": "APL-IPDUO-256GB-SW",
+      "sku": "APL-IPDUO-256GB-STWH",
       "mpn": "MK2D4HN/A",
       "options": {
         "Storage": "256GB",
@@ -191,7 +191,7 @@
       }
     },
     {
-      "sku": "APL-IPDUO-256GB-NS",
+      "sku": "APL-IPDUO-256GB-NISK",
       "mpn": "MK2E4HN/A",
       "options": {
         "Storage": "256GB",
@@ -206,7 +206,7 @@
       }
     },
     {
-      "sku": "APL-IPDUO-512GB-SW",
+      "sku": "APL-IPDUO-512GB-STWH",
       "mpn": "MK2F4HN/A",
       "options": {
         "Storage": "512GB",
@@ -221,7 +221,7 @@
       }
     },
     {
-      "sku": "APL-IPDUO-512GB-NS",
+      "sku": "APL-IPDUO-512GB-NISK",
       "mpn": "MK2G4HN/A",
       "options": {
         "Storage": "512GB",
@@ -236,7 +236,7 @@
       }
     },
     {
-      "sku": "APL-IPDUO-1TB-SW",
+      "sku": "APL-IPDUO-1TB-STWH",
       "mpn": "MK2H4HN/A",
       "options": {
         "Storage": "1TB",
@@ -251,7 +251,7 @@
       }
     },
     {
-      "sku": "APL-IPDUO-1TB-NS",
+      "sku": "APL-IPDUO-1TB-NISK",
       "mpn": "MK2J4HN/A",
       "options": {
         "Storage": "1TB",
@@ -266,7 +266,7 @@
       }
     },
     {
-      "sku": "APL-IPDUO-2TB-SW",
+      "sku": "APL-IPDUO-2TB-STWH",
       "mpn": "MK2K4HN/A",
       "options": {
         "Storage": "2TB",
@@ -281,7 +281,7 @@
       }
     },
     {
-      "sku": "APL-IPDUO-2TB-NS",
+      "sku": "APL-IPDUO-2TB-NISK",
       "mpn": "MK2L4HN/A",
       "options": {
         "Storage": "2TB",

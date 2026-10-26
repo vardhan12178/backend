@@ -280,7 +280,7 @@
   },
   "variants": [
     {
-      "sku": "OPL-NCE6-8128-FB",
+      "sku": "OPL-NCE6-8128-FRBL",
       "mpn": "5011119177",
       "options": {
         "Storage": "8GB + 128GB",
@@ -296,7 +296,7 @@
       }
     },
     {
-      "sku": "OPL-NCE6-8128-PB",
+      "sku": "OPL-NCE6-8128-PIBL",
       "mpn": "5011119176",
       "options": {
         "Storage": "8GB + 128GB",
@@ -312,7 +312,7 @@
       }
     },
     {
-      "sku": "OPL-NCE6-8128-LP",
+      "sku": "OPL-NCE6-8128-LUPE",
       "mpn": "5011119174",
       "options": {
         "Storage": "8GB + 128GB",
@@ -328,7 +328,7 @@
       }
     },
     {
-      "sku": "OPL-NCE6-8256-FB",
+      "sku": "OPL-NCE6-8256-FRBL",
       "mpn": "5011119172",
       "options": {
         "Storage": "8GB + 256GB",
@@ -344,7 +344,7 @@
       }
     },
     {
-      "sku": "OPL-NCE6-8256-PB",
+      "sku": "OPL-NCE6-8256-PIBL",
       "mpn": "5011119175",
       "options": {
         "Storage": "8GB + 256GB",
@@ -360,7 +360,7 @@
       }
     },
     {
-      "sku": "OPL-NCE6-8256-LP",
+      "sku": "OPL-NCE6-8256-LUPE",
       "mpn": "5011119173",
       "options": {
         "Storage": "8GB + 256GB",

@@ -218,7 +218,7 @@
   },
   "variants": [
     {
-      "sku": "APL-IPAIR-256GB-SB",
+      "sku": "APL-IPAIR-256GB-SKBL",
       "mpn": "MG2P4HN/A",
       "options": {
         "Storage": "256GB",
@@ -233,7 +233,7 @@
       }
     },
     {
-      "sku": "APL-IPAIR-256GB-LG",
+      "sku": "APL-IPAIR-256GB-LIGO",
       "mpn": "MG2N4HN/A",
       "options": {
         "Storage": "256GB",
@@ -248,7 +248,7 @@
       }
     },
     {
-      "sku": "APL-IPAIR-256GB-CW",
+      "sku": "APL-IPAIR-256GB-CLWH",
       "mpn": "MG2M4HN/A",
       "options": {
         "Storage": "256GB",
@@ -263,7 +263,7 @@
       }
     },
     {
-      "sku": "APL-IPAIR-256GB-SB",
+      "sku": "APL-IPAIR-256GB-SPBL",
       "mpn": "MG2L4HN/A",
       "options": {
         "Storage": "256GB",
@@ -278,7 +278,7 @@
       }
     },
     {
-      "sku": "APL-IPAIR-512GB-SB",
+      "sku": "APL-IPAIR-512GB-SKBL",
       "mpn": "MG2V4HN/A",
       "options": {
         "Storage": "512GB",
@@ -293,7 +293,7 @@
       }
     },
     {
-      "sku": "APL-IPAIR-512GB-LG",
+      "sku": "APL-IPAIR-512GB-LIGO",
       "mpn": "MG2U4HN/A",
       "options": {
         "Storage": "512GB",
@@ -308,7 +308,7 @@
       }
     },
     {
-      "sku": "APL-IPAIR-512GB-CW",
+      "sku": "APL-IPAIR-512GB-CLWH",
       "mpn": "MG2T4HN/A",
       "options": {
         "Storage": "512GB",
@@ -323,7 +323,7 @@
       }
     },
     {
-      "sku": "APL-IPAIR-512GB-SB",
+      "sku": "APL-IPAIR-512GB-SPBL",
       "mpn": "MG2Q4HN/A",
       "options": {
         "Storage": "512GB",
@@ -338,7 +338,7 @@
       }
     },
     {
-      "sku": "APL-IPAIR-1TB-SB",
+      "sku": "APL-IPAIR-1TB-SKBL",
       "mpn": "MG304HN/A",
       "options": {
         "Storage": "1TB",
@@ -353,7 +353,7 @@
       }
     },
     {
-      "sku": "APL-IPAIR-1TB-LG",
+      "sku": "APL-IPAIR-1TB-LIGO",
       "mpn": "MG2Y4HN/A",
       "options": {
         "Storage": "1TB",
@@ -368,7 +368,7 @@
       }
     },
     {
-      "sku": "APL-IPAIR-1TB-CW",
+      "sku": "APL-IPAIR-1TB-CLWH",
       "mpn": "MG2X4HN/A",
       "options": {
         "Storage": "1TB",
@@ -383,7 +383,7 @@
       }
     },
     {
-      "sku": "APL-IPAIR-1TB-SB",
+      "sku": "APL-IPAIR-1TB-SPBL",
       "mpn": "MG2W4HN/A",
       "options": {
         "Storage": "1TB",

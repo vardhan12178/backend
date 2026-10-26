@@ -149,7 +149,7 @@
   },
   "variants": [
     {
-      "sku": "APL-IP17E-256GB-SP",
+      "sku": "APL-IP17E-256GB-SOPI",
       "mpn": "MHRX4HN/A",
       "options": {
         "Storage": "256GB",
@@ -194,7 +194,7 @@
       }
     },
     {
-      "sku": "APL-IP17E-512GB-SP",
+      "sku": "APL-IP17E-512GB-SOPI",
       "mpn": "MHU34HN/A",
       "options": {
         "Storage": "512GB",

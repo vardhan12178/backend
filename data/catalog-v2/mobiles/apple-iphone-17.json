@@ -244,7 +244,7 @@
       }
     },
     {
-      "sku": "APL-IP17-256GB-MB",
+      "sku": "APL-IP17-256GB-MIBL",
       "mpn": "MG6L4HN/A",
       "options": {
         "Storage": "256GB",
@@ -319,7 +319,7 @@
       }
     },
     {
-      "sku": "APL-IP17-512GB-MB",
+      "sku": "APL-IP17-512GB-MIBL",
       "mpn": "MG6T4HN/A",
       "options": {
         "Storage": "512GB",
