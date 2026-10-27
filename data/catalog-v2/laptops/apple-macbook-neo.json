@@ -232,7 +232,7 @@
       }
     },
     {
-      "sku": "APL-MBN-A18PRO8GB512GB-BLU",
+      "sku": "APL-MBN-A18PRO8GB512GBTOUCHID-BLU",
       "mpn": "MHFJ4HN/A",
       "options": {
         "Configuration": "A18 Pro · 8GB · 512GB · Touch ID",
@@ -249,7 +249,7 @@
       }
     },
     {
-      "sku": "APL-MBN-A18PRO8GB512GB-CIT",
+      "sku": "APL-MBN-A18PRO8GB512GBTOUCHID-CIT",
       "mpn": "MHFE4HN/A",
       "options": {
         "Configuration": "A18 Pro · 8GB · 512GB · Touch ID",
@@ -266,7 +266,7 @@
       }
     },
     {
-      "sku": "APL-MBN-A18PRO8GB512GB-IND",
+      "sku": "APL-MBN-A18PRO8GB512GBTOUCHID-IND",
       "mpn": "MHFG4HN/A",
       "options": {
         "Configuration": "A18 Pro · 8GB · 512GB · Touch ID",
@@ -283,7 +283,7 @@
       }
     },
     {
-      "sku": "APL-MBN-A18PRO8GB512GB-SIL",
+      "sku": "APL-MBN-A18PRO8GB512GBTOUCHID-SIL",
       "mpn": "MHFC4HN/A",
       "options": {
         "Configuration": "A18 Pro · 8GB · 512GB · Touch ID",

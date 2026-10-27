@@ -151,7 +151,7 @@
   },
   "variants": [
     {
-      "sku": "APL-MBP14-M510CORECPU10C-SIL",
+      "sku": "APL-MBP14-M510C10G16GB1TB-SIL",
       "mpn": null,
       "options": {
         "Configuration": "M5, 10-core CPU, 10-core GPU · 16GB · 1TB",
@@ -168,7 +168,7 @@
       }
     },
     {
-      "sku": "APL-MBP14-M510CORECPU10C-SPBL",
+      "sku": "APL-MBP14-M510C10G16GB1TB-SPBL",
       "mpn": null,
       "options": {
         "Configuration": "M5, 10-core CPU, 10-core GPU · 16GB · 1TB",
@@ -185,7 +185,7 @@
       }
     },
     {
-      "sku": "APL-MBP14-M5PRO15CORECPU-SIL",
+      "sku": "APL-MBP14-M5PRO15C16G24GB1TB-SIL",
       "mpn": "MGDN4HN/A",
       "options": {
         "Configuration": "M5 Pro, 15-core CPU, 16-core GPU · 24GB · 1TB",
@@ -202,7 +202,7 @@
       }
     },
     {
-      "sku": "APL-MBP14-M5PRO15CORECPU-SPBL",
+      "sku": "APL-MBP14-M5PRO15C16G24GB1TB-SPBL",
       "mpn": "MGDR4HN/A",
       "options": {
         "Configuration": "M5 Pro, 15-core CPU, 16-core GPU · 24GB · 1TB",
@@ -219,7 +219,7 @@
       }
     },
     {
-      "sku": "APL-MBP14-M5PRO18CORECPU-SIL",
+      "sku": "APL-MBP14-M5PRO18C20G24GB2TB-SIL",
       "mpn": null,
       "options": {
         "Configuration": "M5 Pro, 18-core CPU, 20-core GPU · 24GB · 2TB",
@@ -236,7 +236,7 @@
       }
     },
     {
-      "sku": "APL-MBP14-M5PRO18CORECPU-SPBL",
+      "sku": "APL-MBP14-M5PRO18C20G24GB2TB-SPBL",
       "mpn": null,
       "options": {
         "Configuration": "M5 Pro, 18-core CPU, 20-core GPU · 24GB · 2TB",
@@ -253,7 +253,7 @@
       }
     },
     {
-      "sku": "APL-MBP14-M5MAX18CORECPU-SIL",
+      "sku": "APL-MBP14-M5MAX18C32G36GB2TB-SIL",
       "mpn": "MGDQ4HN/A",
       "options": {
         "Configuration": "M5 Max, 18-core CPU, 32-core GPU · 36GB · 2TB",
@@ -270,7 +270,7 @@
       }
     },
     {
-      "sku": "APL-MBP14-M5MAX18CORECPU-SPBL",
+      "sku": "APL-MBP14-M5MAX18C32G36GB2TB-SPBL",
       "mpn": "MGDU4HN/A",
       "options": {
         "Configuration": "M5 Max, 18-core CPU, 32-core GPU · 36GB · 2TB",
@@ -287,7 +287,7 @@
       }
     },
     {
-      "sku": "APL-MBP14-M5MAX18CORECPU-SIL",
+      "sku": "APL-MBP14-M5MAX18C40G48GB2TB-SIL",
       "mpn": null,
       "options": {
         "Configuration": "M5 Max, 18-core CPU, 40-core GPU · 48GB · 2TB",
@@ -304,7 +304,7 @@
       }
     },
     {
-      "sku": "APL-MBP14-M5MAX18CORECPU-SPBL",
+      "sku": "APL-MBP14-M5MAX18C40G48GB2TB-SPBL",
       "mpn": null,
       "options": {
         "Configuration": "M5 Max, 18-core CPU, 40-core GPU · 48GB · 2TB",

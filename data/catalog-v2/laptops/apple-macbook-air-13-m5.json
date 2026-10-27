@@ -157,7 +157,7 @@
   },
   "variants": [
     {
-      "sku": "APL-MBA13-M510CORECPU8CO-MID",
+      "sku": "APL-MBA13-M510C8G16GB512GB-MID",
       "mpn": "MDHE4HN/A",
       "options": {
         "Configuration": "M5, 10-core CPU, 8-core GPU · 16GB · 512GB",
@@ -174,7 +174,7 @@
       }
     },
     {
-      "sku": "APL-MBA13-M510CORECPU8CO-SIL",
+      "sku": "APL-MBA13-M510C8G16GB512GB-SIL",
       "mpn": "MDH74HN/A",
       "options": {
         "Configuration": "M5, 10-core CPU, 8-core GPU · 16GB · 512GB",
@@ -191,7 +191,7 @@
       }
     },
     {
-      "sku": "APL-MBA13-M510CORECPU8CO-SKBL",
+      "sku": "APL-MBA13-M510C8G16GB512GB-SKBL",
       "mpn": "MDHH4HN/A",
       "options": {
         "Configuration": "M5, 10-core CPU, 8-core GPU · 16GB · 512GB",
@@ -208,7 +208,7 @@
       }
     },
     {
-      "sku": "APL-MBA13-M510CORECPU8CO-STA",
+      "sku": "APL-MBA13-M510C8G16GB512GB-STA",
       "mpn": "MDHA4HN/A",
       "options": {
         "Configuration": "M5, 10-core CPU, 8-core GPU · 16GB · 512GB",
@@ -225,7 +225,7 @@
       }
     },
     {
-      "sku": "APL-MBA13-M510CORECPU10C-MID",
+      "sku": "APL-MBA13-M510C10G16GB1TB-MID",
       "mpn": null,
       "options": {
         "Configuration": "M5, 10-core CPU, 10-core GPU · 16GB · 1TB",
@@ -242,7 +242,7 @@
       }
     },
     {
-      "sku": "APL-MBA13-M510CORECPU10C-SIL",
+      "sku": "APL-MBA13-M510C10G16GB1TB-SIL",
       "mpn": null,
       "options": {
         "Configuration": "M5, 10-core CPU, 10-core GPU · 16GB · 1TB",
@@ -259,7 +259,7 @@
       }
     },
     {
-      "sku": "APL-MBA13-M510CORECPU10C-SKBL",
+      "sku": "APL-MBA13-M510C10G16GB1TB-SKBL",
       "mpn": null,
       "options": {
         "Configuration": "M5, 10-core CPU, 10-core GPU · 16GB · 1TB",
@@ -276,7 +276,7 @@
       }
     },
     {
-      "sku": "APL-MBA13-M510CORECPU10C-STA",
+      "sku": "APL-MBA13-M510C10G16GB1TB-STA",
       "mpn": null,
       "options": {
         "Configuration": "M5, 10-core CPU, 10-core GPU · 16GB · 1TB",
