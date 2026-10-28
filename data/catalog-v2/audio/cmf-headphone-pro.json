@@ -80,7 +80,7 @@
   },
   "variants": [
     {
-      "sku": "NTH-CMFHP-LIGGRE",
+      "sku": "NTH-CMFHP-LIGHTGREEN",
       "mpn": "6974434226746",
       "options": {
         "Color": "Light Green"
@@ -92,7 +92,7 @@
       "keySpecs": {}
     },
     {
-      "sku": "NTH-CMFHP-LIGGRE",
+      "sku": "NTH-CMFHP-LIGHTGREY",
       "mpn": "6974434226739",
       "options": {
         "Color": "Light Grey"
@@ -104,7 +104,7 @@
       "keySpecs": {}
     },
     {
-      "sku": "NTH-CMFHP-DARGRE",
+      "sku": "NTH-CMFHP-DARKGREY",
       "mpn": "6974434226722",
       "options": {
         "Color": "Dark Grey"

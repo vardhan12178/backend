@@ -82,7 +82,7 @@
   },
   "variants": [
     {
-      "sku": "NTH-EARA-WHI",
+      "sku": "NTH-EARA-WHITE",
       "mpn": "6974434222199",
       "options": {
         "Color": "White"
@@ -94,7 +94,7 @@
       "keySpecs": {}
     },
     {
-      "sku": "NTH-EARA-BLA",
+      "sku": "NTH-EARA-BLACK",
       "mpn": "6974434222205",
       "options": {
         "Color": "Black"
@@ -106,7 +106,7 @@
       "keySpecs": {}
     },
     {
-      "sku": "NTH-EARA-YEL",
+      "sku": "NTH-EARA-YELLOW",
       "mpn": "6974434222212",
       "options": {
         "Color": "Yellow"

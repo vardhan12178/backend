@@ -157,7 +157,7 @@
   },
   "variants": [
     {
-      "sku": "NTH-CMFBP2-ORA",
+      "sku": "NTH-CMFBP2-ORANGE",
       "mpn": "6974434222816",
       "options": {
         "Color": "Orange"
@@ -169,7 +169,7 @@
       "keySpecs": {}
     },
     {
-      "sku": "NTH-CMFBP2-DARGRE",
+      "sku": "NTH-CMFBP2-DARKGREY",
       "mpn": "6974434222793",
       "options": {
         "Color": "Dark Grey"
@@ -181,7 +181,7 @@
       "keySpecs": {}
     },
     {
-      "sku": "NTH-CMFBP2-LIGGRE",
+      "sku": "NTH-CMFBP2-LIGHTGREY",
       "mpn": "6974434222779",
       "options": {
         "Color": "Light Grey"
@@ -193,7 +193,7 @@
       "keySpecs": {}
     },
     {
-      "sku": "NTH-CMFBP2-BLU",
+      "sku": "NTH-CMFBP2-BLUE",
       "mpn": "6974434222830",
       "options": {
         "Color": "Blue"
