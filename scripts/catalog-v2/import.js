@@ -14,7 +14,7 @@ import { loadProducts, validateCatalog, withStock, derive, buildSearchText, cont
 // --status    override the status stored in the files (they are all "draft")
 //
 // Safe to re-run: unchanged products (same content hash, embedding present) are skipped.
-// Images stay as the brands' source URLs for now; the S3 step from CATALOG_V2_SCHEMA.md §5 comes later.
+// Run scripts/catalog-v2/images.js first so media items carry S3 keys instead of the brands' URLs.
 
 dotenv.config();
 
@@ -51,14 +51,16 @@ export function makeEmbedder(apiKey = process.env.GEMINI_API_KEY) {
 export async function runImport({ entries, embed = null, dryRun = false, force = false, status = null, log = console.log }) {
   const stats = { created: 0, updated: 0, skipped: 0, embedded: 0, failed: 0 };
   const existing = new Map(
-    (await CatalogProduct.find({}, { slug: 1, contentHash: 1, embeddingUpdatedAt: 1 }).lean()).map((p) => [p.slug, p])
+    (await CatalogProduct.find({}, { slug: 1, contentHash: 1, searchText: 1, embeddingUpdatedAt: 1 }).lean()).map((p) => [p.slug, p])
   );
 
   for (const { file, doc: raw } of entries) {
     const doc = withStock(status ? { ...raw, status } : raw, DEFAULT_STOCK);
     const hash = contentHash(doc);
     const prev = existing.get(doc.slug);
-    const needsEmbed = embed && (force || !prev?.embeddingUpdatedAt || prev.contentHash !== hash);
+    const searchText = buildSearchText(doc);
+    // Only the search text is embedded, so image or stock changes don't cost a Gemini call.
+    const needsEmbed = embed && (force || !prev?.embeddingUpdatedAt || prev.searchText !== searchText);
 
     if (prev && prev.contentHash === hash && !force && !needsEmbed) {
       stats.skipped++;
@@ -70,7 +72,7 @@ export async function runImport({ entries, embed = null, dryRun = false, force =
       continue;
     }
 
-    const update = { ...doc, ...derive(doc), searchText: buildSearchText(doc), contentHash: hash };
+    const update = { ...doc, ...derive(doc), searchText, contentHash: hash };
     try {
       if (needsEmbed) {
         update.embedding = await embed(update.searchText);

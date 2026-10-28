@@ -12,6 +12,7 @@
     "start": "node server.js",
     "vectorize:products": "node ./scripts/vectorize-products.js",
     "catalog:import": "node ./scripts/catalog-v2/import.js",
+    "catalog:images": "node ./scripts/catalog-v2/images.js",
     "set-super-admin": "node ./scripts/set-super-admin.js"
   },
   "keywords": [],
@@ -50,6 +51,7 @@
     "qrcode": "^1.5.4",
     "razorpay": "^2.9.6",
     "resend": "^6.0.1",
+    "sharp": "^0.35.5",
     "similarity": "^1.2.1",
     "socket.io": "^4.8.3",
     "speakeasy": "^2.0.0",
