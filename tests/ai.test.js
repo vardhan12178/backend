@@ -60,7 +60,15 @@ describe('AI: POST /api/ai/chat', () => {
         const res = await request(app).post('/api/ai/chat').send({ message: 'best budget laptop' });
         expect(res.statusCode).toBe(200);
         expect(res.body).toEqual({ structured: { response: { summary: 'ok', points: [] } }, products: [] });
-        expect(handleChatMock).toHaveBeenCalledWith('best budget laptop', []);
+        expect(handleChatMock).toHaveBeenCalledWith('best budget laptop', [], { catalog: 'v1' });
+    });
+
+    it('passes catalog: "v2" through and keeps only the last 10 history turns', async () => {
+        handleChatMock.mockResolvedValueOnce({ structured: { response: { summary: 'ok', points: [] } }, products: [] });
+        const history = Array.from({ length: 14 }, (_, i) => ({ role: i % 2 ? 'assistant' : 'user', content: `turn ${i}` }));
+        const res = await request(app).post('/api/ai/chat').send({ message: 'gaming phone', history, catalog: 'v2' });
+        expect(res.statusCode).toBe(200);
+        expect(handleChatMock).toHaveBeenCalledWith('gaming phone', history.slice(-10), { catalog: 'v2' });
     });
 
     it('returns 500 with a graceful message when the AI service rejects', async () => {
