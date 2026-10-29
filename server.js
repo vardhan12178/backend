@@ -51,6 +51,13 @@ if (!process.env.AES_KEY || Buffer.from(process.env.AES_KEY, 'utf8').length !== 
 
   server.listen(PORT, '0.0.0.0', () => console.log(`[INFO] Server running on port ${PORT}`));
 
+  // One-off Gemini model comparison for Ask VKart (see services/aiModelProbe.js)
+  if (process.env.AI_MODEL_PROBE) {
+    import('./services/aiModelProbe.js')
+      .then(({ runModelProbe }) => runModelProbe(process.env.AI_MODEL_PROBE))
+      .catch((err) => console.error('[modelProbe] failed:', err.message));
+  }
+
   // ── Graceful Shutdown ──
   const shutdown = async (signal) => {
     console.log(`\n[INFO] ${signal} received — starting graceful shutdown`);
