@@ -478,9 +478,10 @@ export async function vectorizeProduct(product) {
 
 // Model calls for the catalog v2 chat (services/aiSearchV2.js). Catalog v2 documents were
 // embedded as RETRIEVAL_DOCUMENT, so queries use the matching RETRIEVAL_QUERY task type.
-// The intent and answer calls are short JSON tasks, so "thinking" is switched off: newer models
-// behind the "-latest" alias think by default, which pushed each call past the timeout.
-// AI_V2_MODEL picks a different model for these calls; AI_V2_TIMEOUT_MS bounds each one.
+// The intent and answer calls are short JSON tasks and should not spend time "thinking".
+// Gemini 3 models (e.g. gemini-3.5-flash-lite) already default to minimal thinking and reject the
+// 2.5-era thinkingBudget field, so it is only sent to 2.5 models. AI_V2_MODEL picks a different
+// model for these calls; AI_V2_TIMEOUT_MS bounds each one.
 const V2_MODEL = process.env.AI_V2_MODEL || CHAT_MODEL;
 const V2_TIMEOUT_MS = Number(process.env.AI_V2_TIMEOUT_MS || 7000);
 const v2Model = (thinking) => genAI.getGenerativeModel({
@@ -491,8 +492,8 @@ const v2Model = (thinking) => genAI.getGenerativeModel({
     ...(thinking ? {} : { thinkingConfig: { thinkingBudget: 0 } }),
   },
 });
-let v2Fast = v2Model(false);
-let v2ThinkingOffSupported = true;
+let v2ThinkingOffSupported = /gemini-2\.5/.test(V2_MODEL);
+let v2Fast = v2Model(!v2ThinkingOffSupported);
 
 async function v2Json(prompt) {
   try {
