@@ -484,35 +484,54 @@ export async function vectorizeProduct(product) {
 // model for these calls; AI_V2_TIMEOUT_MS bounds each one.
 const V2_MODEL = process.env.AI_V2_MODEL || CHAT_MODEL;
 const V2_TIMEOUT_MS = Number(process.env.AI_V2_TIMEOUT_MS || 7000);
+// AI_V2_THINKING_LEVEL ("minimal" | "low" | ...) sets thinkingConfig.thinkingLevel for Gemini 3 models.
+const V2_THINKING_LEVEL = process.env.AI_V2_THINKING_LEVEL || "";
 const v2Model = (thinking) => genAI.getGenerativeModel({
   model: V2_MODEL,
   generationConfig: {
     responseMimeType: "application/json",
     temperature: 0.2,
-    ...(thinking ? {} : { thinkingConfig: { thinkingBudget: 0 } }),
+    ...(!thinking ? { thinkingConfig: { thinkingBudget: 0 } } : V2_THINKING_LEVEL ? { thinkingConfig: { thinkingLevel: V2_THINKING_LEVEL } } : {}),
   },
 });
 let v2ThinkingOffSupported = /gemini-2\.5/.test(V2_MODEL);
 let v2Fast = v2Model(!v2ThinkingOffSupported);
 
-async function v2Json(prompt) {
+// Runs one call and logs how long Gemini really took, including calls we stopped waiting for,
+// plus token usage (thoughtsTokenCount shows whether the model spent time thinking).
+async function timedCall(prompt, label) {
+  const started = Date.now();
+  const call = v2Fast.generateContent(prompt);
+  call
+    .then((r) => {
+      const u = r.response?.usageMetadata || {};
+      console.log(`[aiSearchV2] gemini ${label} ${V2_MODEL} ${Date.now() - started}ms`, JSON.stringify({
+        prompt: u.promptTokenCount, output: u.candidatesTokenCount, thoughts: u.thoughtsTokenCount,
+        finish: r.response?.candidates?.[0]?.finishReason,
+      }));
+    })
+    .catch((err) => console.warn(`[aiSearchV2] gemini ${label} ${V2_MODEL} failed after ${Date.now() - started}ms: ${err.message}`));
+  return JSON.parse((await withTimeout(call, V2_TIMEOUT_MS)).response.text());
+}
+
+async function v2Json(prompt, label) {
   try {
-    return JSON.parse((await withTimeout(v2Fast.generateContent(prompt), V2_TIMEOUT_MS)).response.text());
+    return await timedCall(prompt, label);
   } catch (err) {
     // Some models reject thinkingConfig with a bare "400 ... invalid argument"; drop it once and keep going
     if (v2ThinkingOffSupported && /\b400\b|invalid argument|thinking/i.test(err.message)) {
       console.warn(`[aiSearchV2] ${V2_MODEL} rejected thinkingConfig; retrying without it`);
       v2ThinkingOffSupported = false;
       v2Fast = v2Model(true);
-      return JSON.parse((await withTimeout(v2Fast.generateContent(prompt), V2_TIMEOUT_MS)).response.text());
+      return timedCall(prompt, label);
     }
     throw err;
   }
 }
 
 const v2Ai = {
-  intent: v2Json,
-  answer: v2Json,
+  intent: (prompt) => v2Json(prompt, "intent"),
+  answer: (prompt) => v2Json(prompt, "answer"),
   embed: (text) => withTimeout(embedText(text, "RETRIEVAL_QUERY"), V2_TIMEOUT_MS),
 };
 
