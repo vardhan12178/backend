@@ -36,6 +36,7 @@ jest.unstable_mockModule('../services/ai.service.js', () => ({
     generateComparisonSummary: jest.fn(),
     parseSearchQuery: jest.fn(),
     handleChat: jest.fn(),
+    rankChat: jest.fn(),
 }));
 
 const { default: request } = await import('supertest');

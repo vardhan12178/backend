@@ -1,6 +1,8 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import Product from "../models/Product.js";
-import { chatV2 } from "./aiSearchV2.js";
+import crypto from "crypto";
+import redis from "../utils/redis.js";
+import { chatV2, rankV2 } from "./aiSearchV2.js";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -499,7 +501,7 @@ let v2Fast = v2Model(!v2ThinkingOffSupported);
 
 // Runs one call and logs how long Gemini really took, including calls we stopped waiting for,
 // plus token usage (thoughtsTokenCount shows whether the model spent time thinking).
-async function timedCall(prompt, label) {
+async function timedCall(prompt, label, timeoutMs = V2_TIMEOUT_MS) {
   const started = Date.now();
   const call = v2Fast.generateContent(prompt);
   call
@@ -511,19 +513,19 @@ async function timedCall(prompt, label) {
       }));
     })
     .catch((err) => console.warn(`[aiSearchV2] gemini ${label} ${V2_MODEL} failed after ${Date.now() - started}ms: ${err.message}`));
-  return JSON.parse((await withTimeout(call, V2_TIMEOUT_MS)).response.text());
+  return JSON.parse((await withTimeout(call, timeoutMs)).response.text());
 }
 
-async function v2Json(prompt, label) {
+async function v2Json(prompt, label, timeoutMs) {
   try {
-    return await timedCall(prompt, label);
+    return await timedCall(prompt, label, timeoutMs);
   } catch (err) {
     // Some models reject thinkingConfig with a bare "400 ... invalid argument"; drop it once and keep going
     if (v2ThinkingOffSupported && /\b400\b|invalid argument|thinking/i.test(err.message)) {
       console.warn(`[aiSearchV2] ${V2_MODEL} rejected thinkingConfig; retrying without it`);
       v2ThinkingOffSupported = false;
       v2Fast = v2Model(true);
-      return timedCall(prompt, label);
+      return timedCall(prompt, label, timeoutMs);
     }
     throw err;
   }
@@ -531,14 +533,35 @@ async function v2Json(prompt, label) {
 
 const v2Ai = {
   intent: (prompt) => v2Json(prompt, "intent"),
-  answer: (prompt) => v2Json(prompt, "answer"),
+  answer: (prompt, opts = {}) => v2Json(prompt, "answer", opts.timeoutMs),
   embed: (text) => withTimeout(embedText(text, "RETRIEVAL_QUERY"), V2_TIMEOUT_MS),
 };
+
+// Phase-two state for two-phase v2 answers: the rerank pool, kept in Redis for 10 minutes.
+// The phase-two call may wait longer for the model (AI_V2_RANK_TIMEOUT_MS) because results are already shown.
+const RANK_TTL_S = 600;
+const V2_RANK_TIMEOUT_MS = Number(process.env.AI_V2_RANK_TIMEOUT_MS || 25000);
+const rankStore = {
+  save: async (data) => {
+    const token = crypto.randomUUID();
+    await redis.set(`ai:v2:rank:${token}`, JSON.stringify(data), "EX", RANK_TTL_S);
+    return token;
+  },
+  load: async (token) => {
+    const raw = await redis.get(`ai:v2:rank:${token}`);
+    return raw ? JSON.parse(raw) : null;
+  },
+};
+
+/** Phase two of a two-phase v2 answer: model picks and reasons, or null when the token is unknown. */
+export async function rankChat(token) {
+  return rankV2(token, v2Ai, rankStore, { timeoutMs: V2_RANK_TIMEOUT_MS });
+}
 
 /**
  * Main chat handler with circuit breaker. `catalog: "v2"` answers from catalog_products.
  */
-export async function handleChat(message, history = [], { catalog = "v1" } = {}) {
+export async function handleChat(message, history = [], { catalog = "v1", twoPhase = false } = {}) {
   try {
     if (!message) throw new Error("Empty message received");
 
@@ -563,9 +586,9 @@ export async function handleChat(message, history = [], { catalog = "v1" } = {})
     }
 
     if (catalog === "v2") {
-      const result = await chatV2(message, history, v2Ai);
+      const result = await chatV2(message, history, v2Ai, twoPhase ? { store: rankStore } : {});
       recordSuccess();
-      return { structured: result.structured, products: result.products };
+      return { structured: result.structured, products: result.products, ...(result.rank ? { rank: result.rank } : {}) };
     }
 
     const expandedMessage = await expandQuery(message, history);

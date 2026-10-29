@@ -239,10 +239,6 @@ const CHAT_FALLBACK = {
   products: [],
 };
 
-/**
- * Full v2 chat turn. `ai` = { intent(prompt) → JSON, answer(prompt) → JSON, embed(text) → vector }.
- * One intent call + one answer call per message; the embedding call runs alongside keyword search.
- */
 // Words that only the intent step can turn into filters or context; without them the raw
 // message is already a good search query and the extra model call is skipped.
 // Numbers only count when they look like a price or a spec ("40k", "25000", "12gb"), not a model name ("iPhone 16").
@@ -250,10 +246,25 @@ const NEEDS_INTENT = /₹|\b\d{4,}\b|\b\d+(\.\d+)?\s*(k|lakh|lac|gb|tb|mah|inch|
 
 export const needsIntent = (message, history = []) => history.length > 0 || NEEDS_INTENT.test(message);
 
-export async function chatV2(message, history, ai) {
+// At most `perBrand` products per brand in the first `limit`, so an unranked list isn't one brand only
+export function diversify(docs, limit = MAX_RESULTS, perBrand = 2) {
+  const picked = [];
+  const rest = [];
+  const count = new Map();
+  for (const d of docs) {
+    const n = count.get(d.brand) || 0;
+    if (n < perBrand && picked.length < limit) {
+      picked.push(d);
+      count.set(d.brand, n + 1);
+    } else rest.push(d);
+  }
+  return [...picked, ...rest].slice(0, limit);
+}
+
+/** Intent + hybrid search (with filter relaxation). Returns the rerank pool. */
+export async function searchTurn(message, history, ai) {
   const t0 = Date.now();
   const timings = {};
-  const lap = (name, since) => { timings[name] = Date.now() - since; };
 
   // Embed the raw message while the intent call runs; reused when the intent keeps the same query
   const vectors = new Map();
@@ -264,7 +275,6 @@ export async function chatV2(message, history, ai) {
   embed(message).catch(() => {});
 
   let intent;
-  const tIntent = Date.now();
   if (needsIntent(message, history)) {
     try {
       intent = sanitizeIntent(await ai.intent(intentPrompt(message, history)), message);
@@ -276,7 +286,7 @@ export async function chatV2(message, history, ai) {
     intent = sanitizeIntent({}, message);
     timings.intentSkipped = true;
   }
-  lap("intent", tIntent);
+  timings.intent = Date.now() - t0;
 
   const tSearch = Date.now();
   let { products } = await hybridSearch(intent, { embed });
@@ -286,23 +296,19 @@ export async function chatV2(message, history, ai) {
     ({ products } = await hybridSearch({ ...intent, minPrice: null, maxPrice: null, minRamGB: null, minBatteryMah: null, brand: null }, { embed }));
     relaxed = products.length > 0;
   }
-  lap("search", tSearch);
-  if (!products.length) {
-    console.log("[aiSearchV2] timings", JSON.stringify({ ...timings, total: Date.now() - t0, results: 0 }));
-    return { ...CHAT_FALLBACK, intent };
-  }
+  timings.search = Date.now() - tSearch;
+  return { products, intent, relaxed, timings };
+}
 
+/** Model rerank of a pool; falls back to the diversified fused order. */
+export async function rankTurn(message, history, products, ai, { relaxed = false, timeoutMs } = {}) {
   let ranked;
-  const tAnswer = Date.now();
   try {
-    ranked = applyRanking(products, await ai.answer(answerPrompt(message, products, history)));
+    ranked = applyRanking(products, await ai.answer(answerPrompt(message, products, history), { timeoutMs }));
   } catch (err) {
     console.warn("[aiSearchV2] answer failed, using fused order:", err.message);
-    ranked = applyRanking(products, null);
+    ranked = applyRanking(diversify(products), null);
   }
-  lap("answer", tAnswer);
-  console.log("[aiSearchV2] timings", JSON.stringify({ ...timings, total: Date.now() - t0, reranked: ranked.reranked }));
-
   const summary = ranked.summary || "Here are the closest matches I found.";
   return {
     structured: {
@@ -314,7 +320,68 @@ export async function chatV2(message, history, ai) {
       followUp: ranked.followUp || "Want me to narrow it down by budget or brand?",
     },
     products: ranked.items.map((it) => toChatProduct(it.doc, it.reason)),
-    intent,
     reranked: ranked.reranked,
   };
+}
+
+/**
+ * Full v2 chat turn. `ai` = { intent(prompt) → JSON, answer(prompt, { timeoutMs }) → JSON, embed(text) → vector }.
+ *
+ * Two-phase (when a `store` is given): answer straight after the search with a diversified list and a
+ * `rank` token; the client then calls rankV2(token) for the model's picks and reasons, so a slow model
+ * never holds up the results. Without a store the rerank runs inline (one response).
+ */
+export async function chatV2(message, history, ai, { store } = {}) {
+  const t0 = Date.now();
+  const { products, intent, relaxed, timings } = await searchTurn(message, history, ai);
+  if (!products.length) {
+    console.log("[aiSearchV2] timings", JSON.stringify({ ...timings, total: Date.now() - t0, results: 0 }));
+    return { ...CHAT_FALLBACK, intent };
+  }
+
+  if (store) {
+    let token = null;
+    try {
+      token = await store.save({ message, history: (history || []).slice(-4), ids: products.map((p) => String(p._id)), relaxed });
+    } catch (err) {
+      console.warn("[aiSearchV2] could not store the rerank pool, answering inline:", err.message);
+    }
+    if (token) {
+      console.log("[aiSearchV2] timings", JSON.stringify({ ...timings, total: Date.now() - t0, phase: 1 }));
+      return {
+        structured: {
+          response: {
+            summary: relaxed ? "Nothing matched every filter, so these are the closest options." : "Here are the top matches.",
+            points: [],
+          },
+          recommendation: null,
+          followUp: "Want me to narrow it down by budget or brand?",
+        },
+        products: diversify(products).map((d) => toChatProduct(d)),
+        rank: { token },
+        intent,
+      };
+    }
+  }
+
+  const tAnswer = Date.now();
+  const result = await rankTurn(message, history, products, ai, { relaxed });
+  timings.answer = Date.now() - tAnswer;
+  console.log("[aiSearchV2] timings", JSON.stringify({ ...timings, total: Date.now() - t0, reranked: result.reranked }));
+  return { ...result, intent };
+}
+
+/** Phase two: the model's ranking for a pool stored by chatV2. Returns null for an unknown/expired token. */
+export async function rankV2(token, ai, store, { timeoutMs } = {}) {
+  const saved = await store.load(token);
+  if (!saved || !Array.isArray(saved.ids) || !saved.ids.length) return null;
+  const docs = await CatalogProduct.find({ _id: { $in: saved.ids } }, PROJECTION).lean();
+  const byId = new Map(docs.map((d) => [String(d._id), d]));
+  const pool = saved.ids.map((id) => byId.get(id)).filter(Boolean);
+  if (!pool.length) return null;
+
+  const t0 = Date.now();
+  const result = await rankTurn(saved.message, saved.history, pool, ai, { relaxed: saved.relaxed, timeoutMs });
+  console.log("[aiSearchV2] timings", JSON.stringify({ phase: 2, answer: Date.now() - t0, reranked: result.reranked }));
+  return result;
 }

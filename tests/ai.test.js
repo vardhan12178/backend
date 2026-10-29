@@ -18,8 +18,10 @@ jest.unstable_mockModule('resend', () => ({
 const handleChatMock = jest.fn();
 const parseSearchQueryMock = jest.fn();
 const generateComparisonSummaryMock = jest.fn();
+const rankChatMock = jest.fn();
 jest.unstable_mockModule('../services/ai.service.js', () => ({
     handleChat: handleChatMock,
+    rankChat: rankChatMock,
     parseSearchQuery: parseSearchQueryMock,
     generateComparisonSummary: generateComparisonSummaryMock,
     vectorizeProduct: jest.fn(),
@@ -69,6 +71,37 @@ describe('AI: POST /api/ai/chat', () => {
         const res = await request(app).post('/api/ai/chat').send({ message: 'gaming phone', history, catalog: 'v2' });
         expect(res.statusCode).toBe(200);
         expect(handleChatMock).toHaveBeenCalledWith('gaming phone', history.slice(-10), { catalog: 'v2' });
+    });
+
+    it('asks for a two-phase answer only for v2', async () => {
+        handleChatMock.mockResolvedValue({ structured: { response: { summary: 'ok', points: [] } }, products: [], rank: { token: 't' } });
+        await request(app).post('/api/ai/chat').send({ message: 'gaming phone', catalog: 'v2', twoPhase: true });
+        expect(handleChatMock).toHaveBeenLastCalledWith('gaming phone', [], { catalog: 'v2', twoPhase: true });
+        await request(app).post('/api/ai/chat').send({ message: 'gaming phone', twoPhase: true });
+        expect(handleChatMock).toHaveBeenLastCalledWith('gaming phone', [], { catalog: 'v1' });
+    });
+});
+
+describe('AI: POST /api/ai/chat/rank', () => {
+    const token = '123e4567-e89b-42d3-a456-426614174000';
+
+    it('rejects a malformed token', async () => {
+        const res = await request(app).post('/api/ai/chat/rank').send({ token: 'nope' });
+        expect(res.statusCode).toBe(400);
+    });
+
+    it('returns 404 for an unknown or expired token', async () => {
+        rankChatMock.mockResolvedValueOnce(null);
+        const res = await request(app).post('/api/ai/chat/rank').send({ token });
+        expect(res.statusCode).toBe(404);
+    });
+
+    it('returns the ranked answer', async () => {
+        rankChatMock.mockResolvedValueOnce({ structured: { response: { summary: 'best', points: [] } }, products: [{ _id: 'a' }], reranked: true });
+        const res = await request(app).post('/api/ai/chat/rank').send({ token });
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toMatchObject({ structured: { response: { summary: 'best' } }, products: [{ _id: 'a' }], reranked: true });
+        expect(rankChatMock).toHaveBeenCalledWith(token);
     });
 
     it('returns 500 with a graceful message when the AI service rejects', async () => {

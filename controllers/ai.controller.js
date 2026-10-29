@@ -1,4 +1,4 @@
-import { handleChat, parseSearchQuery, generateComparisonSummary } from "../services/ai.service.js";
+import { handleChat, rankChat, parseSearchQuery, generateComparisonSummary } from "../services/ai.service.js";
 import Product from "../models/Product.js";
 import redis, { CACHE_TTL } from "../utils/redis.js";
 
@@ -33,7 +33,9 @@ export const chat = async (req, res) => {
         const catalog = req.body.catalog === "v2" || req.body.catalog === "v1"
             ? req.body.catalog
             : (process.env.AI_CHAT_CATALOG || "v1");
-        const response = await handleChat(message.trim(), history.slice(-10), { catalog });
+        // twoPhase (v2 only): results come back right after the search, picks via POST /api/ai/chat/rank
+        const twoPhase = catalog === "v2" && req.body.twoPhase === true;
+        const response = await handleChat(message.trim(), history.slice(-10), twoPhase ? { catalog, twoPhase } : { catalog });
 
         // 4. Return Result
         res.json(response);
@@ -45,6 +47,22 @@ export const chat = async (req, res) => {
         res.status(500).json({
             error: "AI service is currently busy. Please try standard search."
         });
+    }
+};
+
+/* POST CHAT RANK - phase two of a two-phase v2 answer */
+export const rankChatTurn = async (req, res) => {
+    try {
+        const { token } = req.body;
+        if (typeof token !== "string" || !/^[0-9a-f-]{36}$/i.test(token)) {
+            return res.status(400).json({ error: "Invalid rank token" });
+        }
+        const result = await rankChat(token);
+        if (!result) return res.status(404).json({ error: "This answer has expired. Please ask again." });
+        res.json({ structured: result.structured, products: result.products, reranked: result.reranked });
+    } catch (error) {
+        console.error("Chat rank error:", error.message);
+        res.status(503).json({ error: "AI ranking is currently busy." });
     }
 };
 

@@ -1,6 +1,6 @@
 import { jest } from '@jest/globals';
 
-const { sanitizeIntent, buildFilters, rrfFuse, applyRanking, chatV2, needsIntent, MAX_RESULTS } = await import('../services/aiSearchV2.js');
+const { sanitizeIntent, buildFilters, rrfFuse, applyRanking, chatV2, rankV2, diversify, needsIntent, MAX_RESULTS } = await import('../services/aiSearchV2.js');
 const { default: CatalogProduct } = await import('../models/CatalogProduct.js');
 
 const doc = (slug, extra = {}) => ({
@@ -107,5 +107,33 @@ describe('chatV2', () => {
         expect(fake.intent).not.toHaveBeenCalled();
         expect(fake.embed).toHaveBeenCalledTimes(1);
         expect(res.products[0].slug).toBe('galaxy-gaming');
+    });
+
+    it('answers in two phases: diversified results first, model picks with the token', async () => {
+        const saved = new Map();
+        const store = { save: jest.fn(async (d) => { saved.set('tok', d); return 'tok'; }), load: jest.fn(async (t) => saved.get(t) || null) };
+        const fake = ai({ query: 'phone' }, { rankedIndexes: [2], reasons: { 2: 'Cheapest' }, response: { summary: 'Picked.' } });
+
+        const first = await chatV2('phone', [], fake, { store });
+        expect(first.rank).toEqual({ token: 'tok' });
+        expect(first.products.length).toBeGreaterThan(0);
+        expect(first.products.every((p) => !p.reason)).toBe(true);
+        expect(fake.answer).not.toHaveBeenCalled();
+
+        const second = await rankV2('tok', fake, store);
+        expect(fake.answer).toHaveBeenCalledTimes(1);
+        expect(second.reranked).toBe(true);
+        expect(second.products).toHaveLength(1);
+        expect(second.products[0].reason).toBe('Cheapest');
+        expect(second.structured.response.summary).toBe('Picked.');
+        expect(await rankV2('missing', fake, store)).toBeNull();
+    });
+});
+
+describe('diversify', () => {
+    it('keeps at most two products per brand in the top results', () => {
+        const docs = ['A', 'A', 'A', 'B', 'A', 'C'].map((brand, i) => ({ brand, i }));
+        expect(diversify(docs).map((d) => d.i)).toEqual([0, 1, 3, 5]);
+        expect(diversify([{ brand: 'A', i: 0 }, { brand: 'A', i: 1 }, { brand: 'A', i: 2 }]).map((d) => d.i)).toEqual([0, 1, 2]);
     });
 });
