@@ -128,6 +128,13 @@ async function main() {
     status: value("status") || null,
   });
   console.log("[INFO] Done.", stats);
+  if (!dryRun && process.env.REDIS_URL && (stats.created || stats.updated)) {
+    // Drop cached /api/v2 responses so the shop shows the new data straight away
+    const { default: redis, invalidatePattern } = await import("../../utils/redis.js");
+    await invalidatePattern("v2:*");
+    redis.disconnect();
+    console.log("[INFO] Cleared v2 API cache.");
+  }
   await mongoose.disconnect();
   process.exit(stats.failed ? 1 : 0);
 }

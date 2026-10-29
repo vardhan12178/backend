@@ -275,6 +275,13 @@ product_reviews:
 | GET | `/api/v2/products/:slug/similar` | Vector similarity (same as today's recommendations) |
 | POST/PUT/DELETE | `/api/v2/admin/products…` | Admin CRUD with variant editor; re-embeds on content change |
 
+**Implemented so far** (`routes/catalogV2.routes.js`, `services/catalogV2.service.js`):
+- `GET /api/v2/categories`: storefront groups (fashion split by gender, large appliances grouped) with counts.
+- `GET /api/v2/products?category=&brand=a,b&minPrice=&maxPrice=&minDiscount=&inStock=&q=&sort=featured|price-asc|price-desc|discount|newest&page=&limit=`: cards plus `facets.brands` and `facets.price`.
+- `GET /api/v2/products/:slug`: full product, media resolved to `thumb`/`md`/`lg` URLs from `S3_PUBLIC_BASE_URL` (default: the S3 bucket URL).
+- `GET /api/v2/products/:slug/similar`: `$vectorSearch` on `catalog_v2_vector`, falling back to same category, closest price.
+- Drafts are visible until `CATALOG_V2_ACTIVE_ONLY=true`. Responses are cached under `v2:*`; the import script clears it.
+
 ---
 
 ## 9. Cart, wishlist and orders
