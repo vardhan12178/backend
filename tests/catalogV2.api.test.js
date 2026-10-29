@@ -68,6 +68,7 @@ describe('Catalog v2 API', () => {
         expect(res.body.products.map((p) => p.slug)).toEqual(['phone-b', 'phone-c']);
         const card = res.body.products[0];
         expect(card.discountPercent).toBe(50);
+        expect(card).toMatchObject({ sku: 'B-1', id: expect.stringMatching(/^[a-f0-9]{24}$/) });
         expect(card.image.md).toMatch(/catalog-v2\/mobiles\/phone-b\/black-1-md\.webp$/);
         expect(res.body.facets.brands).toEqual([{ name: 'Samsung', count: 2 }, { name: 'Apple', count: 1 }]);
         expect(res.body.facets.price).toEqual({ min: 20000, max: 80000 });

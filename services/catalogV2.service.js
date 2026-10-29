@@ -60,6 +60,8 @@ export function toCard(p) {
   const first = imagesFor(p, v?.options?.[p.media?.groupBy])[0];
   const colors = (p.variantOptions || []).find((o) => o.name === "Color")?.values || [];
   return {
+    id: String(p._id),
+    sku: v?.sku,
     slug: p.slug,
     title: p.title,
     brand: p.brand,
