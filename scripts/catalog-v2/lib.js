@@ -1,11 +1,12 @@
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 
 // Pure helpers for the catalog v2 import: load, validate, derive fields and build the embedding text.
 // Kept free of Mongo and Gemini so they can be unit tested and reused by admin save hooks.
 
-export const DATA_DIR = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../../data/catalog-v2");
+export const DATA_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../data/catalog-v2");
 
 export function loadProducts(dir = DATA_DIR, { category } = {}) {
   const out = [];

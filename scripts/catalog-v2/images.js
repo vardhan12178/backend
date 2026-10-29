@@ -1,3 +1,4 @@
+import "dotenv/config"; // must load before utils/s3.js, which reads AWS creds when imported
 import fs from "fs";
 import path from "path";
 import dotenv from "dotenv";

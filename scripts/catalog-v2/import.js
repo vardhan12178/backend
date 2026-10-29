@@ -1,3 +1,5 @@
+import path from "path";
+import { fileURLToPath } from "url";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
 import { GoogleGenerativeAI } from "@google/generative-ai";
@@ -130,7 +132,7 @@ async function main() {
   process.exit(stats.failed ? 1 : 0);
 }
 
-if (process.argv[1] && new URL(import.meta.url).pathname === process.argv[1]) {
+if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
   main().catch((err) => {
     console.error("Critical Script Failure:", err);
     process.exit(1);
