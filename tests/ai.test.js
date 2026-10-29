@@ -83,7 +83,7 @@ describe('AI: POST /api/ai/chat', () => {
 });
 
 describe('AI: POST /api/ai/chat/rank', () => {
-    const token = '123e4567-e89b-42d3-a456-426614174000';
+    const token = crypto.randomUUID();
 
     it('rejects a malformed token', async () => {
         const res = await request(app).post('/api/ai/chat/rank').send({ token: 'nope' });
