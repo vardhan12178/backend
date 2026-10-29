@@ -498,8 +498,8 @@ async function v2Json(prompt) {
   try {
     return JSON.parse((await withTimeout(v2Fast.generateContent(prompt), V2_TIMEOUT_MS)).response.text());
   } catch (err) {
-    // Some models reject thinkingConfig; drop it once and keep going
-    if (v2ThinkingOffSupported && /thinking/i.test(err.message) && /400|invalid|unknown|not supported/i.test(err.message)) {
+    // Some models reject thinkingConfig with a bare "400 ... invalid argument"; drop it once and keep going
+    if (v2ThinkingOffSupported && /\b400\b|invalid argument|thinking/i.test(err.message)) {
       console.warn(`[aiSearchV2] ${V2_MODEL} rejected thinkingConfig; retrying without it`);
       v2ThinkingOffSupported = false;
       v2Fast = v2Model(true);
