@@ -1,5 +1,5 @@
 import express from "express";
-import { param, query } from "express-validator";
+import { body, param, query } from "express-validator";
 import validate from "../middleware/validate.js";
 import * as catalogV2 from "../controllers/catalogV2.controller.js";
 import { SORT_KEYS, MAX_PAGE_SIZE } from "../services/catalogV2.service.js";
@@ -31,5 +31,17 @@ router.get(
 
 router.get("/products/:slug", [slug], validate, catalogV2.getProduct);
 router.get("/products/:slug/similar", [slug, query("limit").optional().isInt({ min: 1, max: 24 }).toInt()], validate, catalogV2.getSimilar);
+
+router.post(
+  "/cart/resolve",
+  [
+    body("items").isArray({ max: 100 }),
+    body("items.*.productId").isMongoId(),
+    body("items.*.sku").isString().isLength({ min: 1, max: 80 }),
+    body("items.*.quantity").optional().isInt({ min: 1, max: 99 }).toInt(),
+  ],
+  validate,
+  catalogV2.resolveCart
+);
 
 export default router;

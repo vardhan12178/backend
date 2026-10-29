@@ -13,6 +13,7 @@ import {
   getCheckoutVerificationToken,
 } from "../services/payment.session.service.js";
 import { refundPaymentViaRazorpay } from "../services/refund.service.js";
+import { isV2Line, reserveV2Line, restoreV2Line } from "../services/catalogV2.stock.js";
 import PDFDocument from "pdfkit";
 import { renderTaxInvoice } from "../utils/invoicePdf.js";
 import { round2 } from "../utils/calc.js";
@@ -63,6 +64,18 @@ export const createOrder = async (req, res) => {
 
     for (const p of products) {
       const qty = Math.max(1, Math.trunc(Number(p.quantity) || 0));
+
+      // Catalog v2 lines: price and stock come from the variant (sale overlay not applied to v2 yet)
+      if (isV2Line(p)) {
+        try {
+          normalizedProducts.push(await reserveV2Line({ productId: p.productId, sku: p.sku, quantity: qty }, session));
+        } catch (err) {
+          if (err.status === 400) return abortWith(400, { message: err.message });
+          throw err;
+        }
+        continue;
+      }
+
       const product = await Product.findById(p.productId)
         .select("title thumbnail images category price discountPercentage stock isActive")
         .session(session);
@@ -498,7 +511,9 @@ export const updateReturnStatus = async (req, res) => {
   // Restore stock when return is received
   if (status === "RECEIVED") {
     for (const p of order.products) {
-      if (p.productId) {
+      if (isV2Line(p)) {
+        await restoreV2Line(p);
+      } else if (p.productId) {
         await Product.findByIdAndUpdate(p.productId, { $inc: { stock: p.quantity } });
       }
     }
@@ -663,6 +678,16 @@ export const createReplacementOrder = async (req, res) => {
     // Inventory enforcement
     for (const p of order.products) {
       if (!p.productId) continue;
+      if (isV2Line(p)) {
+        try {
+          await reserveV2Line({ productId: p.productId, sku: p.sku, quantity: p.quantity }, session);
+        } catch (err) {
+          await session.abortTransaction();
+          if (err.status === 400) return res.status(400).json({ message: err.message });
+          throw err;
+        }
+        continue;
+      }
       const product = await Product.findById(p.productId).session(session);
       if (!product || !product.isActive) {
         await session.abortTransaction();
@@ -812,7 +837,9 @@ export const cancelOrder = async (req, res) => {
 
     // Restore stock for each product
     for (const p of order.products) {
-      if (p.productId) {
+      if (isV2Line(p)) {
+        await restoreV2Line(p, session);
+      } else if (p.productId) {
         await Product.findByIdAndUpdate(p.productId, { $inc: { stock: p.quantity } }, { session });
       }
     }

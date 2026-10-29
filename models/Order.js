@@ -27,6 +27,9 @@ const productLineSchema = new mongoose.Schema(
   {
     productId: { type: mongoose.Schema.Types.ObjectId, ref: "Product" },
     externalId: { type: String },
+    // Catalog v2 lines point at catalog_products and a variant SKU
+    catalog: { type: String, enum: ["v1", "v2"], default: "v1" },
+    sku: { type: String, trim: true },
 
     name: { type: String, required: true, trim: true },
     image: { type: String, trim: true },

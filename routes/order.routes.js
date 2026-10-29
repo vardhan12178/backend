@@ -25,6 +25,11 @@ const validateOrder = [
   body("products.*.quantity").isInt({ gt: 0 }),
   body("products.*.price").optional().isFloat({ gt: 0 }),
   body("products.*.selectedVariants").optional({ nullable: true }).isString(),
+  body("products.*.catalog").optional({ nullable: true }).isIn(["v1", "v2"]),
+  body("products.*.sku").optional({ nullable: true }).isString().isLength({ max: 80 }),
+  body("products").custom((items) =>
+    items.every((p) => p?.catalog !== "v2" || (typeof p.sku === "string" && p.sku.trim().length > 0))
+  ).withMessage("Catalog v2 items need a sku"),
 
   body("promo").optional({ nullable: true }).isString(),
   body("paymentVerificationToken").optional({ nullable: true }).isString(),

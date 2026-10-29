@@ -15,6 +15,7 @@ jest.unstable_mockModule('resend', () => ({
 const { default: request } = await import('supertest');
 const { default: app } = await import('../app.js');
 const { default: CatalogProduct } = await import('../models/CatalogProduct.js');
+const { reserveV2Line, restoreV2Line } = await import('../services/catalogV2.stock.js');
 
 const variant = (sku, price, mrp, extra = {}) => ({ sku, options: { Color: 'Black' }, price, mrp, stock: 10, isDefault: false, ...extra });
 const product = (slug, overrides = {}) => ({
@@ -109,5 +110,38 @@ describe('Catalog v2 API', () => {
         expect(res.status).toBe(200);
         expect(res.body.source).toBe('price');
         expect(res.body.products.map((p) => p.slug).sort()).toEqual(['phone-a', 'phone-b']);
+    });
+
+    it('resolves cart lines with live price and stock', async () => {
+        const phone = await CatalogProduct.findOne({ slug: 'phone-a' }).lean();
+        const res = await request(app).post('/api/v2/cart/resolve').send({
+            items: [
+                { productId: String(phone._id), sku: 'A-2', quantity: 2 },
+                { productId: String(phone._id), sku: 'NOPE', quantity: 1 },
+            ],
+        });
+        expect(res.status).toBe(200);
+        expect(res.body.items[0]).toMatchObject({ sku: 'A-2', price: 90000, quantity: 2, available: true, variantLabel: 'Black' });
+        expect(res.body.items[0].image).toMatch(/black-1-md\.webp$/);
+        expect(res.body.items[1]).toMatchObject({ sku: 'NOPE', available: false });
+    });
+
+    it('reserves stock atomically and restores it', async () => {
+        const phone = await CatalogProduct.findOne({ slug: 'phone-b' }).lean();
+        const line = await reserveV2Line({ productId: phone._id, sku: 'B-1', quantity: 4 });
+        expect(line).toMatchObject({ catalog: 'v2', sku: 'B-1', price: 20000, quantity: 4, name: 'Brand phone-b' });
+        let doc = await CatalogProduct.findById(phone._id).lean();
+        expect(doc.variants[0].stock).toBe(6);
+
+        await expect(reserveV2Line({ productId: phone._id, sku: 'B-1', quantity: 7 })).rejects.toThrow(/Insufficient stock/);
+        await reserveV2Line({ productId: phone._id, sku: 'B-1', quantity: 6 });
+        doc = await CatalogProduct.findById(phone._id).lean();
+        expect(doc.variants[0].stock).toBe(0);
+        expect(doc.inStock).toBe(false);
+
+        await restoreV2Line({ productId: phone._id, sku: 'B-1', quantity: 3 });
+        doc = await CatalogProduct.findById(phone._id).lean();
+        expect(doc.variants[0].stock).toBe(3);
+        expect(doc.inStock).toBe(true);
     });
 });

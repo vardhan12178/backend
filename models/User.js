@@ -78,6 +78,10 @@ const userSchema = new Schema(
       {
         productId: { type: Schema.Types.ObjectId, ref: "Product" },
         externalId: { type: String },
+        // Catalog v2 lines: productId is a catalog_products id and sku picks the variant
+        catalog: { type: String, enum: ["v1", "v2"], default: "v1" },
+        sku: { type: String, trim: true },
+        slug: { type: String, trim: true },
         title: { type: String, trim: true },
         price: { type: Number, min: 0 },
         quantity: { type: Number, min: 1, default: 1 },
