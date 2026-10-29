@@ -29,7 +29,11 @@ export const chat = async (req, res) => {
         }
 
         // 3. Process Request
-        const response = await handleChat(message.trim(), history);
+        // Catalog v2 answers from catalog_products; AI_CHAT_CATALOG sets the default for old clients
+        const catalog = req.body.catalog === "v2" || req.body.catalog === "v1"
+            ? req.body.catalog
+            : (process.env.AI_CHAT_CATALOG || "v1");
+        const response = await handleChat(message.trim(), history.slice(-10), { catalog });
 
         // 4. Return Result
         res.json(response);

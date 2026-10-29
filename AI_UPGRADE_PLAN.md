@@ -1,6 +1,14 @@
 # VKart Copilot — AI Upgrade Plan
 
-Status: **Draft for review.** Nothing here is built yet. The agentic feature list (Phase 3) is still to be confirmed.
+Status: **Phases 0–2 built for catalog v2** (`services/aiSearchV2.js`). Phase 3 (agentic tools) is still to be confirmed.
+
+**Catalog v2 implementation** (Ask VKart sends `catalog: "v2"`; old clients stay on v1 unless `AI_CHAT_CATALOG=v2`):
+- One intent call replaces `expandQuery()`: standalone query plus filters (storefront category, brand, price, RAM, battery, 5G), validated server-side.
+- Hybrid retrieval on `catalog_products`: `$vectorSearch` on `catalog_v2_vector` with the filters **inside** the search, in parallel with `$text` keyword search; fused with RRF (k = 60). Either side can fail alone.
+- Queries are embedded with `taskType: RETRIEVAL_QUERY` (documents were embedded as `RETRIEVAL_DOCUMENT`).
+- The answer call reranks the top 10 into `rankedIndexes` (max 4) with a reason per pick; invalid output falls back to fused order.
+- If the filters leave nothing, the search relaxes them and says so.
+- Evaluation: `npm run catalog:eval` runs 24 cases from `tests/fixtures/catalog-v2-search-eval.json` and prints Recall@4 and MRR for keyword-only, vector-only and hybrid. Record the numbers under **Results**.
 
 Goal: take VKart Copilot from "basic vector RAG" to a production-style AI shopping assistant that we can explain and back up with numbers in an interview.
 

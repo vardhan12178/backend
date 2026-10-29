@@ -13,6 +13,7 @@
     "vectorize:products": "node ./scripts/vectorize-products.js",
     "catalog:import": "node ./scripts/catalog-v2/import.js",
     "catalog:images": "node ./scripts/catalog-v2/images.js",
+    "catalog:eval": "node ./scripts/catalog-v2/eval-search.js",
     "set-super-admin": "node ./scripts/set-super-admin.js"
   },
   "keywords": [],

@@ -8,7 +8,7 @@ const REGION = process.env.S3_REGION || "ap-south-1";
 const IMAGE_BASE = (process.env.S3_PUBLIC_BASE_URL || `https://${BUCKET}.s3.${REGION}.amazonaws.com`).replace(/\/$/, "") + "/catalog-v2";
 
 // Until launch every imported product is "draft"; set CATALOG_V2_ACTIVE_ONLY=true to hide drafts.
-const visibleStatuses = () => (process.env.CATALOG_V2_ACTIVE_ONLY === "true" ? ["active"] : ["active", "draft"]);
+export const visibleStatuses = () => (process.env.CATALOG_V2_ACTIVE_ONLY === "true" ? ["active"] : ["active", "draft"]);
 
 export const PAGE_SIZE = 24;
 export const MAX_PAGE_SIZE = 60;

@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import Product from "../models/Product.js";
+import { chatV2 } from "./aiSearchV2.js";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -86,9 +87,10 @@ const PRODUCT_PROJECTION = {
 
 const escapeRegex = (value = "") => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-async function embedText(text) {
+async function embedText(text, taskType) {
   const payload = {
     content: { parts: [{ text: String(text || "").trim() }] },
+    ...(taskType ? { taskType } : {}),
   };
 
   if (Number.isFinite(EMBEDDING_DIM) && EMBEDDING_DIM > 0) {
@@ -474,10 +476,18 @@ export async function vectorizeProduct(product) {
   }
 }
 
+// Model calls for the catalog v2 chat (services/aiSearchV2.js). Catalog v2 documents were
+// embedded as RETRIEVAL_DOCUMENT, so queries use the matching RETRIEVAL_QUERY task type.
+const v2Ai = {
+  intent: async (prompt) => JSON.parse((await withTimeout(chatModel.generateContent(prompt))).response.text()),
+  answer: async (prompt) => JSON.parse((await withTimeout(chatModel.generateContent(prompt))).response.text()),
+  embed: (text) => embedText(text, "RETRIEVAL_QUERY"),
+};
+
 /**
- * Main chat handler with circuit breaker.
+ * Main chat handler with circuit breaker. `catalog: "v2"` answers from catalog_products.
  */
-export async function handleChat(message, history = []) {
+export async function handleChat(message, history = [], { catalog = "v1" } = {}) {
   try {
     if (!message) throw new Error("Empty message received");
 
@@ -499,6 +509,12 @@ export async function handleChat(message, history = []) {
         },
         products: []
       };
+    }
+
+    if (catalog === "v2") {
+      const result = await chatV2(message, history, v2Ai);
+      recordSuccess();
+      return { structured: result.structured, products: result.products };
     }
 
     const expandedMessage = await expandQuery(message, history);
