@@ -118,10 +118,6 @@
           "sourceUrl": "https://images.samsung.com/in/smartphones/galaxy-s26/buy/product_color_black_PC.jpg",
           "width": 1600,
           "height": 864
-        },
-        {
-          "src": "https://images.samsung.com/in/smartphones/galaxy-s26/images/galaxy-s26-features-colors-viewer-initial-black.jpg",
-          "alt": "Samsung Galaxy S26 in Black, view 2"
         }
       ],
       "Cobalt Violet": [
@@ -131,10 +127,6 @@
           "sourceUrl": "https://images.samsung.com/in/smartphones/galaxy-s26/buy/product_color_cobaltViolet_PC.jpg",
           "width": 1600,
           "height": 864
-        },
-        {
-          "src": "https://images.samsung.com/in/smartphones/galaxy-s26/images/galaxy-s26-features-colors-viewer-initial-cobalt-violet.jpg",
-          "alt": "Samsung Galaxy S26 in Cobalt Violet, view 2"
         }
       ],
       "Pink Gold": [
@@ -144,10 +136,6 @@
           "sourceUrl": "https://images.samsung.com/in/smartphones/galaxy-s26/buy/product_color_pinkGold_PC.jpg",
           "width": 1600,
           "height": 864
-        },
-        {
-          "src": "https://images.samsung.com/in/smartphones/galaxy-s26/images/galaxy-s26-features-colors-viewer-initial-pink-gold.jpg",
-          "alt": "Samsung Galaxy S26 in Pink Gold, view 2"
         }
       ],
       "Silver Shadow": [
@@ -157,10 +145,6 @@
           "sourceUrl": "https://images.samsung.com/in/smartphones/galaxy-s26/buy/product_color_silverShadow_PC.jpg",
           "width": 1600,
           "height": 864
-        },
-        {
-          "src": "https://images.samsung.com/in/smartphones/galaxy-s26/images/galaxy-s26-features-colors-viewer-initial-silver-shadow.jpg",
-          "alt": "Samsung Galaxy S26 in Silver Shadow, view 2"
         }
       ],
       "Sky Blue": [
@@ -170,10 +154,6 @@
           "sourceUrl": "https://images.samsung.com/in/smartphones/galaxy-s26/buy/product_color_skyBlue_PC.jpg",
           "width": 1600,
           "height": 864
-        },
-        {
-          "src": "https://images.samsung.com/in/smartphones/galaxy-s26/images/galaxy-s26-features-colors-viewer-initial-sky-blue.jpg",
-          "alt": "Samsung Galaxy S26 in Sky Blue, view 2"
         }
       ],
       "White": [
@@ -183,10 +163,6 @@
           "sourceUrl": "https://images.samsung.com/in/smartphones/galaxy-s26/buy/product_color_white_PC.jpg",
           "width": 1600,
           "height": 864
-        },
-        {
-          "src": "https://images.samsung.com/in/smartphones/galaxy-s26/images/galaxy-s26-features-colors-viewer-initial-white.jpg",
-          "alt": "Samsung Galaxy S26 in White, view 2"
         }
       ]
     },
