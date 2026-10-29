@@ -243,31 +243,65 @@ const CHAT_FALLBACK = {
  * Full v2 chat turn. `ai` = { intent(prompt) → JSON, answer(prompt) → JSON, embed(text) → vector }.
  * One intent call + one answer call per message; the embedding call runs alongside keyword search.
  */
-export async function chatV2(message, history, ai) {
-  let intent;
-  try {
-    intent = sanitizeIntent(await ai.intent(intentPrompt(message, history)), message);
-  } catch (err) {
-    console.warn("[aiSearchV2] intent failed, searching the raw message:", err.message);
-    intent = sanitizeIntent({}, message);
-  }
+// Words that only the intent step can turn into filters or context; without them the raw
+// message is already a good search query and the extra model call is skipped.
+// Numbers only count when they look like a price or a spec ("40k", "25000", "12gb"), not a model name ("iPhone 16").
+const NEEDS_INTENT = /₹|\b\d{4,}\b|\b\d+(\.\d+)?\s*(k|lakh|lac|gb|tb|mah|inch|hz|w|kg|l|ton)\b|\b(rs|inr|lakh|lac|under|below|above|over|budget|cheap|cheaper|costly|less than|more than|between|around|within|gb|mah|5g|battery|ram|men'?s?|women'?s?|ladies|for (him|her|my)|gift|that|those|these|them|it|same|other|another|instead|like this)\b/i;
 
-  let { products } = await hybridSearch(intent, { embed: ai.embed });
+export const needsIntent = (message, history = []) => history.length > 0 || NEEDS_INTENT.test(message);
+
+export async function chatV2(message, history, ai) {
+  const t0 = Date.now();
+  const timings = {};
+  const lap = (name, since) => { timings[name] = Date.now() - since; };
+
+  // Embed the raw message while the intent call runs; reused when the intent keeps the same query
+  const vectors = new Map();
+  const embed = (text) => {
+    if (!vectors.has(text)) vectors.set(text, ai.embed(text));
+    return vectors.get(text);
+  };
+  embed(message).catch(() => {});
+
+  let intent;
+  const tIntent = Date.now();
+  if (needsIntent(message, history)) {
+    try {
+      intent = sanitizeIntent(await ai.intent(intentPrompt(message, history)), message);
+    } catch (err) {
+      console.warn("[aiSearchV2] intent failed, searching the raw message:", err.message);
+      intent = sanitizeIntent({}, message);
+    }
+  } else {
+    intent = sanitizeIntent({}, message);
+    timings.intentSkipped = true;
+  }
+  lap("intent", tIntent);
+
+  const tSearch = Date.now();
+  let { products } = await hybridSearch(intent, { embed });
   let relaxed = false;
   if (!products.length && (intent.minPrice || intent.maxPrice || intent.minRamGB || intent.minBatteryMah || intent.brand)) {
     // Nothing under the shopper's constraints: show the closest matches in the same category instead
-    ({ products } = await hybridSearch({ ...intent, minPrice: null, maxPrice: null, minRamGB: null, minBatteryMah: null, brand: null }, { embed: ai.embed }));
+    ({ products } = await hybridSearch({ ...intent, minPrice: null, maxPrice: null, minRamGB: null, minBatteryMah: null, brand: null }, { embed }));
     relaxed = products.length > 0;
   }
-  if (!products.length) return { ...CHAT_FALLBACK, intent };
+  lap("search", tSearch);
+  if (!products.length) {
+    console.log("[aiSearchV2] timings", JSON.stringify({ ...timings, total: Date.now() - t0, results: 0 }));
+    return { ...CHAT_FALLBACK, intent };
+  }
 
   let ranked;
+  const tAnswer = Date.now();
   try {
     ranked = applyRanking(products, await ai.answer(answerPrompt(message, products, history)));
   } catch (err) {
     console.warn("[aiSearchV2] answer failed, using fused order:", err.message);
     ranked = applyRanking(products, null);
   }
+  lap("answer", tAnswer);
+  console.log("[aiSearchV2] timings", JSON.stringify({ ...timings, total: Date.now() - t0, reranked: ranked.reranked }));
 
   const summary = ranked.summary || "Here are the closest matches I found.";
   return {

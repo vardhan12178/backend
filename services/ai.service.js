@@ -478,10 +478,41 @@ export async function vectorizeProduct(product) {
 
 // Model calls for the catalog v2 chat (services/aiSearchV2.js). Catalog v2 documents were
 // embedded as RETRIEVAL_DOCUMENT, so queries use the matching RETRIEVAL_QUERY task type.
+// The intent and answer calls are short JSON tasks, so "thinking" is switched off: newer models
+// behind the "-latest" alias think by default, which pushed each call past the timeout.
+// AI_V2_MODEL picks a different model for these calls; AI_V2_TIMEOUT_MS bounds each one.
+const V2_MODEL = process.env.AI_V2_MODEL || CHAT_MODEL;
+const V2_TIMEOUT_MS = Number(process.env.AI_V2_TIMEOUT_MS || 7000);
+const v2Model = (thinking) => genAI.getGenerativeModel({
+  model: V2_MODEL,
+  generationConfig: {
+    responseMimeType: "application/json",
+    temperature: 0.2,
+    ...(thinking ? {} : { thinkingConfig: { thinkingBudget: 0 } }),
+  },
+});
+let v2Fast = v2Model(false);
+let v2ThinkingOffSupported = true;
+
+async function v2Json(prompt) {
+  try {
+    return JSON.parse((await withTimeout(v2Fast.generateContent(prompt), V2_TIMEOUT_MS)).response.text());
+  } catch (err) {
+    // Some models reject thinkingConfig; drop it once and keep going
+    if (v2ThinkingOffSupported && /thinking/i.test(err.message) && /400|invalid|unknown|not supported/i.test(err.message)) {
+      console.warn(`[aiSearchV2] ${V2_MODEL} rejected thinkingConfig; retrying without it`);
+      v2ThinkingOffSupported = false;
+      v2Fast = v2Model(true);
+      return JSON.parse((await withTimeout(v2Fast.generateContent(prompt), V2_TIMEOUT_MS)).response.text());
+    }
+    throw err;
+  }
+}
+
 const v2Ai = {
-  intent: async (prompt) => JSON.parse((await withTimeout(chatModel.generateContent(prompt))).response.text()),
-  answer: async (prompt) => JSON.parse((await withTimeout(chatModel.generateContent(prompt))).response.text()),
-  embed: (text) => embedText(text, "RETRIEVAL_QUERY"),
+  intent: v2Json,
+  answer: v2Json,
+  embed: (text) => withTimeout(embedText(text, "RETRIEVAL_QUERY"), V2_TIMEOUT_MS),
 };
 
 /**

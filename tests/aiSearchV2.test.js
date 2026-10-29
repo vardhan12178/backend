@@ -1,6 +1,6 @@
 import { jest } from '@jest/globals';
 
-const { sanitizeIntent, buildFilters, rrfFuse, applyRanking, chatV2, MAX_RESULTS } = await import('../services/aiSearchV2.js');
+const { sanitizeIntent, buildFilters, rrfFuse, applyRanking, chatV2, needsIntent, MAX_RESULTS } = await import('../services/aiSearchV2.js');
 const { default: CatalogProduct } = await import('../models/CatalogProduct.js');
 
 const doc = (slug, extra = {}) => ({
@@ -51,6 +51,14 @@ describe('aiSearchV2 helpers', () => {
     });
 });
 
+describe('needsIntent', () => {
+    it('skips the intent call for plain names and descriptions, not for prices, specs or follow-ups', () => {
+        for (const m of ['OnePlus 15R', 'iPhone 16', 'noise cancelling earbuds for flights']) expect(needsIntent(m)).toBe(false);
+        for (const m of ['phone under 40k', 'phone 25000', 'phone with 12gb ram', 'saree for women', 'cheaper ones']) expect(needsIntent(m)).toBe(true);
+        expect(needsIntent('OnePlus 15R', [{ role: 'user', content: 'hi' }])).toBe(true);
+    });
+});
+
 describe('chatV2', () => {
     beforeEach(async () => {
         await CatalogProduct.syncIndexes();
@@ -90,5 +98,14 @@ describe('chatV2', () => {
         const fake = { intent: jest.fn(async () => { throw new Error('quota'); }), answer: jest.fn(async () => { throw new Error('quota'); }), embed: jest.fn(async () => { throw new Error('quota'); }) };
         const res = await chatV2('budget phone', [], fake);
         expect(res.products.map((p) => p.slug)).toContain('budget-phone');
+    });
+
+    it('skips the intent call for a plain name and embeds each query once', async () => {
+        const fake = ai({}, { rankedIndexes: [1] });
+        fake.embed = jest.fn(async () => { throw new Error('no vector index here'); });
+        const res = await chatV2('Samsung Galaxy Gaming Phone', [], fake);
+        expect(fake.intent).not.toHaveBeenCalled();
+        expect(fake.embed).toHaveBeenCalledTimes(1);
+        expect(res.products[0].slug).toBe('galaxy-gaming');
     });
 });
