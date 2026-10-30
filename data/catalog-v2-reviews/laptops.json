@@ -1,0 +1,162 @@
+{
+  "apple-macbook-air-13-m5": [4.7, [
+    [5,"Silent and fast","No fan, no noise, and it never gets hot on my lap. Battery lasts two working days for coding and browsing."],
+    [5,"Perfect college laptop","Light enough to carry around campus all day. Display is crisp for reading research papers."],
+    [4,"Only two ports","Had to buy a USB-C hub for my pen drive and HDMI. Otherwise flawless."]
+  ]],
+  "apple-macbook-air-15-m5": [4.7, [
+    [5,"Big screen, still light","Spreadsheets and side-by-side windows are much easier than on the 13 inch. Speakers are surprisingly full."],
+    [5,"Great for remote work","Zoom calls all day and still 40 percent left in the evening. Camera quality is good too."],
+    [4,"Base storage is low","Go for at least 512GB if you edit photos. I'm already using iCloud a lot."]
+  ]],
+  "apple-macbook-neo": [4.4, [
+    [5,"Mac for everyone","Got it for my daughter's Class 11. Pages, Keynote and browser work smoothly. Battery is excellent."],
+    [4,"Good value for a Mac","Not as premium as the Air but the build is solid and the display is nice."],
+    [4,"Fine for light work","Office work and Netflix are perfect. Not for heavy video editing."]
+  ]],
+  "apple-macbook-pro-14-m5": [4.8, [
+    [5,"Final Cut renders fly","4K wedding edits that took an hour on my old Windows laptop now finish in about 15 minutes."],
+    [5,"Best display on a laptop","The mini LED screen makes colour grading so much easier. HDR content looks amazing."],
+    [4,"Heavy for daily commute","Feels solid but slightly heavy in my backpack on the metro."]
+  ]],
+  "apple-macbook-pro-16-m5": [4.7, [
+    [5,"Desktop replacement","Running Xcode, Docker and a dozen Chrome tabs without any slowdown. Fans rarely spin."],
+    [5,"Speakers are the best","Honestly better than my Bluetooth speaker. Movie nights are on this now."],
+    [4,"Very expensive upgrades","RAM and storage upgrades cost a fortune, decide carefully at purchase."]
+  ]],
+  "asus-vivobook-14-flip-tp3407": [4.2, [
+    [4,"Handy 2-in-1","Use it in tent mode for recipes in the kitchen and as a laptop for work. Touch is responsive."],
+    [4,"Good for students","Stylus support helps with handwritten notes. Battery lasts most of the day."],
+    [3,"A little heavy as a tablet","Holding it as a tablet for long gets tiring. Better as a laptop."]
+  ]],
+  "asus-vivobook-16-x1607": [4.1, [
+    [4,"Big screen for office work","16-inch screen is great for Excel. Keyboard with numpad is a plus for accounts work."],
+    [4,"Decent performance","Handles Office, Tally and Chrome well. Fan gets audible under load."],
+    [4,"Value for money","Good specs for the price. Display brightness is average outdoors."]
+  ]],
+  "asus-vivobook-16-x1607q": [4, [
+    [4,"Long battery life","Snapdragon chip gives me almost 15 hours of browsing. Very impressive."],
+    [4,"Light for a 16 inch","Easy to carry for its size. Stays cool and silent."],
+    [3,"Some apps don't work","A couple of older Windows apps I use for work had issues. Check compatibility first."]
+  ]],
+  "asus-vivobook-go-15-oled-e1504f": [4.1, [
+    [5,"OLED at this price!","Movies look stunning on this screen. Can't believe I got OLED under 41k."],
+    [4,"Good for basics","Perfect for online classes, assignments and YouTube."],
+    [3,"Slow with many tabs","Starts lagging with 20+ Chrome tabs. Upgrade RAM if you can."]
+  ]],
+  "asus-vivobook-s14-oled-s5406": [4.4, [
+    [5,"Sleek and powerful","Lightweight, beautiful OLED display, and handles my design work well. Very happy."],
+    [4,"Lasts a full office day","Gets me through a full office day with brightness at 60 percent."],
+    [4,"Glossy screen","Reflections are noticeable near windows. Otherwise excellent."]
+  ]],
+  "asus-vivobook-s14-s3407": [4.2, [
+    [4,"Well-rounded thin laptop","Good build, good keyboard, decent battery. Does everything I need for work."],
+    [4,"Copilot key is handy","Use it for quick summaries of long emails. Nice touch."],
+    [4,"Value pick","Solid choice in the 80k range."]
+  ]],
+  "asus-vivobook-s14-s3407q": [4.2, [
+    [5,"Battery champion","Easily 2 days of light use. I've stopped carrying the charger to office."],
+    [4,"Quiet and cool","No fan noise during meetings. Good webcam too."],
+    [3,"Gaming is not its thing","Steam games mostly don't run well. Buy it for work, not play."]
+  ]],
+  "asus-vivobook-s16-s3607": [4.3, [
+    [4,"Large display, slim body","Good for watching movies and multitasking. Weight is manageable."],
+    [5,"Great keyboard","Typing for hours is comfortable. Key travel feels just right."],
+    [4,"Good speakers","Clear and loud enough for a small room."]
+  ]],
+  "hp-omen-16": [4.4, [
+    [5,"Runs everything on high","Cyberpunk and Warzone run smoothly at high settings. Cooling is impressive."],
+    [4,"Heavy charger","The power brick is huge. Laptop itself is great for gaming and streaming."],
+    [4,"Good screen for gaming","High refresh rate makes a big difference in shooters."]
+  ]],
+  "hp-omnibook-3-14": [4, [
+    [4,"Reliable office laptop","Boots fast, handles Office and email easily. Good for small business work."],
+    [4,"Light and compact","Easy to carry between client meetings."],
+    [3,"Average display","Colours look a bit washed out. Fine for documents."]
+  ]],
+  "hp-omnibook-3-16": [4, [
+    [4,"Good for home use","Kids use it for online classes and I use it for work. No complaints."],
+    [4,"Comfortable big screen","Easier on the eyes than my old 14 inch laptop."],
+    [3,"Speakers are weak","Need headphones for movies. Rest is fine."]
+  ]],
+  "hp-omnibook-5-14": [4.3, [
+    [5,"OLED and long battery","Great combination. The display is a treat for Netflix after work."],
+    [4,"Premium feel","Metal body feels solid. Keyboard is comfortable."],
+    [4,"Good webcam","5MP camera makes video calls look professional."]
+  ]],
+  "hp-omnibook-7-14": [4.4, [
+    [5,"Business class laptop","Fast, light and the battery lasts through long flights. Very happy for work travel."],
+    [4,"Good AI features","Noise cancellation on calls works well even in a busy cafe."],
+    [4,"Slightly expensive","Excellent laptop, but similar specs are available for a bit less."]
+  ]],
+  "hp-omnibook-ultra-14": [4.5, [
+    [5,"Top of the line","Super fast, super thin. Battery and display are both excellent."],
+    [5,"Premium build","Feels like it can handle years of travel. Great keyboard."],
+    [4,"Port selection is limited","Need a dongle for HDMI. Minor inconvenience."]
+  ]],
+  "hp-victus-15": [4.2, [
+    [4,"Entry gaming done right","Valorant at 144 fps, GTA V on high. Good value for gamers."],
+    [4,"Gets loud when gaming","Fans are noisy under load but temperatures stay in check."],
+    [4,"Decent for coding too","Use it for college projects and gaming. Battery is short when gaming though."]
+  ]],
+  "lenovo-ideapad-5i-2-in-1-gen-11-14": [4.2, [
+    [4,"Flip for presentations","Tent mode is perfect for showing slides to clients across the table."],
+    [4,"Pen support for notes","Annotating PDFs during lectures is easy."],
+    [4,"Lasts a college day","From 9 to 5 classes without charging."]
+  ]],
+  "lenovo-ideapad-slim-5-gen-10-14-amd": [4.3, [
+    [5,"Best value thin laptop","Fast Ryzen chip, great keyboard and a bright display. Recommend to anyone under 1 lakh."],
+    [4,"Stays cool","Even long Teams calls don't heat it up."],
+    [4,"Good for programming","Running VS Code, Docker and a browser with no slowdown."]
+  ]],
+  "lenovo-legion-5-gen-10-amd": [4.5, [
+    [5,"Gaming laptop of choice","Cooling is excellent, keyboard is fantastic. Plays every game I own at high settings."],
+    [4,"Heavy but sturdy","Not something you'd carry daily, but stays on my desk as a desktop replacement."],
+    [5,"Great display","Colour accurate and high refresh. Good for both gaming and editing."]
+  ]],
+  "lenovo-legion-5i-gen-10": [4.5, [
+    [5,"Performance monster","Renders in Blender and plays AAA games without breaking a sweat."],
+    [4,"Fan noise in performance mode","Need headphones while gaming. Balanced mode is quiet enough for work."],
+    [5,"Lenovo Vantage is useful","Easy to switch modes and manage battery conservation."]
+  ]],
+  "lenovo-thinkbook-16-gen-9-amd": [4.2, [
+    [4,"Solid work laptop","Great keyboard, lots of ports, and a fingerprint reader. Perfect for office use."],
+    [4,"Big and clear display","Comfortable for long hours with spreadsheets."],
+    [4,"Good price","Business build quality without the ThinkPad price."]
+  ]],
+  "lenovo-thinkpad-x1-carbon-gen-13-aura": [4.6, [
+    [5,"The best keyboard ever","Typing on this is pure joy. Weighs nothing and feels indestructible."],
+    [5,"Company laptop envy","Got it through work and colleagues keep asking about it. Battery lasts all day."],
+    [4,"Very expensive for personal use","Fantastic machine, but hard to justify unless work pays for it."]
+  ]],
+  "lenovo-yoga-slim-7i-aura-gen-10": [4.4, [
+    [5,"Slim, fast, beautiful","OLED display is stunning and battery is excellent. Feels premium in every way."],
+    [4,"Great for creators","Photo editing in Lightroom is smooth. Colours look accurate."],
+    [4,"Limited ports","Only USB-C ports. Carry a dongle."]
+  ]],
+  "samsung-galaxy-book6-14": [4.2, [
+    [4,"Works great with Galaxy phone","Copying photos and messages between my S26 and the laptop is seamless."],
+    [4,"Light and stylish","Easy to carry around. AMOLED screen is lovely."],
+    [3,"Bloatware","Several Samsung apps pre-installed that I don't need."]
+  ]],
+  "samsung-galaxy-book6-16": [4.2, [
+    [4,"Big screen productivity","Good for watching movies and working on documents side by side."],
+    [4,"No charger needed at work","Lasts a working day comfortably."],
+    [4,"Galaxy ecosystem","Quick Share and phone link make life easy if you use Samsung phones."]
+  ]],
+  "samsung-galaxy-book6-pro-14": [4.4, [
+    [5,"Stunning AMOLED","Deep blacks and vibrant colours make it great for streaming."],
+    [4,"Premium and thin","Feels high quality. Performance is top notch."],
+    [4,"Pricey","Wait for a sale to get better value."]
+  ]],
+  "samsung-galaxy-book6-pro-16": [4.4, [
+    [5,"Big and light","Perfect for editing photos and watching content. Surprisingly light for a 16 inch."],
+    [4,"AKG speakers","The speaker tuning is clearly better than typical laptops."],
+    [4,"Most of the day on battery","Lasts most of a workday with moderate usage."]
+  ]],
+  "samsung-galaxy-book6-ultra": [4.5, [
+    [5,"Creator's laptop","Video editing with the dedicated GPU is fast. Display is excellent."],
+    [4,"Heavier than the Pro","Worth it for the GPU, but you feel the extra weight."],
+    [5,"Top quality all round","Build, display, speakers — everything is premium."]
+  ]]
+}

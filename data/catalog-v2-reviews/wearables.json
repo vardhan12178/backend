@@ -1,0 +1,87 @@
+{
+  "apple-watch-se-3": [4.5, [
+    [5,"Great first smartwatch","Fitness rings keep me motivated to walk more. Notifications on the wrist are super convenient."],
+    [4,"Battery needs daily charging","Lasts about a day and a half. Charging is quick though."],
+    [5,"Fall detection gives peace of mind","Bought it for my mother who lives alone. Very reassuring."]
+  ]],
+  "apple-watch-series-12": [4.6, [
+    [5,"Health tracking is excellent","Sleep tracking and blood oxygen readings are reliable. Display is bright outdoors."],
+    [5,"Apple Pay on the wrist","Love tapping to pay at the metro and coffee shops."],
+    [4,"SE might be enough for some","Great watch but the SE covers most needs for less."]
+  ]],
+  "apple-watch-ultra-4": [4.7, [
+    [5,"Built for adventure","Used it on a Himalayan trek, GPS and battery were excellent. Very rugged."],
+    [5,"Battery lasts 3 days","Finally an Apple Watch I don't charge daily."],
+    [4,"Big on small wrists","Looks chunky on my wrist, but I've gotten used to it."]
+  ]],
+  "boat-ultima-aeris": [4, [
+    [4,"Looks premium for the price","AMOLED screen is bright and the metal frame looks expensive."],
+    [4,"Taking calls on the wrist","Bluetooth calling works well when my phone is in another room."],
+    [3,"Overcounts steps","Sometimes adds steps when I'm just riding my scooter."]
+  ]],
+  "boat-ultima-vogue-2": [4, [
+    [4,"Classy metal strap","Looks like a regular analog watch at office."],
+    [4,"A week on one charge","Charge it on Sunday and it's good till the next."],
+    [3,"Companion app is basic","The app could show better health insights."]
+  ]],
+  "boat-wave-sigma-3-curv": [3.9, [
+    [4,"Big curved display","Large screen with calling at this price is good value."],
+    [4,"Soft silicone strap","Doesn't irritate my skin even when sweaty."],
+    [3,"Heart rate readings vary","Sometimes differs from my BP machine by a few beats."]
+  ]],
+  "fire-boltt-hunter": [3.9, [
+    [4,"Rugged sporty look","Looks tough, good for trekking and outdoor use."],
+    [4,"Close to 10 days battery","Rarely need to charge it."],
+    [3,"Bulky on a thin wrist","A bit heavy and big for my wrist."]
+  ]],
+  "fire-boltt-ninja-call-pro-max": [3.8, [
+    [4,"Calls are clear enough","Big display is easy for my father to read. Calls work fine."],
+    [4,"Covers the basics","Notifications and step tracking work fine."],
+    [3,"Plasticky build","Feels light and cheap, but expected for the price."]
+  ]],
+  "fire-boltt-phoenix-ultra": [4, [
+    [4,"Nobody believes the price","The metal body looks expensive. Colleagues guessed 5k."],
+    [4,"Weekly charging","Charge once a week with notifications on."],
+    [4,"Decent daily tracking","Steps and sleep data are good enough for me."]
+  ]],
+  "google-fitbit-air": [4.2, [
+    [4,"Simple tracker done right","Light and comfortable, sleep tracking is very accurate."],
+    [5,"Charge once a week","Love not having to charge it daily like my old smartwatch."],
+    [4,"Fitbit app insights","Sleep score and readiness tips are genuinely useful."]
+  ]],
+  "google-pixel-watch-4": [4.3, [
+    [5,"Elegant round design","Looks beautiful on the wrist. Fitbit tracking is detailed."],
+    [4,"Needs nightly charging","Battery lasts a day, I charge it while showering."],
+    [4,"Pixel phone pairing","Integration with my Pixel 10 is smooth."]
+  ]],
+  "google-pixel-watch-5": [4.4, [
+    [5,"Big improvement in battery","Lasts about two days now. Display is brighter too."],
+    [4,"Accurate health data","Heart rate and sleep tracking match my doctor's devices closely."],
+    [4,"Well made and comfy","Feels well made and comfortable."]
+  ]],
+  "noise-colorfit-ultra-4": [4, [
+    [4,"Readable in sunlight","The AMOLED display is bright and easy to read outdoors."],
+    [4,"Calls sound clear","Audio during calls is clear on both sides."],
+    [4,"Feature packed under 5k","Lots of watch faces, sports modes and calling."]
+  ]],
+  "noise-pro-6r": [4.1, [
+    [4,"Looks like a regular watch","The round dial looks classy, which is what I wanted."],
+    [4,"Tracking is decent","Steps and sleep data seem reasonable."],
+    [4,"Over a week of battery","Rarely need to charge."]
+  ]],
+  "noisefit-halo-3-ai-pro": [4, [
+    [4,"AI quick replies are handy","Replying to WhatsApp from the wrist is convenient."],
+    [4,"Bright and smooth screen","Animations are fluid and the screen is bright."],
+    [3,"Sync takes time","Data sometimes takes a while to show in the app."]
+  ]],
+  "samsung-galaxy-watch-ultra2": [4.5, [
+    [5,"Rugged and smart","Great for runs and hikes. Battery lasts multiple days even with GPS."],
+    [4,"Large but secure","Big case, but the strap keeps it firmly in place."],
+    [5,"Accurate GPS on long rides","Tracked my 80 km ride to Nandi Hills perfectly."]
+  ]],
+  "samsung-galaxy-watch9": [4.4, [
+    [5,"Health features galore","Body composition and sleep coaching are very useful."],
+    [4,"Charge every other day","Battery lasts about a day and a half."],
+    [4,"Finds my phone instantly","Unlocks and locates my Galaxy phone easily."]
+  ]]
+}

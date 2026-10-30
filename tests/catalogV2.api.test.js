@@ -102,6 +102,7 @@ describe('Catalog v2 API', () => {
         expect(res.body.embedding).toBeUndefined();
         expect(res.body.media.groups.Black[0].thumb).toMatch(/black-1-thumb\.webp$/);
         expect(res.body.variants[0]).toMatchObject({ sku: 'B-1', discountPercent: 50, inStock: true });
+        expect(res.body.reviews).toBeNull(); // test fixtures have no sample reviews
         expect((await request(app).get('/api/v2/products/old-phone')).status).toBe(404);
         expect((await request(app).get('/api/v2/products/missing')).status).toBe(404);
     });

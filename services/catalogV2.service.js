@@ -1,4 +1,5 @@
 import CatalogProduct from "../models/CatalogProduct.js";
+import { ratingFor, reviewsFor } from "./catalogV2.reviews.js";
 
 // Read side of the catalog v2 API (CATALOG_V2_SCHEMA.md §8).
 // Controllers stay thin; everything that shapes queries or responses lives here.
@@ -76,6 +77,7 @@ export function toCard(p) {
     // Default variant's options, so listing tiles can add it to the cart directly
     options: v?.options || {},
     defaultInStock: Boolean(v && (v.stock == null || v.stock > 0) && v.keySpecs?.available !== false),
+    rating: ratingFor(p),
     // Clothing with several sizes: tiles ask for a size instead of guessing one
     needsSize: ((p.variantOptions || []).find((o) => o.name === "Size")?.values.length || 0) > 1,
     inStock: p.inStock,
@@ -99,6 +101,8 @@ export function toDetail(p) {
     },
     variants: p.variants.map((v) => ({ ...v, discountPercent: discountPercent(v), inStock: (v.stock ?? 0) > 0 })),
     id: String(p._id),
+    rating: ratingFor(p) || (p.rating?.count ? p.rating : null),
+    reviews: reviewsFor(p),
   };
 }
 

@@ -4,8 +4,11 @@ import { resolveCartLines } from "../services/catalogV2.stock.js";
 
 // Public read endpoints for catalog v2. Responses are cached under "v2:*";
 // scripts/catalog-v2/import.js clears that prefix after an import.
+// Bump SHAPE when the response shape changes so stale entries are skipped after a deploy.
+const SHAPE = "r2";
 
-async function cached(key, ttl, load) {
+async function cached(name, ttl, load) {
+  const key = name.replace(/^v2:/, `v2:${SHAPE}:`);
   try {
     const hit = await redis.get(key);
     if (hit) return JSON.parse(hit);

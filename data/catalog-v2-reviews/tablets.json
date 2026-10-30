@@ -1,0 +1,57 @@
+{
+  "apple-ipad-a16": [4.6, [
+    [5,"Perfect family tablet","Kids watch cartoons, I read the newspaper and my wife uses it for recipes. Battery lasts for days."],
+    [5,"Great for online classes","My son's school uses Google Classroom and it works perfectly. Screen size is just right."],
+    [4,"Pencil is extra","Had to buy the Apple Pencil separately, which adds quite a bit to the cost."]
+  ]],
+  "apple-ipad-air-m4": [4.7, [
+    [5,"Notes app plus Pencil is magic","I've gone paperless for my CA studies. Writing feels natural."],
+    [5,"Fast and light","Edits photos in Lightroom smoothly. Carries easily in my handbag."],
+    [4,"Magic Keyboard is pricey","Great tablet but the keyboard accessory costs a lot."]
+  ]],
+  "apple-ipad-pro-m5": [4.7, [
+    [5,"Display is jaw dropping","Tandem OLED is the best screen I've seen. Procreate drawings look incredible."],
+    [5,"Replaced my laptop for travel","With the keyboard, I handle emails, docs and presentations on trips."],
+    [4,"Overkill for many","If you don't draw or edit, the Air is enough."]
+  ]],
+  "oneplus-pad-3": [4.4, [
+    [5,"Best Android tablet","Huge screen, fast performance and great speakers. Watching IPL matches on this is a treat."],
+    [4,"Battery lasts long","Two days of mixed use. Charging is fast."],
+    [4,"Some apps not optimised","A few Indian apps show the phone layout stretched."]
+  ]],
+  "oneplus-pad-go-2": [4.2, [
+    [4,"Good for entertainment","Speakers and display are great for movies. Kids love it."],
+    [4,"A lot of tablet for under 40k","At under 40k it offers a lot. Performance is fine for daily tasks."],
+    [4,"LTE version is handy","Use it with a SIM while travelling, works well."]
+  ]],
+  "oneplus-pad-lite": [4, [
+    [4,"Budget tablet done well","Perfect for YouTube and reading. Battery lasts a long time."],
+    [4,"Light enough for bed","Comfortable to hold for reading before sleep."],
+    [3,"Casual games only","Heavy games lag, casual ones are fine."]
+  ]],
+  "oppo-pad-5": [4.1, [
+    [4,"Sharp, smooth display","Watching shows on it is a treat."],
+    [4,"Pairs with my Oppo phone","File sharing and screen mirroring are easy."],
+    [4,"Feels well put together","Feels premium for the price."]
+  ]],
+  "oppo-pad-mini": [4, [
+    [4,"One-handed reading","Easy to hold with one hand for e-books."],
+    [4,"Multitasking is smooth","Handles split screen and games well."],
+    [3,"Expensive for the size","Nice tablet but price feels high."]
+  ]],
+  "samsung-galaxy-tab-s11": [4.5, [
+    [5,"S Pen included!","Love that the pen comes in the box. Use it daily for handwritten notes."],
+    [4,"Great AMOLED display","Vibrant colours and deep blacks. Netflix looks great."],
+    [5,"DeX mode is useful","Works like a laptop with a keyboard for quick office work."]
+  ]],
+  "samsung-galaxy-tab-s12-plus": [4.5, [
+    [5,"Big screen, light weight","Perfect for reading and sketching. Very thin."],
+    [4,"Full day battery","Easily lasts a full day of usage."],
+    [4,"Pricey keyboard cover","Tablet is great, accessories are expensive."]
+  ]],
+  "samsung-galaxy-tab-s12-ultra": [4.6, [
+    [5,"Massive and gorgeous","Like carrying a portable TV. Fantastic for movies and multitasking."],
+    [4,"Too big for some","Hard to use on a crowded train. Perfect at home."],
+    [5,"Excellent for productivity","Running three apps side by side is very handy."]
+  ]]
+}
