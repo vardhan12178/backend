@@ -73,6 +73,11 @@ export function toCard(p) {
     priceRange: p.priceRange,
     colors: colors.map((c) => ({ value: c.value, hex: c.hex })),
     variantCount: p.variants.length,
+    // Default variant's options, so listing tiles can add it to the cart directly
+    options: v?.options || {},
+    defaultInStock: Boolean(v && (v.stock == null || v.stock > 0) && v.keySpecs?.available !== false),
+    // Clothing with several sizes: tiles ask for a size instead of guessing one
+    needsSize: ((p.variantOptions || []).find((o) => o.name === "Size")?.values.length || 0) > 1,
     inStock: p.inStock,
     launchDate: p.launchDate,
   };
