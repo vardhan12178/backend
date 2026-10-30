@@ -113,6 +113,8 @@ const SORTS = {
   "price-desc": { "priceRange.min": -1, _id: 1 },
   discount: { discountPercent: -1, "priceRange.min": -1, _id: 1 },
   newest: { launchDate: -1, _id: 1 },
+  // Keyword search: best text match first (only meaningful with q; otherwise treated as featured)
+  relevance: { _score: -1, isFeatured: -1, _id: 1 },
 };
 export const SORT_KEYS = Object.keys(SORTS);
 
@@ -141,7 +143,9 @@ export function buildMatch(query = {}) {
 export async function listProducts(query = {}) {
   const page = Math.max(1, Math.floor(toNumber(query.page) || 1));
   const limit = Math.min(MAX_PAGE_SIZE, Math.max(1, Math.floor(toNumber(query.limit) || PAGE_SIZE)));
-  const sortKey = SORTS[query.sort] ? query.sort : "featured";
+  const searching = Boolean(buildMatch(query).$text);
+  const requested = SORTS[query.sort] ? query.sort : searching ? "relevance" : "featured";
+  const sortKey = requested === "relevance" && !searching ? "featured" : requested;
   const brands = toList(query.brand);
   const minDiscount = toNumber(query.minDiscount);
 
@@ -164,6 +168,7 @@ export async function listProducts(query = {}) {
 
   const [result] = await CatalogProduct.aggregate([
     { $match: buildMatch(query) },
+    ...(searching ? [{ $addFields: { _score: { $meta: "textScore" } } }] : []),
     { $project: { embedding: 0, searchText: 0, specs: 0, description: 0, source: 0 } },
     addDiscount,
     computeDiscount,

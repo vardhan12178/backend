@@ -90,6 +90,16 @@ describe('Catalog v2 API', () => {
         expect(appl.body.products.map((p) => p.slug)).toEqual(['fridge-1']);
     });
 
+    it('searches by keyword across categories, best match first', async () => {
+        const res = await request(app).get('/api/v2/products?q=samsung%20phone');
+        expect(res.status).toBe(200);
+        expect(res.body.sort).toBe('relevance');
+        // Samsung phones match both words, so they rank above the Samsung fridge
+        expect(res.body.products.map((p) => p.slug).slice(-1)).toEqual(['fridge-1']);
+        expect(res.body.products.map((p) => p.slug)).toEqual(expect.arrayContaining(['phone-b', 'phone-c', 'fridge-1']));
+        expect((await request(app).get('/api/v2/products?sort=relevance')).body.sort).toBe('featured');
+    });
+
     it('rejects bad query values', async () => {
         expect((await request(app).get('/api/v2/products?sort=random')).status).toBe(400);
         expect((await request(app).get('/api/v2/products?limit=500')).status).toBe(400);
