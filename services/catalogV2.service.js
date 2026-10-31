@@ -1,5 +1,6 @@
 import CatalogProduct from "../models/CatalogProduct.js";
 import { ratingFor, reviewsFor } from "./catalogV2.reviews.js";
+import { filtersFor, parseSelections, matchFor, facetStages, shapeFacet } from "./catalogV2.filters.js";
 
 // Read side of the catalog v2 API (CATALOG_V2_SCHEMA.md §8).
 // Controllers stay thin; everything that shapes queries or responses lives here.
@@ -115,6 +116,7 @@ const SORTS = {
   newest: { launchDate: -1, _id: 1 },
   // Keyword search: best text match first (only meaningful with q; otherwise treated as featured)
   relevance: { _score: -1, isFeatured: -1, _id: 1 },
+  rating: { "rating.average": -1, "rating.count": -1, _id: 1 },
 };
 export const SORT_KEYS = Object.keys(SORTS);
 
@@ -148,6 +150,10 @@ export async function listProducts(query = {}) {
   const sortKey = requested === "relevance" && !searching ? "featured" : requested;
   const brands = toList(query.brand);
   const minDiscount = toNumber(query.minDiscount);
+  const minRating = toNumber(query.minRating);
+  const category = query.category ? String(query.category) : null;
+  const selections = parseSelections(query, category);
+  const specFilters = filtersFor(category);
 
   const addDiscount = {
     $addFields: {
@@ -162,9 +168,16 @@ export async function listProducts(query = {}) {
       },
     },
   };
-  const narrow = [];
-  if (brands.length) narrow.push({ $match: { brand: { $in: brands } } });
-  if (minDiscount) narrow.push({ $match: { discountPercent: { $gte: minDiscount } } });
+  // Narrowing filters, keyed so each facet can be counted with all the others applied
+  const narrowing = [
+    ["brand", brands.length && { $match: { brand: { $in: brands } } }],
+    ["discount", minDiscount && { $match: { discountPercent: { $gte: minDiscount } } }],
+    ["rating", minRating && { $match: { "rating.average": { $gte: minRating } } }],
+    ...specFilters.filter((f) => selections[f.key]).map((f) => [`f_${f.key}`, { $match: matchFor(f, selections[f.key]) }]),
+  ].filter(([, stage]) => stage);
+  const narrow = narrowing.map(([, stage]) => stage);
+  const except = (key) => narrowing.filter(([k]) => k !== key).map(([, stage]) => stage);
+  const ratingCount = (min) => ({ $sum: { $cond: [{ $gte: ["$rating.average", min] }, 1, 0] } });
 
   const [result] = await CatalogProduct.aggregate([
     { $match: buildMatch(query) },
@@ -174,8 +187,11 @@ export async function listProducts(query = {}) {
     computeDiscount,
     {
       $facet: {
-        brands: [...(minDiscount ? [{ $match: { discountPercent: { $gte: minDiscount } } }] : []), { $group: { _id: "$brand", count: { $sum: 1 } } }, { $sort: { count: -1, _id: 1 } }],
+        brands: [...except("brand"), { $group: { _id: "$brand", count: { $sum: 1 } } }, { $sort: { count: -1, _id: 1 } }],
         priceBounds: [{ $group: { _id: null, min: { $min: "$priceRange.min" }, max: { $max: "$priceRange.min" } } }],
+        unfiltered: [{ $count: "n" }],
+        ratings: [...except("rating"), { $group: { _id: null, r4: ratingCount(4), r3: ratingCount(3) } }],
+        ...Object.fromEntries(specFilters.map((f) => [`spec_${f.key}`, [...except(`f_${f.key}`), ...facetStages(f)]])),
         total: [...narrow, { $count: "n" }],
         items: [...narrow, { $sort: SORTS[sortKey] }, { $skip: (page - 1) * limit }, { $limit: limit }],
       },
@@ -193,6 +209,10 @@ export async function listProducts(query = {}) {
     facets: {
       brands: result.brands.map((b) => ({ name: b._id, count: b.count })),
       price: result.priceBounds[0] ? { min: result.priceBounds[0].min, max: result.priceBounds[0].max } : null,
+      ratings: [4, 3].map((min) => ({ min, count: result.ratings[0]?.[`r${min}`] || 0 })),
+      specs: specFilters
+        .map((f) => shapeFacet(f, result[`spec_${f.key}`], result.unfiltered[0]?.n || 0, selections[f.key]))
+        .filter(Boolean),
     },
   };
 }

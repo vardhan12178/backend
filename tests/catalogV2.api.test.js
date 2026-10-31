@@ -83,6 +83,42 @@ describe('Catalog v2 API', () => {
         expect(off.body.products.map((p) => p.slug)).toEqual(['phone-b']);
     });
 
+    it('filters by specs and rating, with facet counts, and sorts by rating', async () => {
+        const set = (slug, fields) => CatalogProduct.updateOne({ slug }, { $set: fields });
+        await set('phone-a', { keySpecs: { is5G: true, os: 'iOS', batteryMah: 4800 }, 'variants.0.keySpecs': { ramGB: 8, storageGB: 256 }, 'variants.1.keySpecs': { ramGB: 8, storageGB: 512 }, rating: { average: 4.7, count: 900 } });
+        await set('phone-b', { keySpecs: { is5G: false, os: 'Android', batteryMah: 6000 }, 'variants.0.keySpecs': { ramGB: 6, storageGB: 128 }, rating: { average: 4.1, count: 5000 } });
+        await set('phone-c', { keySpecs: { is5G: true, os: 'Android', batteryMah: 5000 }, 'variants.0.keySpecs': { ramGB: 12, storageGB: 256 }, rating: { average: 4.4, count: 2000 } });
+
+        const res = await request(app).get('/api/v2/products?category=mobiles&f_storage=256&f_5g=1&sort=price-asc');
+        expect(res.status).toBe(200);
+        expect(res.body.products.map((p) => p.slug)).toEqual(['phone-c', 'phone-a']);
+        const facet = (key) => res.body.facets.specs.find((f) => f.key === key);
+        // Each filter's counts apply the other filters: storage among 5G phones, 5G among 256 GB phones
+        expect(facet('storage').options).toEqual([{ value: '256', label: '256 GB', count: 2 }, { value: '512', label: '512 GB', count: 1 }]);
+        expect(facet('5g')).toMatchObject({ kind: 'flag', options: [{ value: '1', label: '5G', count: 2 }] });
+        expect(facet('os').options.map((o) => [o.value, o.count])).toEqual([['Android', 1], ['iOS', 1]]);
+
+        const battery = await request(app).get('/api/v2/products?category=mobiles&f_battery=6000&f_nope=1');
+        expect(battery.body.products.map((p) => p.slug)).toEqual(['phone-b']);
+
+        const top = await request(app).get('/api/v2/products?category=mobiles&sort=rating');
+        expect(top.body.products.map((p) => p.slug)).toEqual(['phone-a', 'phone-c', 'phone-b']);
+        const good = await request(app).get('/api/v2/products?category=mobiles&minRating=4.4');
+        expect(good.body.products.map((p) => p.slug).sort()).toEqual(['phone-a', 'phone-c']);
+        expect(good.body.facets.ratings).toEqual([{ min: 4, count: 3 }, { min: 3, count: 3 }]);
+        expect((await request(app).get('/api/v2/products?minRating=9')).status).toBe(400);
+    });
+
+    it('copies sample ratings into the database, writing only what changed', async () => {
+        const { syncRatings } = await import('../services/catalogV2.ratings.js');
+        await CatalogProduct.create(product('apple-ipad-a16', { category: 'tablets', categoryPath: ['electronics', 'tablets'], variants: [variant('IPAD-1', 34900, 34900, { isDefault: true })] }));
+        expect(await syncRatings()).toBe(1); // only the product with sample reviews
+        const ipad = await CatalogProduct.findOne({ slug: 'apple-ipad-a16' }).lean();
+        expect(ipad.rating.average).toBe(4.6);
+        expect(ipad.rating.count).toBeGreaterThan(0);
+        expect(await syncRatings()).toBe(0);
+    });
+
     it('splits fashion by gender and groups appliances', async () => {
         const women = await request(app).get('/api/v2/products?category=fashion-women');
         expect(women.body.products.map((p) => p.slug)).toEqual(['saree-1']);

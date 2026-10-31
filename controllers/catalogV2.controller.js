@@ -6,7 +6,7 @@ import { deliveryFor } from "../services/delivery.service.js";
 // Public read endpoints for catalog v2. Responses are cached under "v2:*";
 // scripts/catalog-v2/import.js clears that prefix after an import.
 // Bump SHAPE when the response shape changes so stale entries are skipped after a deploy.
-const SHAPE = "r2";
+const SHAPE = "r3";
 
 async function cached(name, ttl, load) {
   const key = name.replace(/^v2:/, `v2:${SHAPE}:`);

@@ -19,6 +19,7 @@ router.get(
     query("minPrice").optional().isInt({ min: 0 }).toInt(),
     query("maxPrice").optional().isInt({ min: 0 }).toInt(),
     query("minDiscount").optional().isInt({ min: 0, max: 100 }).toInt(),
+    query("minRating").optional().isFloat({ min: 0, max: 5 }).toFloat(),
     query("inStock").optional().isIn(["true", "false"]),
     query("q").optional().isString().isLength({ max: 100 }),
     query("sort").optional().isIn(SORT_KEYS),

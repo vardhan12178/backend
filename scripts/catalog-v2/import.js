@@ -4,6 +4,7 @@ import mongoose from "mongoose";
 import dotenv from "dotenv";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import CatalogProduct from "../../models/CatalogProduct.js";
+import { syncRatings } from "../../services/catalogV2.ratings.js";
 import { loadProducts, validateCatalog, withStock, derive, buildSearchText, contentHash } from "./lib.js";
 
 // Imports data/catalog-v2/*/*.json into the catalog_products collection.
@@ -128,6 +129,7 @@ async function main() {
     status: value("status") || null,
   });
   console.log("[INFO] Done.", stats);
+  if (!dryRun) console.log(`[INFO] Ratings updated for ${await syncRatings()} products.`);
   if (!dryRun && process.env.REDIS_URL && (stats.created || stats.updated)) {
     // Drop cached /api/v2 responses so the shop shows the new data straight away
     const { default: redis, invalidatePattern } = await import("../../utils/redis.js");
