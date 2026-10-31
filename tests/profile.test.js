@@ -72,12 +72,15 @@ describe('Profile: get/update, cart, wishlist, addresses, password', () => {
             expect(res.body.cart).toEqual([]);
         });
 
-        it('replaces the cart wholesale via PUT', async () => {
-            const items = [{ externalId: 'p1', title: 'Item 1', price: 100, quantity: 2 }];
+        it('replaces the cart wholesale via PUT, dropping lines from the retired catalog', async () => {
+            const items = [
+                { catalog: 'v2', productId: '64b000000000000000000001', sku: 'SKU-1', title: 'Item 1', price: 100, quantity: 2 },
+                { externalId: 'p1', title: 'Old item', price: 100, quantity: 1 },
+            ];
             const res = await request(app).put('/api/profile/cart').set('Authorization', `Bearer ${token}`).send({ cart: items });
             expect(res.statusCode).toBe(200);
             expect(res.body.cart).toHaveLength(1);
-            expect(res.body.cart[0].title).toBe('Item 1');
+            expect(res.body.cart[0]).toMatchObject({ title: 'Item 1', sku: 'SKU-1' });
         });
 
         it('ignores a non-array cart payload (defaults to empty)', async () => {
@@ -89,7 +92,7 @@ describe('Profile: get/update, cart, wishlist, addresses, password', () => {
 
     describe('Wishlist', () => {
         it('replaces the wishlist wholesale via PUT', async () => {
-            const items = [{ externalId: 'p2', title: 'Wished Item', price: 500 }];
+            const items = [{ catalog: 'v2', productId: '64b000000000000000000002', sku: 'SKU-2', title: 'Wished Item', price: 500 }, { externalId: 'p2', title: 'Old item', price: 500 }];
             const res = await request(app).put('/api/profile/wishlist').set('Authorization', `Bearer ${token}`).send({ wishlist: items });
             expect(res.statusCode).toBe(200);
             expect(res.body.wishlist).toHaveLength(1);

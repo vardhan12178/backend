@@ -42,7 +42,7 @@ jest.unstable_mockModule('resend', () => ({
 const { default: request } = await import('supertest');
 const { default: app } = await import('../app.js');
 const { default: User } = await import('../models/User.js');
-const { default: Product } = await import('../models/Product.js');
+const { default: CatalogProduct } = await import('../models/CatalogProduct.js');
 const { saveWalletOrderSession } = await import('../services/payment.session.service.js');
 
 const sign = (orderId, paymentId) => signRazorpaySignature(orderId, paymentId, RAZORPAY_KEY_SECRET);
@@ -248,20 +248,17 @@ describe('Wallet: debit via order checkout (walletUsed)', () => {
     it('debits the wallet balance and records a DEBIT transaction when used to pay for an order', async () => {
         const { token, payload } = await registerAndLogin(request, app, { username: 'debitwallet', email: 'debitwallet@test.com' });
         await User.updateOne({ username: payload.username }, { $set: { walletBalance: 1000 } });
-        const product = await Product.create({
-            title: 'Wallet Item',
-            description: 'Desc',
-            category: 'test',
-            price: 100,
-            stock: 5,
-            thumbnail: 'img.jpg',
+        const product = await CatalogProduct.create({
+            slug: 'wallet-item', title: 'Wallet Item', brand: 'Brand', category: 'mobiles', categoryPath: ['electronics', 'mobiles'],
+            status: 'active', variants: [{ sku: 'WALLET-1', options: {}, price: 100, mrp: 100, stock: 5, isDefault: true }],
+            priceRange: { min: 100, max: 100 }, inStock: true, searchText: 'wallet item',
         });
 
         const res = await request(app)
             .post('/api/orders')
             .set('Authorization', `Bearer ${token}`)
             .send({
-                products: [{ productId: product.id, name: 'Wallet Item', quantity: 1, price: 100 }],
+                products: [{ catalog: 'v2', productId: product.id, sku: 'WALLET-1', name: 'Wallet Item', quantity: 1, price: 100 }],
                 shippingAddress: '123 Fake St',
                 walletUsed: 1000,
             });

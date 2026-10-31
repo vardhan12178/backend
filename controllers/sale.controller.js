@@ -30,45 +30,11 @@ export const getActiveSale = async () => {
   return sale || null;
 };
 
+// Catalog responses are keyed by the active sale (see catalog.controller.js), so dropping the
+// cached sale is enough for prices to update; old catalog entries are cleared to free memory.
 export const clearSaleCache = async () => {
   try { await redis.del(SALE_CACHE_KEY); } catch { /* ignore */ }
-  try { await redis.del("home:data"); } catch { /* ignore */ }
-  await invalidatePattern("products:*");
-};
-
-export const overlaySalePricing = (products, sale, isPrime = false) => {
-  if (!sale || !sale.categories?.length) return products;
-
-  const catMap = new Map(
-    sale.categories.map((c) => [c.category.toLowerCase(), c])
-  );
-
-  return products.map((p) => {
-    const cat = catMap.get((p.category || "").toLowerCase());
-    if (!cat) return p;
-
-    const salePercent =
-      isPrime && cat.primeDiscountPercent > 0
-        ? cat.primeDiscountPercent
-        : cat.discountPercent;
-
-    // Calculate original MRP from current price & discount, then apply sale discount
-    const originalMrp = p.discountPercentage > 0
-      ? p.price / (1 - p.discountPercentage / 100)
-      : p.price * 1.2; // fallback MRP if no existing discount
-    const salePrice = Math.round(originalMrp * (1 - salePercent / 100));
-
-    return {
-      ...p,
-      originalPrice: p.price,
-      originalDiscountPercentage: p.discountPercentage,
-      price: salePrice,
-      discountPercentage: salePercent,
-      saleName: sale.name,
-      saleId: sale._id,
-      onSale: true,
-    };
-  });
+  await invalidatePattern("catalog:*");
 };
 
 export const getActiveSalePublic = async (req, res) => {

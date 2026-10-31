@@ -1,8 +1,8 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import Product from "../models/Product.js";
 import crypto from "crypto";
 import redis from "../utils/redis.js";
-import { chatV2, rankV2 } from "./aiSearchV2.js";
+import { chatTurn, rankStoredTurn } from "./aiSearch.js";
+import { getActiveSale } from "../controllers/sale.controller.js";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -13,8 +13,6 @@ if (!process.env.GEMINI_API_KEY) {
 
 const EMBEDDING_MODEL = process.env.GEMINI_EMBEDDING_MODEL || "gemini-embedding-001";
 const EMBEDDING_DIM = Number(process.env.EMBEDDING_DIM || 768);
-const VECTOR_MIN_SCORE = Number(process.env.AI_VECTOR_MIN_SCORE || 0.60);
-const VECTOR_NUM_CANDIDATES = Number(process.env.AI_VECTOR_CANDIDATES || 150);
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
@@ -76,19 +74,6 @@ const FALLBACK_RESPONSE = {
   products: []
 };
 
-const PRODUCT_PROJECTION = {
-  _id: 1,
-  title: 1,
-  price: 1,
-  description: 1,
-  brand: 1,
-  category: 1,
-  thumbnail: 1,
-  stock: 1
-};
-
-const escapeRegex = (value = "") => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
 async function embedText(text, taskType) {
   const payload = {
     content: { parts: [{ text: String(text || "").trim() }] },
@@ -109,314 +94,19 @@ async function embedText(text, taskType) {
   return vector;
 }
 
-async function keywordFallbackSearch(query, limit = 4) {
-  const cleaned = String(query || "").trim();
-  if (!cleaned) return [];
-
-  try {
-    const textMatches = await Product.find(
-      { isActive: true, stock: { $gt: 0 }, $text: { $search: cleaned } },
-      { ...PRODUCT_PROJECTION, score: { $meta: "textScore" } }
-    )
-      .sort({ score: { $meta: "textScore" } })
-      .limit(limit)
-      .lean();
-
-    if (textMatches.length) {
-      return textMatches;
-    }
-  } catch (error) {
-    // If text index is unavailable, fallback to regex search below.
-    console.warn("Keyword fallback (text index) failed:", error.message);
-  }
-
-  const rx = new RegExp(escapeRegex(cleaned), "i");
-
-  return Product.find({
-    isActive: true,
-    stock: { $gt: 0 },
-    $or: [{ title: rx }, { description: rx }, { category: rx }, { brand: rx }]
-  })
-    .select(PRODUCT_PROJECTION)
-    .limit(limit)
-    .lean();
-}
-
-/**
- * Refines vague queries using conversation history.
- */
-async function expandQuery(message, history) {
-  if (history.length === 0) return message;
-
-  const recentContext = history.slice(-4).map(m =>
-    `${m.role === 'user' ? 'User' : 'System'}: ${m.content}`
-  ).join('\n');
-
-  const prompt = `
-    System Role: Contextual Query Refinement.
-    
-    Session Context:
-    ${recentContext}
-    
-    Current Input: "${message}"
-    
-    Objective: 
-    If the input relies on context (e.g., "red ones", "cheaper", "specs"), rewrite it into a standalone search query. 
-    If the input is already specific, return it unchanged.
-
-    Output JSON: { "expandedQuery": "..." }
-  `;
-
-  try {
-    const result = await withTimeout(chatModel.generateContent(prompt));
-    const parsed = JSON.parse(result.response.text());
-    const expanded = parsed.expandedQuery || message;
-
-    if (expanded !== message) {
-      console.log(`[INFO] Context applied: "${message}" → "${expanded}"`);
-    }
-    return expanded;
-  } catch (error) {
-    console.error("Context processing failed:", error.message);
-    return message;
-  }
-}
-
-/**
- * Vector search against MongoDB.
- */
-async function searchProducts(query, limit = 4) {
-  try {
-    const queryVector = await embedText(query);
-    const safeLimit = Math.max(1, Number(limit) || 4);
-    const numCandidates = Math.max(VECTOR_NUM_CANDIDATES, safeLimit * 10);
-
-    const products = await Product.aggregate([
-      {
-        $vectorSearch: {
-          index: "vector_index",
-          path: "embedding",
-          queryVector: queryVector,
-          numCandidates: numCandidates,
-          limit: safeLimit * 3
-        }
-      },
-      {
-        $addFields: {
-          score: { $meta: "vectorSearchScore" }
-        }
-      },
-      {
-        $match: {
-          isActive: true,
-          stock: { $gt: 0 },
-          score: { $gte: VECTOR_MIN_SCORE }
-        }
-      },
-      {
-        $limit: safeLimit
-      },
-      {
-        $project: {
-          ...PRODUCT_PROJECTION,
-          score: 1
-        }
-      }
-    ]);
-
-    if (products.length > 0) {
-      return products;
-    }
-
-    return keywordFallbackSearch(query, safeLimit);
-  } catch (error) {
-    console.error("Search Service Error:", error.message);
-    return keywordFallbackSearch(query, limit);
-  }
-}
-
-/**
- * Generates a structured JSON response for the frontend.
- */
-async function generateSmartReply(userQuery, products, conversationHistory = []) {
-  const productContext = products.map((p, index) =>
-    `${index + 1}. ${p.title} (${p.brand}) - ₹${p.price}\n   ${p.description.substring(0, 120)}...`
-  ).join("\n\n");
-
-  const historyContext = conversationHistory.length > 0
-    ? `Session History:\n${conversationHistory.map(msg =>
-      `${msg.role === 'user' ? 'User' : 'System'}: ${msg.content}`
-    ).join('\n')}\n\n`
-    : '';
-
-  const prompt = `
-    You are VKart Copilot, the official digital shopping assistant.
-
-    Directives:
-    - Assist users in finding products, comparing specs, and checking prices.
-    - Maintain a professional, concise, and helpful tone.
-    - Focus on "Value for Money" and Indian market context (₹).
-    - Do not invent product details; strictly use the provided "Available Products" data.
-
-    ${historyContext}
-    Current Query: "${userQuery}"
-
-    Available Products:
-    ${productContext}
-
-    Required Output JSON Format:
-    {
-      "greeting": "Brief professional opener (optional)",
-      "response": {
-        "summary": "Direct answer summarizing the findings.",
-        "points": ["Key feature 1", "Key feature 2"] 
-      },
-      "recommendation": {
-        "productIndex": 1, 
-        "reason": "Objective reason for this selection (e.g., best specs for price)"
-      },
-      "alternatives": ["Brief mention of an alternative"],
-      "followUp": "Relevant question to refine the search"
-    }
-  `;
-
-  try {
-    const result = await withTimeout(chatModel.generateContent(prompt));
-    const text = result.response.text();
-    return JSON.parse(text);
-  } catch (error) {
-    console.error("Generation error:", error);
-    return {
-      response: {
-        summary: "I found some matching products. Please review the options below.",
-        points: []
-      },
-      recommendation: null,
-      followUp: "Would you like to refine your search?"
-    };
-  }
-}
-
-/**
- * Summarizes a product's reviews into structured pros/cons via Gemini.
- * Grounded strictly in the supplied review text - reviewsAnalyzed is set
- * from the actual array length server-side, never trusted from the model.
- */
-export async function generateReviewSummary(product, reviews) {
-  const sample = reviews.slice(0, 40);
-  const reviewText = sample
-    .map((r, i) => `${i + 1}. [${r.rating}/5] ${(r.comment || "").slice(0, 300)}`)
-    .join("\n");
-
-  const prompt = `
-    You are summarizing real customer reviews for an Indian e-commerce product.
-
-    Product: ${product.title} (${product.category})
-
-    Directives:
-    - Base every point strictly on the reviews below. Do not invent details not present in the reviews.
-    - If reviews disagree, reflect that in "sentiment" (use "mixed").
-    - Keep each pro/con to a short phrase, not a full sentence.
-
-    Reviews (${sample.length} of ${reviews.length} total):
-    ${reviewText}
-
-    Required Output JSON Format:
-    {
-      "sentiment": "positive" | "mixed" | "negative",
-      "pros": ["short phrase", "..."],
-      "cons": ["short phrase", "..."],
-      "bestFor": "One short sentence on who this product suits, based only on the reviews."
-    }
-  `;
-
-  const result = await withTimeout(chatModel.generateContent(prompt));
-  const parsed = JSON.parse(result.response.text());
-
-  return {
-    sentiment: ["positive", "mixed", "negative"].includes(parsed.sentiment) ? parsed.sentiment : "mixed",
-    pros: Array.isArray(parsed.pros) ? parsed.pros.slice(0, 5) : [],
-    cons: Array.isArray(parsed.cons) ? parsed.cons.slice(0, 5) : [],
-    bestFor: typeof parsed.bestFor === "string" ? parsed.bestFor : "",
-    reviewsAnalyzed: reviews.length,
-  };
-}
-
-/**
- * Generates an AI verdict for a 2-4 product comparison: an overall pick plus
- * a short "best for" reasoning per product where there's a real
- * differentiator. Grounded strictly on the products' own stored fields
- * (price/rating/brand/description) — never invents a spec not present.
- */
-export async function generateComparisonSummary(products) {
-  const productBlocks = products
-    .map(
-      (p, i) => `
-    Product ${i + 1} (id: ${p._id}):
-      Title: ${p.title}
-      Brand: ${p.brand || "Generic"}
-      Category: ${p.category}
-      Price: ₹${p.price}
-      Rating: ${p.rating ?? "N/A"} (${p.reviews?.length || 0} reviews)
-      Description: ${(p.description || "").slice(0, 500)}
-  `
-    )
-    .join("\n");
-
-  const prompt = `
-    You are an impartial shopping assistant comparing products for an Indian e-commerce store.
-
-    ${productBlocks}
-
-    Directives:
-    - Base every claim strictly on the fields given above. Do not invent specs, features, or
-      comparisons not supported by this data.
-    - "overallPickId" must be one of the exact product ids listed above.
-    - Every product must get a short "bestFor" line — if two products don't clearly differ,
-      it's fine for the reasoning to be about price/rating rather than invented features.
-    - Keep bestFor to one short sentence each. Keep the overall reason to 1-2 sentences.
-
-    Required Output JSON Format:
-    {
-      "overallPickId": "the id of the best overall pick",
-      "overallReason": "1-2 sentences on why, grounded in the data above",
-      "perProduct": [
-        { "id": "product id", "bestFor": "one short sentence" }
-      ]
-    }
-  `;
-
-  const result = await withTimeout(chatModel.generateContent(prompt));
-  const parsed = JSON.parse(result.response.text());
-
-  const validIds = new Set(products.map((p) => String(p._id)));
-  const perProduct = Array.isArray(parsed.perProduct)
-    ? parsed.perProduct
-        .filter((row) => row && validIds.has(String(row.id)))
-        .map((row) => ({ id: String(row.id), bestFor: typeof row.bestFor === "string" ? row.bestFor : "" }))
-    : [];
-
-  return {
-    overallPickId: validIds.has(String(parsed.overallPickId)) ? String(parsed.overallPickId) : null,
-    overallReason: typeof parsed.overallReason === "string" ? parsed.overallReason : "",
-    perProduct,
-  };
-}
-
 const SORT_VALUES = new Set(["price_asc", "price_desc", "rating_desc", "newest"]);
 
 /**
- * Parses a free-text search query into structured filters matching the
- * exact params getProducts() already accepts. Grounded against the real
- * category list so the model can't invent a category that doesn't exist.
- * Every field is validated/clamped server-side before returning.
+ * Parses a free-text search query into the listing's filters. Grounded against the storefront
+ * categories ([{ slug, name }]) so the model can't invent one; every field is validated before returning.
  */
 export async function parseSearchQuery(nlQuery, categories) {
+  const slugs = categories.map((c) => c.slug);
   const prompt = `
     You are a search-query parser for an Indian e-commerce store (prices in INR, ₹).
 
-    Valid categories (choose exactly one of these, or null if none clearly match):
-    ${categories.join(", ")}
+    Valid categories (answer with the slug before the colon, or null if none clearly match):
+    ${categories.map((c) => `${c.slug}: ${c.name}`).join("\n    ")}
 
     User query: "${nlQuery}"
 
@@ -426,7 +116,7 @@ export async function parseSearchQuery(nlQuery, categories) {
     Required Output JSON Format:
     {
       "q": "residual free-text keywords to still search on (brand/product terms), or empty string",
-      "category": "<one value from the valid categories list, or null>",
+      "category": "<one slug from the valid categories list, or null>",
       "minPrice": number or null,
       "maxPrice": number or null,
       "minRating": number (1-5) or null,
@@ -437,7 +127,7 @@ export async function parseSearchQuery(nlQuery, categories) {
   const result = await withTimeout(chatModel.generateContent(prompt));
   const parsed = JSON.parse(result.response.text());
 
-  const category = typeof parsed.category === "string" && categories.includes(parsed.category)
+  const category = typeof parsed.category === "string" && slugs.includes(parsed.category)
     ? parsed.category
     : null;
   const sort = SORT_VALUES.has(parsed.sort) ? parsed.sort : null;
@@ -454,114 +144,88 @@ export async function parseSearchQuery(nlQuery, categories) {
   };
 }
 
-/**
- * Generates embeddings for a product document.
- */
-export async function vectorizeProduct(product) {
-  try {
-    const textToEmbed = `
-      Title: ${product.title}
-      Brand: ${product.brand || "Generic"}
-      Category: ${product.category}
-      Description: ${product.description}
-      Tags: ${product.tags ? product.tags.join(", ") : ""}
-      Price: ${product.price}
-    `.trim();
-
-    product.embedding = await embedText(textToEmbed);
-    await product.save();
-    console.log(`[INFO] Index updated: ${product.title}`);
-    return true;
-  } catch (error) {
-    console.error(`[ERROR] Indexing failed for ${product._id}:`, error.message);
-    return false;
-  }
-}
-
-// Model calls for the catalog v2 chat (services/aiSearchV2.js). Catalog v2 documents were
+// Model calls for the catalog chat (services/aiSearch.js). Catalog documents were
 // embedded as RETRIEVAL_DOCUMENT, so queries use the matching RETRIEVAL_QUERY task type.
 // The intent and answer calls are short JSON tasks and should not spend time "thinking".
 // Gemini 3 models (e.g. gemini-3.5-flash-lite) already default to minimal thinking and reject the
 // 2.5-era thinkingBudget field, so it is only sent to 2.5 models. AI_V2_MODEL picks a different
 // model for these calls; AI_V2_TIMEOUT_MS bounds each one.
-const V2_MODEL = process.env.AI_V2_MODEL || CHAT_MODEL;
-const V2_TIMEOUT_MS = Number(process.env.AI_V2_TIMEOUT_MS || 7000);
+const SEARCH_MODEL = process.env.AI_V2_MODEL || CHAT_MODEL;
+const SEARCH_TIMEOUT_MS = Number(process.env.AI_V2_TIMEOUT_MS || 7000);
 // AI_V2_THINKING_LEVEL ("minimal" | "low" | ...) sets thinkingConfig.thinkingLevel for Gemini 3 models.
-const V2_THINKING_LEVEL = process.env.AI_V2_THINKING_LEVEL || "";
-const v2Model = (thinking) => genAI.getGenerativeModel({
-  model: V2_MODEL,
+const SEARCH_THINKING_LEVEL = process.env.AI_V2_THINKING_LEVEL || "";
+const fastModel = (thinking) => genAI.getGenerativeModel({
+  model: SEARCH_MODEL,
   generationConfig: {
     responseMimeType: "application/json",
     temperature: 0.2,
-    ...(!thinking ? { thinkingConfig: { thinkingBudget: 0 } } : V2_THINKING_LEVEL ? { thinkingConfig: { thinkingLevel: V2_THINKING_LEVEL } } : {}),
+    ...(!thinking ? { thinkingConfig: { thinkingBudget: 0 } } : SEARCH_THINKING_LEVEL ? { thinkingConfig: { thinkingLevel: SEARCH_THINKING_LEVEL } } : {}),
   },
 });
-let v2ThinkingOffSupported = /gemini-2\.5/.test(V2_MODEL);
-let v2Fast = v2Model(!v2ThinkingOffSupported);
+let thinkingOffSupported = /gemini-2\.5/.test(SEARCH_MODEL);
+let fast = fastModel(!thinkingOffSupported);
 
 // Runs one call and logs how long Gemini really took, including calls we stopped waiting for,
 // plus token usage (thoughtsTokenCount shows whether the model spent time thinking).
-async function timedCall(prompt, label, timeoutMs = V2_TIMEOUT_MS) {
+async function timedCall(prompt, label, timeoutMs = SEARCH_TIMEOUT_MS) {
   const started = Date.now();
-  const call = v2Fast.generateContent(prompt);
+  const call = fast.generateContent(prompt);
   call
     .then((r) => {
       const u = r.response?.usageMetadata || {};
-      console.log(`[aiSearchV2] gemini ${label} ${V2_MODEL} ${Date.now() - started}ms`, JSON.stringify({
+      console.log(`[aiSearch] gemini ${label} ${SEARCH_MODEL} ${Date.now() - started}ms`, JSON.stringify({
         prompt: u.promptTokenCount, output: u.candidatesTokenCount, thoughts: u.thoughtsTokenCount,
         finish: r.response?.candidates?.[0]?.finishReason,
       }));
     })
-    .catch((err) => console.warn(`[aiSearchV2] gemini ${label} ${V2_MODEL} failed after ${Date.now() - started}ms: ${err.message}`));
+    .catch((err) => console.warn(`[aiSearch] gemini ${label} ${SEARCH_MODEL} failed after ${Date.now() - started}ms: ${err.message}`));
   return JSON.parse((await withTimeout(call, timeoutMs)).response.text());
 }
 
-async function v2Json(prompt, label, timeoutMs) {
+async function jsonCall(prompt, label, timeoutMs) {
   try {
     return await timedCall(prompt, label, timeoutMs);
   } catch (err) {
     // Some models reject thinkingConfig with a bare "400 ... invalid argument"; drop it once and keep going
-    if (v2ThinkingOffSupported && /\b400\b|invalid argument|thinking/i.test(err.message)) {
-      console.warn(`[aiSearchV2] ${V2_MODEL} rejected thinkingConfig; retrying without it`);
-      v2ThinkingOffSupported = false;
-      v2Fast = v2Model(true);
+    if (thinkingOffSupported && /\b400\b|invalid argument|thinking/i.test(err.message)) {
+      console.warn(`[aiSearch] ${SEARCH_MODEL} rejected thinkingConfig; retrying without it`);
+      thinkingOffSupported = false;
+      fast = fastModel(true);
       return timedCall(prompt, label, timeoutMs);
     }
     throw err;
   }
 }
 
-const v2Ai = {
-  intent: (prompt) => v2Json(prompt, "intent"),
-  answer: (prompt, opts = {}) => v2Json(prompt, "answer", opts.timeoutMs),
-  embed: (text) => withTimeout(embedText(text, "RETRIEVAL_QUERY"), V2_TIMEOUT_MS),
+const searchAi = {
+  intent: (prompt) => jsonCall(prompt, "intent"),
+  answer: (prompt, opts = {}) => jsonCall(prompt, "answer", opts.timeoutMs),
+  embed: (text) => withTimeout(embedText(text, "RETRIEVAL_QUERY"), SEARCH_TIMEOUT_MS),
 };
 
-// Phase-two state for two-phase v2 answers: the rerank pool, kept in Redis for 10 minutes.
+// Phase-two state for two-phase answers: the rerank pool, kept in Redis for 10 minutes.
 // The phase-two call may wait longer for the model (AI_V2_RANK_TIMEOUT_MS) because results are already shown.
 const RANK_TTL_S = 600;
-const V2_RANK_TIMEOUT_MS = Number(process.env.AI_V2_RANK_TIMEOUT_MS || 25000);
+const RANK_TIMEOUT_MS = Number(process.env.AI_V2_RANK_TIMEOUT_MS || 25000);
 const rankStore = {
   save: async (data) => {
     const token = crypto.randomUUID();
-    await redis.set(`ai:v2:rank:${token}`, JSON.stringify(data), "EX", RANK_TTL_S);
+    await redis.set(`ai:rank:${token}`, JSON.stringify(data), "EX", RANK_TTL_S);
     return token;
   },
   load: async (token) => {
-    const raw = await redis.get(`ai:v2:rank:${token}`);
+    const raw = await redis.get(`ai:rank:${token}`);
     return raw ? JSON.parse(raw) : null;
   },
 };
 
-/** Phase two of a two-phase v2 answer: model picks and reasons, or null when the token is unknown. */
+/** Phase two of a two-phase answer: model picks and reasons, or null when the token is unknown. */
 export async function rankChat(token) {
-  return rankV2(token, v2Ai, rankStore, { timeoutMs: V2_RANK_TIMEOUT_MS });
+  return rankStoredTurn(token, searchAi, rankStore, { timeoutMs: RANK_TIMEOUT_MS, sale: await getActiveSale() });
 }
 
-/**
- * Main chat handler with circuit breaker. `catalog: "v2"` answers from catalog_products.
- */
-export async function handleChat(message, history = [], { catalog = "v1", twoPhase = false } = {}) {
+/** Main chat handler with circuit breaker. `twoPhase` returns results first and the model's picks via rankChat. */
+export async function handleChat(message, history = [], { twoPhase = false } = {}) {
   try {
     if (!message) throw new Error("Empty message received");
 
@@ -585,47 +249,10 @@ export async function handleChat(message, history = [], { catalog = "v1", twoPha
       };
     }
 
-    if (catalog === "v2") {
-      const result = await chatV2(message, history, v2Ai, twoPhase ? { store: rankStore } : {});
-      recordSuccess();
-      return { structured: result.structured, products: result.products, ...(result.rank ? { rank: result.rank } : {}) };
-    }
-
-    const expandedMessage = await expandQuery(message, history);
-
-    let products = await searchProducts(expandedMessage);
-
-    // Handle empty results
-    if (!products || products.length === 0) {
-      return {
-        structured: {
-          response: {
-            summary: "I couldn't find any products matching that specific description.",
-            points: ["Try using broader keywords", "Check our main categories"]
-          },
-          followUp: "Can I help you find something else?"
-        },
-        products: []
-      };
-    }
-
-    // Generate AI response
-    let structured = await generateSmartReply(message, products, history);
-
-    // Reorder products so the recommended item is first
-    if (structured.recommendation && structured.recommendation.productIndex) {
-      const recommendedIndex = structured.recommendation.productIndex - 1;
-
-      if (recommendedIndex > 0 && recommendedIndex < products.length) {
-        const [bestMatchItem] = products.splice(recommendedIndex, 1);
-        products.unshift(bestMatchItem);
-        structured.recommendation.productIndex = 1;
-      }
-    }
-
+    const sale = await getActiveSale();
+    const result = await chatTurn(message, history, searchAi, twoPhase ? { store: rankStore, sale } : { sale });
     recordSuccess();
-    return { structured, products };
-
+    return { structured: result.structured, products: result.products, ...(result.rank ? { rank: result.rank } : {}) };
   } catch (error) {
     console.error("Chat error:", error.message);
     recordFailure();

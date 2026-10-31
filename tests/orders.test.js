@@ -51,20 +51,28 @@ jest.unstable_mockModule('../services/payment.session.service.js', () => ({
 
 const { default: request } = await import('supertest');
 const { default: app } = await import('../app.js');
-const { default: Product } = await import('../models/Product.js');
+const { default: CatalogProduct } = await import('../models/CatalogProduct.js');
 const { default: User } = await import('../models/User.js');
 const { default: jwt } = await import('jsonwebtoken');
 
-const createProduct = (overrides = {}) =>
-    Product.create({
+// One catalog product with a single variant (SKU TEST-1); order lines refer to it by id and SKU
+let productSeq = 0;
+const createProduct = ({ price = 100, stock = 10 } = {}) => {
+    productSeq += 1;
+    return CatalogProduct.create({
+        slug: `test-item-${productSeq}`,
         title: 'Test Item',
-        description: 'Desc',
-        category: 'test',
-        price: 100,
-        stock: 10,
-        thumbnail: 'img.jpg',
-        ...overrides,
+        brand: 'Brand',
+        category: 'mobiles',
+        categoryPath: ['electronics', 'mobiles'],
+        status: 'active',
+        variants: [{ sku: 'TEST-1', options: {}, price, mrp: price, stock, isDefault: true }],
+        priceRange: { min: price, max: price },
+        inStock: stock > 0,
+        searchText: 'test item',
     });
+};
+const stockOf = async (id) => (await CatalogProduct.findById(id).lean()).variants[0].stock;
 
 describe('Orders: create (online payment path)', () => {
     let token;
@@ -100,7 +108,7 @@ describe('Orders: create (online payment path)', () => {
             .post('/api/orders')
             .set('Authorization', `Bearer ${token}`)
             .send({
-                products: [{ productId, name: 'Test Item', quantity: 2, price: 100 }],
+                products: [{ catalog: 'v2', productId, sku: 'TEST-1', name: 'Test Item', quantity: 2, price: 100 }],
                 shippingAddress: '123 Fake St',
                 paymentVerificationToken: 'verify_tok_1',
             });
@@ -111,8 +119,7 @@ describe('Orders: create (online payment path)', () => {
         expect(res.body.paymentMethod).toBe('CARD');
 
         // Stock was decremented.
-        const product = await Product.findById(productId);
-        expect(product.stock).toBe(8);
+        expect(await stockOf(productId)).toBe(8);
     });
 
     it('rejects an online order missing the payment verification token', async () => {
@@ -120,7 +127,7 @@ describe('Orders: create (online payment path)', () => {
             .post('/api/orders')
             .set('Authorization', `Bearer ${token}`)
             .send({
-                products: [{ productId, name: 'Test Item', quantity: 1, price: 100 }],
+                products: [{ catalog: 'v2', productId, sku: 'TEST-1', name: 'Test Item', quantity: 1, price: 100 }],
                 shippingAddress: '123 Fake St',
             });
         expect(res.statusCode).toBe(400);
@@ -138,7 +145,7 @@ describe('Orders: create (online payment path)', () => {
             .post('/api/orders')
             .set('Authorization', `Bearer ${token}`)
             .send({
-                products: [{ productId, name: 'Test Item', quantity: 1, price: 100 }],
+                products: [{ catalog: 'v2', productId, sku: 'TEST-1', name: 'Test Item', quantity: 1, price: 100 }],
                 shippingAddress: '123 Fake St',
                 paymentVerificationToken: 'verify_tok_mismatch',
             });
@@ -157,7 +164,7 @@ describe('Orders: create (online payment path)', () => {
             .post('/api/orders')
             .set('Authorization', `Bearer ${token}`)
             .send({
-                products: [{ productId, name: 'Test Item', quantity: 2, price: 100 }],
+                products: [{ catalog: 'v2', productId, sku: 'TEST-1', name: 'Test Item', quantity: 2, price: 100 }],
                 shippingAddress: '123 Fake St',
                 paymentVerificationToken: 'verify_tok_wrong_user',
             });
@@ -169,7 +176,7 @@ describe('Orders: create (online payment path)', () => {
             .post('/api/orders')
             .set('Authorization', `Bearer ${token}`)
             .send({
-                products: [{ productId: '000000000000000000000000', name: 'Ghost', quantity: 1, price: 100 }],
+                products: [{ catalog: 'v2', productId: '000000000000000000000000', sku: 'TEST-1', name: 'Ghost', quantity: 1, price: 100 }],
                 shippingAddress: '123 Fake St',
                 paymentVerificationToken: 'verify_tok_ghost',
             });
@@ -181,7 +188,7 @@ describe('Orders: create (online payment path)', () => {
             .post('/api/orders')
             .set('Authorization', `Bearer ${token}`)
             .send({
-                products: [{ productId, name: 'Test Item', quantity: 999, price: 100 }],
+                products: [{ catalog: 'v2', productId, sku: 'TEST-1', name: 'Test Item', quantity: 999, price: 100 }],
                 shippingAddress: '123 Fake St',
                 paymentVerificationToken: 'verify_tok_stock',
             });
@@ -212,7 +219,7 @@ describe('Orders: create (wallet-funded path — no gateway needed)', () => {
             .post('/api/orders')
             .set('Authorization', `Bearer ${token}`)
             .send({
-                products: [{ productId, name: 'Test Item', quantity: 1, price: 100 }],
+                products: [{ catalog: 'v2', productId, sku: 'TEST-1', name: 'Test Item', quantity: 1, price: 100 }],
                 shippingAddress: '123 Fake St',
                 walletUsed: 1000,
             });
@@ -233,7 +240,7 @@ describe('Orders: create (wallet-funded path — no gateway needed)', () => {
             .post('/api/orders')
             .set('Authorization', `Bearer ${token}`)
             .send({
-                products: [{ productId, name: 'Test Item', quantity: 1, price: 100 }],
+                products: [{ catalog: 'v2', productId, sku: 'TEST-1', name: 'Test Item', quantity: 1, price: 100 }],
                 shippingAddress: '123 Fake St',
                 walletUsed: 1000,
             });
@@ -264,7 +271,7 @@ describe('Orders: fetching own orders / access control', () => {
             .post('/api/orders')
             .set('Authorization', `Bearer ${tokenA}`)
             .send({
-                products: [{ productId, name: 'Test Item', quantity: 1, price: 100 }],
+                products: [{ catalog: 'v2', productId, sku: 'TEST-1', name: 'Test Item', quantity: 1, price: 100 }],
                 shippingAddress: '123 Fake St',
                 walletUsed: 1000,
             });
@@ -345,7 +352,7 @@ describe('Orders: admin stage transitions', () => {
             .post('/api/orders')
             .set('Authorization', `Bearer ${userToken}`)
             .send({
-                products: [{ productId, name: 'Test Item', quantity: 1, price: 100 }],
+                products: [{ catalog: 'v2', productId, sku: 'TEST-1', name: 'Test Item', quantity: 1, price: 100 }],
                 shippingAddress: '123 Fake St',
                 walletUsed: 1000,
             });
@@ -413,7 +420,7 @@ describe('Orders: customer cancellation', () => {
             .post('/api/orders')
             .set('Authorization', `Bearer ${tokenA}`)
             .send({
-                products: [{ productId, name: 'Test Item', quantity: 1, price: 100 }],
+                products: [{ catalog: 'v2', productId, sku: 'TEST-1', name: 'Test Item', quantity: 1, price: 100 }],
                 shippingAddress: '123 Fake St',
                 walletUsed: 1000,
             });
@@ -437,7 +444,7 @@ describe('Orders: customer cancellation', () => {
     });
 
     it('cancels an order, restores stock, and refunds to wallet', async () => {
-        const before = await Product.findById(productId);
+        const before = await stockOf(productId);
 
         const res = await request(app)
             .post(`/api/orders/${orderId}/cancel`)
@@ -448,8 +455,7 @@ describe('Orders: customer cancellation', () => {
         expect(res.body.order.stage).toBe('CANCELLED');
         expect(res.body.order.refundStatus).toBe('COMPLETED');
 
-        const after = await Product.findById(productId);
-        expect(after.stock).toBe(before.stock + 1);
+        expect(await stockOf(productId)).toBe(before + 1);
 
         const user = await User.findOne({ username: usernameA });
         expect(user.walletTransactions.some((t) => t.type === 'CREDIT' && t.reason === 'Order cancellation refund')).toBe(true);
