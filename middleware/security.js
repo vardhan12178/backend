@@ -140,7 +140,6 @@ export const googleLimiter = rateLimit({ windowMs: 60 * 1000, max: 10, standardH
 // per-minute cap within a shared app instance across many `it()` blocks.
 export const aiChatLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, standardHeaders: true, message: { error: 'Too many requests, please slow down' }, skip: skipInTest });
 export const aiReviewSummaryLimiter = rateLimit({ windowMs: 60 * 1000, max: 20, standardHeaders: true, message: { error: 'Too many requests, please slow down' }, skip: skipInTest });
-export const aiCompareLimiter = rateLimit({ windowMs: 60 * 1000, max: 15, standardHeaders: true, message: { error: 'Too many requests, please slow down' }, skip: skipInTest });
 export const supportMessageLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, standardHeaders: true, message: { error: 'Too many requests, please slow down' }, skip: skipInTest });
 
 // Global API rate limiter — 200 requests per minute per IP

@@ -1,6 +1,5 @@
-import { handleChat, rankChat, parseSearchQuery, generateComparisonSummary } from "../services/ai.service.js";
-import Product from "../models/Product.js";
-import redis, { CACHE_TTL } from "../utils/redis.js";
+import { handleChat, rankChat, parseSearchQuery } from "../services/ai.service.js";
+import { CATEGORY_GROUPS } from "../services/catalog.service.js";
 
 /* GET HEALTH */
 export const getHealth = (req, res) => {
@@ -29,13 +28,8 @@ export const chat = async (req, res) => {
         }
 
         // 3. Process Request
-        // Catalog v2 answers from catalog_products; AI_CHAT_CATALOG sets the default for old clients
-        const catalog = req.body.catalog === "v2" || req.body.catalog === "v1"
-            ? req.body.catalog
-            : (process.env.AI_CHAT_CATALOG || "v1");
-        // twoPhase (v2 only): results come back right after the search, picks via POST /api/ai/chat/rank
-        const twoPhase = catalog === "v2" && req.body.twoPhase === true;
-        const response = await handleChat(message.trim(), history.slice(-10), twoPhase ? { catalog, twoPhase } : { catalog });
+        // twoPhase: results come back right after the search, the model's picks via POST /api/ai/chat/rank
+        const response = await handleChat(message.trim(), history.slice(-10), { twoPhase: req.body.twoPhase === true });
 
         // 4. Return Result
         res.json(response);
@@ -50,7 +44,7 @@ export const chat = async (req, res) => {
     }
 };
 
-/* POST CHAT RANK - phase two of a two-phase v2 answer */
+/* POST CHAT RANK - phase two of a two-phase answer */
 export const rankChatTurn = async (req, res) => {
     try {
         const { token } = req.body;
@@ -77,9 +71,8 @@ export const parseSearch = async (req, res) => {
             });
         }
 
-        // Ground the parser against the real, current category list so it
-        // can never invent a category slug that doesn't exist in the catalog.
-        const categories = await Product.distinct("category", { isActive: true });
+        // Grounded against the storefront categories, so the parser can't invent one
+        const categories = CATEGORY_GROUPS.map((g) => ({ slug: g.slug, name: g.name }));
         const parsed = await parseSearchQuery(query.trim(), categories);
 
         res.json(parsed);
@@ -88,48 +81,5 @@ export const parseSearch = async (req, res) => {
         res.status(503).json({
             error: "AI search is currently busy. Please use the filters instead."
         });
-    }
-};
-
-/* POST /api/ai/compare - AI verdict for a 2-4 product comparison */
-export const compareProducts = async (req, res) => {
-    try {
-        const ids = Array.isArray(req.body.ids) ? req.body.ids.filter(Boolean) : [];
-        const uniqueIds = [...new Set(ids.map(String))];
-
-        if (uniqueIds.length < 2 || uniqueIds.length > 4) {
-            return res.status(400).json({ error: "Provide between 2 and 4 product ids to compare." });
-        }
-
-        // Order-independent cache key so [A,B] and [B,A] share a cache entry.
-        const cacheKey = `ai-compare:${[...uniqueIds].sort().join(",")}`;
-
-        try {
-            const cached = await redis.get(cacheKey);
-            if (cached) return res.json(JSON.parse(cached));
-        } catch (err) {
-            console.warn(`Redis Get Error (ai-compare): ${err.message}`);
-        }
-
-        const products = await Product.find({ _id: { $in: uniqueIds } })
-            .select("title brand category price rating reviews description");
-
-        if (products.length !== uniqueIds.length) {
-            return res.status(404).json({ error: "One or more products could not be found." });
-        }
-
-        const verdict = await generateComparisonSummary(products);
-        const response = { available: true, ...verdict };
-
-        try {
-            await redis.set(cacheKey, JSON.stringify(response), "EX", CACHE_TTL.COMPARE_SUMMARY);
-        } catch (err) {
-            console.warn(`Redis Set Error (ai-compare): ${err.message}`);
-        }
-
-        res.json(response);
-    } catch (error) {
-        console.error("AI compare error:", error.message);
-        res.status(503).json({ available: false, reason: "ai-unavailable" });
     }
 };

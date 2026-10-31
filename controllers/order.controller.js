@@ -1,19 +1,18 @@
 import { validationResult } from "express-validator";
 import mongoose from "mongoose";
 import Order from "../models/Order.js";
-import Product from "../models/Product.js";
 import User from "../models/User.js";
 import { createNotification } from "./admin.notifications.controller.js";
 import { createUserNotification } from "./user.notifications.controller.js";
 import { sendEmail, emailTemplate } from "../services/email.service.js";
 import { applyCoupon, recordCouponUsage } from "./coupon.controller.js";
-import { getActiveSale, overlaySalePricing } from "./sale.controller.js";
+import { getActiveSale } from "./sale.controller.js";
 import {
   consumeCheckoutVerificationToken,
   getCheckoutVerificationToken,
 } from "../services/payment.session.service.js";
 import { refundPaymentViaRazorpay } from "../services/refund.service.js";
-import { isV2Line, reserveV2Line, restoreV2Line } from "../services/catalogV2.stock.js";
+import { isCatalogLine, reserveLine, restoreLine } from "../services/catalog.stock.js";
 import PDFDocument from "pdfkit";
 import { renderTaxInvoice } from "../utils/invoicePdf.js";
 import { round2 } from "../utils/calc.js";
@@ -65,60 +64,25 @@ export const createOrder = async (req, res) => {
     for (const p of products) {
       const qty = Math.max(1, Math.trunc(Number(p.quantity) || 0));
 
-      // Catalog v2 lines: price and stock come from the variant (sale overlay not applied to v2 yet)
-      if (isV2Line(p)) {
-        try {
-          normalizedProducts.push(await reserveV2Line({ productId: p.productId, sku: p.sku, quantity: qty }, session));
-        } catch (err) {
-          if (err.status === 400) return abortWith(400, { message: err.message });
-          throw err;
+      // Only catalog lines can be ordered; anything else is a leftover from the retired catalog
+      if (!isCatalogLine(p)) {
+        return abortWith(400, { message: "An item in your cart is no longer sold. Please remove it and try again." });
+      }
+
+      // Price and stock come from the variant, with the active sale applied
+      try {
+        const line = await reserveLine({ productId: p.productId, sku: p.sku, quantity: qty }, session, { sale: activeSale, isPrime });
+        if (line.sale) {
+          saleApplied = true;
+          saleId = activeSale._id;
+          saleName = activeSale.name;
         }
-        continue;
+        const { sale: _sale, ...stored } = line;
+        normalizedProducts.push(stored);
+      } catch (err) {
+        if (err.status === 400) return abortWith(400, { message: err.message });
+        throw err;
       }
-
-      const product = await Product.findById(p.productId)
-        .select("title thumbnail images category price discountPercentage stock isActive")
-        .session(session);
-
-      if (!product || !product.isActive) {
-        return abortWith(400, { message: "Product unavailable" });
-      }
-      if (product.stock < qty) {
-        return abortWith(400, { message: `Insufficient stock for ${product.title}` });
-      }
-
-      product.stock -= qty;
-      await product.save({ session });
-
-      const productSnapshot = {
-        _id: product._id,
-        title: product.title,
-        thumbnail: product.thumbnail,
-        images: product.images,
-        category: product.category,
-        price: product.price,
-        discountPercentage: Number(product.discountPercentage) || 0,
-      };
-
-      const overlaidProduct = activeSale
-        ? overlaySalePricing([productSnapshot], activeSale, isPrime)[0]
-        : productSnapshot;
-
-      const unitPrice = round2(overlaidProduct?.price ?? product.price);
-      if (activeSale && unitPrice !== round2(product.price)) {
-        saleApplied = true;
-        saleId = activeSale._id;
-        saleName = activeSale.name;
-      }
-
-      normalizedProducts.push({
-        productId: product._id,
-        name: product.title,
-        image: p.image || product.thumbnail || product.images?.[0] || "",
-        quantity: qty,
-        price: unitPrice,
-        ...(p.selectedVariants ? { selectedVariants: String(p.selectedVariants) } : {}),
-      });
     }
 
     const lineSubtotal = round2(
@@ -511,11 +475,7 @@ export const updateReturnStatus = async (req, res) => {
   // Restore stock when return is received
   if (status === "RECEIVED") {
     for (const p of order.products) {
-      if (isV2Line(p)) {
-        await restoreV2Line(p);
-      } else if (p.productId) {
-        await Product.findByIdAndUpdate(p.productId, { $inc: { stock: p.quantity } });
-      }
+      if (isCatalogLine(p)) await restoreLine(p);
     }
   }
 
@@ -678,9 +638,9 @@ export const createReplacementOrder = async (req, res) => {
     // Inventory enforcement
     for (const p of order.products) {
       if (!p.productId) continue;
-      if (isV2Line(p)) {
+      if (isCatalogLine(p)) {
         try {
-          await reserveV2Line({ productId: p.productId, sku: p.sku, quantity: p.quantity }, session);
+          await reserveLine({ productId: p.productId, sku: p.sku, quantity: p.quantity }, session);
         } catch (err) {
           await session.abortTransaction();
           if (err.status === 400) return res.status(400).json({ message: err.message });
@@ -688,17 +648,8 @@ export const createReplacementOrder = async (req, res) => {
         }
         continue;
       }
-      const product = await Product.findById(p.productId).session(session);
-      if (!product || !product.isActive) {
-        await session.abortTransaction();
-        return res.status(400).json({ message: "Product unavailable for replacement" });
-      }
-      if (product.stock < p.quantity) {
-        await session.abortTransaction();
-        return res.status(400).json({ message: `Insufficient stock for ${product.title}` });
-      }
-      product.stock -= p.quantity;
-      await product.save({ session });
+      await session.abortTransaction();
+      return res.status(400).json({ message: "Product unavailable for replacement" });
     }
 
     const replacement = new Order({
@@ -837,11 +788,7 @@ export const cancelOrder = async (req, res) => {
 
     // Restore stock for each product
     for (const p of order.products) {
-      if (isV2Line(p)) {
-        await restoreV2Line(p, session);
-      } else if (p.productId) {
-        await Product.findByIdAndUpdate(p.productId, { $inc: { stock: p.quantity } }, { session });
-      }
+      if (isCatalogLine(p)) await restoreLine(p, session);
     }
 
     if (order.paymentStatus === "PAID") {

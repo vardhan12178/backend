@@ -113,7 +113,7 @@ export const getCart = async (req, res) => {
     try {
         const user = await User.findById(req.user.userId).select('cart').lean();
         if (!user) return res.status(404).json({ message: 'User not found' });
-        return res.json({ cart: user.cart || [] });
+        return res.json({ cart: (user.cart || []).filter((it) => it.catalog === 'v2') });
     } catch (err) {
         console.error('Get cart error:', err);
         return res.status(500).json({ message: 'Internal server error' });
@@ -122,7 +122,8 @@ export const getCart = async (req, res) => {
 
 export const updateCart = async (req, res) => {
     try {
-        const items = Array.isArray(req.body.cart) ? req.body.cart : [];
+        // Only catalog lines are kept; lines from the retired catalog are dropped
+        const items = (Array.isArray(req.body.cart) ? req.body.cart : []).filter((it) => it?.catalog === 'v2');
         const user = await User.findByIdAndUpdate(
             req.user.userId,
             { cart: items },
@@ -141,7 +142,7 @@ export const getWishlist = async (req, res) => {
     try {
         const user = await User.findById(req.user.userId).select('wishlist').lean();
         if (!user) return res.status(404).json({ message: 'User not found' });
-        return res.json({ wishlist: user.wishlist || [] });
+        return res.json({ wishlist: (user.wishlist || []).filter((it) => it.catalog === 'v2') });
     } catch (err) {
         console.error('Get wishlist error:', err);
         return res.status(500).json({ message: 'Internal server error' });
@@ -150,7 +151,7 @@ export const getWishlist = async (req, res) => {
 
 export const updateWishlist = async (req, res) => {
     try {
-        const items = Array.isArray(req.body.wishlist) ? req.body.wishlist : [];
+        const items = (Array.isArray(req.body.wishlist) ? req.body.wishlist : []).filter((it) => it?.catalog === 'v2');
         const user = await User.findByIdAndUpdate(
             req.user.userId,
             { wishlist: items },

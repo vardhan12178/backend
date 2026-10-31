@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import CatalogProduct from "../models/CatalogProduct.js";
-import { intentPrompt, answerPrompt, sanitizeIntent, applyRanking } from "./aiSearchV2.js";
+import { intentPrompt, answerPrompt, sanitizeIntent, applyRanking } from "./aiSearch.js";
 
 // One-off model comparison for Ask VKart, run on the real server with the real API key.
 // Enable with AI_MODEL_PROBE=1 (default candidates) or a comma-separated model list, restart,

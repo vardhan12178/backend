@@ -1,4 +1,5 @@
-import Product from "../models/Product.js";
+import CatalogProduct from "../models/CatalogProduct.js";
+import { CATEGORY_GROUPS, visibleStatuses } from "../services/catalog.service.js";
 
 const SITE = "https://vkart.balavardhan.dev";
 const today = new Date().toISOString().slice(0, 10);
@@ -9,12 +10,10 @@ const staticPages = [
   { loc: "/blog", changefreq: "weekly", priority: "0.8" },
   { loc: "/about", changefreq: "monthly", priority: "0.7" },
   { loc: "/contact", changefreq: "monthly", priority: "0.7" },
-  { loc: "/compare", changefreq: "monthly", priority: "0.6" },
   { loc: "/careers", changefreq: "monthly", priority: "0.6" },
   { loc: "/terms", changefreq: "yearly", priority: "0.3" },
   { loc: "/privacy", changefreq: "yearly", priority: "0.3" },
   { loc: "/license", changefreq: "yearly", priority: "0.3" },
-  { loc: "/wishlist", changefreq: "weekly", priority: "0.5" },
   { loc: "/prime", changefreq: "monthly", priority: "0.5" },
 ];
 
@@ -23,13 +22,13 @@ const blogIds = Array.from({ length: 12 }, (_, i) => i + 1);
 
 /**
  * GET /api/sitemap.xml
- * Dynamic sitemap including all products and blog posts.
+ * Dynamic sitemap: static pages, storefront categories, every visible product and the blog posts.
  */
 export const getSitemap = async (_req, res) => {
   try {
-    // Fetch all active product IDs
-    const products = await Product.find({ isActive: true })
-      .select("_id updatedAt")
+    // Every product the storefront shows (archived ones are left out)
+    const products = await CatalogProduct.find({ status: { $in: visibleStatuses() } })
+      .select("slug updatedAt")
       .lean();
 
     let xml = `<?xml version="1.0" encoding="UTF-8"?>\n`;
@@ -45,13 +44,23 @@ export const getSitemap = async (_req, res) => {
       xml += `  </url>\n`;
     }
 
+    // Category pages
+    for (const g of CATEGORY_GROUPS) {
+      xml += `  <url>\n`;
+      xml += `    <loc>${SITE}/products?cat=${g.slug}</loc>\n`;
+      xml += `    <lastmod>${today}</lastmod>\n`;
+      xml += `    <changefreq>daily</changefreq>\n`;
+      xml += `    <priority>0.8</priority>\n`;
+      xml += `  </url>\n`;
+    }
+
     // Product pages
     for (const prod of products) {
       const lastmod = prod.updatedAt
         ? new Date(prod.updatedAt).toISOString().slice(0, 10)
         : today;
       xml += `  <url>\n`;
-      xml += `    <loc>${SITE}/product/${prod._id}</loc>\n`;
+      xml += `    <loc>${SITE}/products/${prod.slug}</loc>\n`;
       xml += `    <lastmod>${lastmod}</lastmod>\n`;
       xml += `    <changefreq>weekly</changefreq>\n`;
       xml += `    <priority>0.8</priority>\n`;

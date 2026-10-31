@@ -1,8 +1,8 @@
 import mongoose from "mongoose";
 const { Schema } = mongoose;
 
-// Catalog v2 product: one document per model with its variants embedded.
-// See CATALOG_V2_SCHEMA.md §3 for the field reference.
+// Catalog product: one document per model with its variants embedded.
+// See CATALOG_SCHEMA.md §3 for the field reference.
 
 /* ------------ Variant ------------ */
 const variantSchema = new Schema(

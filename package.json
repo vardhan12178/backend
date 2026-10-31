@@ -10,11 +10,11 @@
   "scripts": {
     "test": "dotenv -e .env.test -- node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --detectOpenHandles --forceExit",
     "start": "node server.js",
-    "vectorize:products": "node ./scripts/vectorize-products.js",
-    "catalog:import": "node ./scripts/catalog-v2/import.js",
-    "catalog:images": "node ./scripts/catalog-v2/images.js",
-    "catalog:eval": "node ./scripts/catalog-v2/eval-search.js",
+    "catalog:import": "node ./scripts/catalog/import.js",
+    "catalog:images": "node ./scripts/catalog/images.js",
+    "catalog:eval": "node ./scripts/catalog/eval-search.js",
     "pincodes:import": "node ./scripts/pincodes/import.js",
+    "cleanup:old-catalog": "node ./scripts/cleanup-old-catalog.js",
     "set-super-admin": "node ./scripts/set-super-admin.js"
   },
   "keywords": [],

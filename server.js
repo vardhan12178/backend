@@ -51,16 +51,16 @@ if (!process.env.AES_KEY || Buffer.from(process.env.AES_KEY, 'utf8').length !== 
 
   server.listen(PORT, '0.0.0.0', () => console.log(`[INFO] Server running on port ${PORT}`));
 
-  // Keep catalog v2 ratings in MongoDB in step with the review data shipped with this build
-  import('./services/catalogV2.ratings.js')
+  // Keep catalog ratings in MongoDB in step with the review data shipped with this build
+  import('./services/catalog.ratings.js')
     .then(({ syncRatings }) => syncRatings())
     .then(async (updated) => {
       if (!updated) return;
       const { invalidatePattern } = await import('./utils/redis.js');
-      await invalidatePattern('v2:*');
-      console.log(`[INFO] Catalog v2 ratings updated for ${updated} products`);
+      await invalidatePattern('catalog:*');
+      console.log(`[INFO] Catalog ratings updated for ${updated} products`);
     })
-    .catch((err) => console.error('[ERROR] Catalog v2 rating sync failed:', err.message));
+    .catch((err) => console.error('[ERROR] Catalog rating sync failed:', err.message));
 
   // One-off Gemini model comparison for Ask VKart (see services/aiModelProbe.js)
   if (process.env.AI_MODEL_PROBE) {
