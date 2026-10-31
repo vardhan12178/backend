@@ -14,6 +14,7 @@
     "catalog:import": "node ./scripts/catalog-v2/import.js",
     "catalog:images": "node ./scripts/catalog-v2/images.js",
     "catalog:eval": "node ./scripts/catalog-v2/eval-search.js",
+    "pincodes:import": "node ./scripts/pincodes/import.js",
     "set-super-admin": "node ./scripts/set-super-admin.js"
   },
   "keywords": [],

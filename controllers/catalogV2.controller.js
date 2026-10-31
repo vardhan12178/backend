@@ -1,6 +1,7 @@
 import redis, { CACHE_TTL } from "../utils/redis.js";
 import * as catalog from "../services/catalogV2.service.js";
 import { resolveCartLines } from "../services/catalogV2.stock.js";
+import { deliveryFor } from "../services/delivery.service.js";
 
 // Public read endpoints for catalog v2. Responses are cached under "v2:*";
 // scripts/catalog-v2/import.js clears that prefix after an import.
@@ -70,6 +71,17 @@ export const resolveCart = async (req, res) => {
     res.json({ items: await resolveCartLines(req.body.items) });
   } catch (err) {
     console.error("v2 resolveCart:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+};
+
+export const getDelivery = async (req, res) => {
+  try {
+    const result = await deliveryFor(req.params.pincode, { category: req.query.category });
+    res.set("Cache-Control", "public, max-age=3600");
+    res.json(result);
+  } catch (err) {
+    console.error("v2 getDelivery:", err);
     res.status(500).json({ error: "Server error" });
   }
 };

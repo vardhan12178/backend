@@ -32,6 +32,17 @@ router.get(
 router.get("/products/:slug", [slug], validate, catalogV2.getProduct);
 router.get("/products/:slug/similar", [slug, query("limit").optional().isInt({ min: 1, max: 24 }).toInt()], validate, catalogV2.getSimilar);
 
+// Delivery estimate for a PIN code (and optionally the storefront category, for large items)
+router.get(
+  "/delivery/:pincode",
+  [
+    param("pincode").isString().trim().isLength({ min: 1, max: 12 }),
+    query("category").optional().isString().trim().matches(/^[a-z-]{1,40}$/),
+  ],
+  validate,
+  catalogV2.getDelivery
+);
+
 router.post(
   "/cart/resolve",
   [

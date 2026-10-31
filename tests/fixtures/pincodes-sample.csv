@@ -1,0 +1,7 @@
+circlename,regionname,divisionname,officename,pincode,officetype,delivery,district,statename,latitude,longitude
+Karnataka Circle,Bangalore HQ Region,Bangalore East Division,Indiranagar S.O (Bangalore),560038,SO,Delivery,BENGALURU URBAN,KARNATAKA,12.9784,77.6408
+Karnataka Circle,Bangalore HQ Region,Bangalore East Division,HAL II Stage S.O,560038,SO,Non Delivery,BENGALURU URBAN,KARNATAKA,12.9719,77.6412
+Karnataka Circle,Bangalore HQ Region,Bangalore East Division,Jeevanbhimanagar B.O,560038,BO,Delivery,BENGALURU URBAN,KARNATAKA,NA,NA
+"North Eastern Circle","Manipur Region","Imphal Division","Imphal H.O",795001,HO,Delivery,IMPHAL WEST,MANIPUR,24.8074,93.9384
+Andaman & Nicobar Circle,Port Blair Region,Port Blair Division,Port Blair H.O,744101,HO,Delivery,SOUTH ANDAMAN,ANDAMAN & NICOBAR ISLANDS,11.6234,92.7265
+Bad Row,,,,12345,,,,,,

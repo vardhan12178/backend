@@ -280,6 +280,7 @@ product_reviews:
 - `GET /api/v2/products?category=&brand=a,b&minPrice=&maxPrice=&minDiscount=&inStock=&q=&sort=featured|price-asc|price-desc|discount|newest&page=&limit=`: cards plus `facets.brands` and `facets.price`.
 - `GET /api/v2/products/:slug`: full product, media resolved to `thumb`/`md`/`lg` URLs from `S3_PUBLIC_BASE_URL` (default: the S3 bucket URL).
 - `GET /api/v2/products/:slug/similar`: `$vectorSearch` on `catalog_v2_vector`, falling back to same category, closest price.
+- `GET /api/v2/delivery/:pincode?category=`: delivery estimate for a PIN code (`services/delivery.service.js`). Checks the code against India Post's directory in the `pincodes` collection (`npm run pincodes:import -- --file=<csv>` or `--api-key=<data.gov.in key>`); before that import, the state comes from the PIN prefix. Returns the place, a zone measured from sample warehouses (`metro` 1-2 days, `regional` 2-3, `national` 3-5, `remote` 6-9; large appliances +1 day with installation), and cash-on-delivery availability. Estimates only, not a courier API.
 - Drafts are visible until `CATALOG_V2_ACTIVE_ONLY=true`. Responses are cached under `v2:*`; the import script clears it.
 
 ---
