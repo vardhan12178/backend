@@ -1,6 +1,6 @@
 import { jest } from '@jest/globals';
 
-const { sanitizeIntent, buildFilters, rrfFuse, applyRanking, chatTurn, rankV2, diversify, needsIntent, MAX_RESULTS } = await import('../services/aiSearch.js');
+const { sanitizeIntent, buildFilters, rrfFuse, applyRanking, chatTurn, rankStoredTurn, diversify, needsIntent, MAX_RESULTS } = await import('../services/aiSearch.js');
 const { default: CatalogProduct } = await import('../models/CatalogProduct.js');
 
 const doc = (slug, extra = {}) => ({
@@ -59,7 +59,7 @@ describe('needsIntent', () => {
     });
 });
 
-describe('chatV2', () => {
+describe('chatTurn', () => {
     beforeEach(async () => {
         await CatalogProduct.syncIndexes();
         await CatalogProduct.insertMany([

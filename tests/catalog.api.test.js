@@ -122,7 +122,7 @@ describe('Catalog API', () => {
 
     it('applies the active sale to listings, product pages and the cart', async () => {
         await Sale.create({
-            name: 'Diwali Sale', startDate: new Date(Date.now() - 3600e3), endDate: new Date(Date.now() + 3600e3),
+            name: 'Diwali Sale', slug: 'diwali-sale', startDate: new Date(Date.now() - 3600e3), endDate: new Date(Date.now() + 3600e3),
             categories: [{ category: 'mobiles', discountPercent: 50, primeDiscountPercent: 60 }],
         });
         await redisMock.del('sale:active'); // earlier requests cached "no sale"

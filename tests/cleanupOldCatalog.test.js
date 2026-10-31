@@ -9,9 +9,9 @@ const id = () => new mongoose.Types.ObjectId();
 describe('cleanup:old-catalog', () => {
     beforeEach(async () => {
         await Order.collection.insertMany([
-            { userId: id(), products: [{ productId: id(), name: 'Old phone', quantity: 1, price: 100 }] },
-            { userId: id(), products: [{ productId: id(), catalog: 'v2', sku: 'A-1', name: 'New', quantity: 1, price: 100 }, { productId: id(), catalog: 'v1', name: 'Old', quantity: 1, price: 50 }] },
-            { userId: id(), products: [{ productId: id(), catalog: 'v2', sku: 'B-1', name: 'New only', quantity: 2, price: 200 }] },
+            { userId: id(), invoiceNumber: 'INV-1', products: [{ productId: id(), name: 'Old phone', quantity: 1, price: 100 }] },
+            { userId: id(), invoiceNumber: 'INV-2', products: [{ productId: id(), catalog: 'v2', sku: 'A-1', name: 'New', quantity: 1, price: 100 }, { productId: id(), catalog: 'v1', name: 'Old', quantity: 1, price: 50 }] },
+            { userId: id(), invoiceNumber: 'INV-3', products: [{ productId: id(), catalog: 'v2', sku: 'B-1', name: 'New only', quantity: 2, price: 200 }] },
         ]);
         await User.collection.insertOne({
             username: 'shopper', email: 'shopper@test.com',
