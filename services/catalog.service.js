@@ -90,7 +90,8 @@ export function toCard(raw, sale = null) {
     // Default variant's options, so listing tiles can add it to the cart directly
     options: v?.options || {},
     defaultInStock: Boolean(v && (v.stock == null || v.stock > 0) && v.keySpecs?.available !== false),
-    rating: ratingFor(p),
+    // The stored rating is the sample baseline plus published shopper reviews (see catalog.userReviews.js)
+    rating: p.rating?.count ? p.rating : ratingFor(p),
     // Clothing with several sizes: tiles ask for a size instead of guessing one
     needsSize: ((p.variantOptions || []).find((o) => o.name === "Size")?.values.length || 0) > 1,
     inStock: p.inStock,
@@ -116,7 +117,7 @@ export function toDetail(raw, sale = null) {
     },
     variants: p.variants.map((v) => ({ ...v, discountPercent: discountPercent(v), inStock: (v.stock ?? 0) > 0 })),
     id: String(p._id),
-    rating: ratingFor(p) || (p.rating?.count ? p.rating : null),
+    rating: p.rating?.count ? p.rating : ratingFor(p),
     reviews: reviewsFor(p),
     sale: terms,
   };
