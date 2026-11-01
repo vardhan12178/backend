@@ -115,24 +115,39 @@
     "groups": {},
     "common": [
       {
-        "src": "https://images.samsung.com/is/image/samsung/p6pim/in/ar60h18d13wnna/gallery/in-bespoke-ai-windfree%E2%84%A2-inverter-split-ac-ar60h18d13w-4-8-kw-1-5-3-star-2026-ar60h18d13wnna-549931652?$2052_1641_PNG$",
-        "alt": "Samsung 1.5 Ton 3-Star Bespoke AI WindFree Inverter Split AC"
+        "key": "air-conditioners/samsung-1-5-ton-3-star-bespoke-ai-windfree-inverter-split-ac/common-1",
+        "alt": "Samsung 1.5 Ton 3-Star Bespoke AI WindFree Inverter Split AC",
+        "sourceUrl": "https://images.samsung.com/is/image/samsung/p6pim/in/ar60h18d13wnna/gallery/in-bespoke-ai-windfree%E2%84%A2-inverter-split-ac-ar60h18d13w-4-8-kw-1-5-3-star-2026-ar60h18d13wnna-549931652?$2052_1641_PNG$",
+        "width": 2052,
+        "height": 1641
       },
       {
-        "src": "https://images.samsung.com/is/image/samsung/p6pim/in/ar60h18d13wnna/gallery/in-bespoke-ai-windfree%E2%84%A2-inverter-split-ac-ar60h18d13w-4-8-kw-1-5-3-star-2026-ar60h18d13wnna-549931653?$2052_1641_PNG$",
-        "alt": "Samsung 1.5 Ton 3-Star Bespoke AI WindFree Inverter Split AC, view 2"
+        "key": "air-conditioners/samsung-1-5-ton-3-star-bespoke-ai-windfree-inverter-split-ac/common-2",
+        "alt": "Samsung 1.5 Ton 3-Star Bespoke AI WindFree Inverter Split AC, view 2",
+        "sourceUrl": "https://images.samsung.com/is/image/samsung/p6pim/in/ar60h18d13wnna/gallery/in-bespoke-ai-windfree%E2%84%A2-inverter-split-ac-ar60h18d13w-4-8-kw-1-5-3-star-2026-ar60h18d13wnna-549931653?$2052_1641_PNG$",
+        "width": 2052,
+        "height": 1641
       },
       {
-        "src": "https://images.samsung.com/is/image/samsung/p6pim/in/ar60h18d13wnna/gallery/in-bespoke-ai-windfree%E2%84%A2-inverter-split-ac-ar60h18d13w-4-8-kw-1-5-3-star-2026-ar60h18d13wnna-549931654?$2052_1641_PNG$",
-        "alt": "Samsung 1.5 Ton 3-Star Bespoke AI WindFree Inverter Split AC, view 3"
+        "key": "air-conditioners/samsung-1-5-ton-3-star-bespoke-ai-windfree-inverter-split-ac/common-3",
+        "alt": "Samsung 1.5 Ton 3-Star Bespoke AI WindFree Inverter Split AC, view 3",
+        "sourceUrl": "https://images.samsung.com/is/image/samsung/p6pim/in/ar60h18d13wnna/gallery/in-bespoke-ai-windfree%E2%84%A2-inverter-split-ac-ar60h18d13w-4-8-kw-1-5-3-star-2026-ar60h18d13wnna-549931654?$2052_1641_PNG$",
+        "width": 2052,
+        "height": 1641
       },
       {
-        "src": "https://images.samsung.com/is/image/samsung/p6pim/in/ar60h18d13wnna/gallery/in-bespoke-ai-windfree%E2%84%A2-inverter-split-ac-ar60h18d13w-4-8-kw-1-5-3-star-2026-ar60h18d13wnna-549931655?$2052_1641_PNG$",
-        "alt": "Samsung 1.5 Ton 3-Star Bespoke AI WindFree Inverter Split AC, view 4"
+        "key": "air-conditioners/samsung-1-5-ton-3-star-bespoke-ai-windfree-inverter-split-ac/common-4",
+        "alt": "Samsung 1.5 Ton 3-Star Bespoke AI WindFree Inverter Split AC, view 4",
+        "sourceUrl": "https://images.samsung.com/is/image/samsung/p6pim/in/ar60h18d13wnna/gallery/in-bespoke-ai-windfree%E2%84%A2-inverter-split-ac-ar60h18d13w-4-8-kw-1-5-3-star-2026-ar60h18d13wnna-549931655?$2052_1641_PNG$",
+        "width": 2052,
+        "height": 1641
       },
       {
-        "src": "https://images.samsung.com/is/image/samsung/p6pim/in/ar60h18d13wnna/gallery/in-bespoke-ai-windfree%E2%84%A2-inverter-split-ac-ar60h18d13w-4-8-kw-1-5-3-star-2026-ar60h18d13wnna-549931656?$2052_1641_PNG$",
-        "alt": "Samsung 1.5 Ton 3-Star Bespoke AI WindFree Inverter Split AC, view 5"
+        "key": "air-conditioners/samsung-1-5-ton-3-star-bespoke-ai-windfree-inverter-split-ac/common-5",
+        "alt": "Samsung 1.5 Ton 3-Star Bespoke AI WindFree Inverter Split AC, view 5",
+        "sourceUrl": "https://images.samsung.com/is/image/samsung/p6pim/in/ar60h18d13wnna/gallery/in-bespoke-ai-windfree%E2%84%A2-inverter-split-ac-ar60h18d13w-4-8-kw-1-5-3-star-2026-ar60h18d13wnna-549931656?$2052_1641_PNG$",
+        "width": 2052,
+        "height": 1641
       }
     ]
   },
