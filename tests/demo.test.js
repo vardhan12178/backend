@@ -11,6 +11,9 @@ jest.unstable_mockModule('../utils/redis.js', () => ({
 const { default: request } = await import('supertest');
 const { default: app } = await import('../app.js');
 const { default: User } = await import('../models/User.js');
+const { default: Order } = await import('../models/Order.js');
+const { default: CatalogProduct } = await import('../models/CatalogProduct.js');
+const { default: CatalogReview } = await import('../models/CatalogReview.js');
 
 describe('Demo logins', () => {
   afterEach(() => { delete process.env.DEMO_LOGINS; });
@@ -69,5 +72,46 @@ describe('Demo logins', () => {
     process.env.DEMO_LOGINS = 'false';
     expect((await request(app).post('/api/auth/demo/shopper')).status).toBe(404);
     expect((await request(app).post('/api/auth/demo/admin')).status).toBe(404);
+  });
+
+  describe('seeded delivered order', () => {
+    const mk = (slug, count) => ({
+      slug, title: `Brand ${slug}`, brand: 'Brand', category: 'mobiles', categoryPath: ['electronics', 'mobiles'], status: 'draft',
+      priceRange: { min: 9000, max: 9000 }, inStock: true, searchText: slug, rating: { average: 4, count },
+      variants: [{ sku: `${slug}-1`, options: { Color: 'Black' }, price: 9000, mrp: 10000, stock: 5, isDefault: true }],
+    });
+    beforeEach(async () => {
+      await CatalogProduct.syncIndexes();
+      await CatalogProduct.insertMany([mk('demo-a', 500), mk('demo-b', 400), mk('demo-c', 10)]);
+    });
+
+    test('the demo shopper can review the two most-rated products, once, and the next visit starts clean', async () => {
+      const login = await request(app).post('/api/auth/demo/shopper');
+      const auth = { Authorization: `Bearer ${login.body.token}` };
+
+      const state = await request(app).get('/api/v2/products/demo-a/reviews').set(auth);
+      expect(state.body.canReview).toBe(true);
+      expect((await request(app).get('/api/v2/products/demo-c/reviews').set(auth)).body.canReview).toBe(false);
+
+      const posted = await request(app).post('/api/v2/products/demo-a/reviews').set(auth)
+        .send({ stars: 5, title: 'Nice', body: 'Tried the demo review flow today.' });
+      expect(posted.status).toBe(201);
+      expect(await CatalogReview.countDocuments()).toBe(1);
+
+      // Signing in again wipes it, so the next visitor can write their own
+      const again = await request(app).post('/api/auth/demo/shopper');
+      expect(await CatalogReview.countDocuments()).toBe(0);
+      const next = await request(app).get('/api/v2/products/demo-a/reviews').set({ Authorization: `Bearer ${again.body.token}` });
+      expect(next.body.canReview).toBe(true);
+      expect(await Order.countDocuments({ orderId: 'VK-DEMO-DELIVERED' })).toBe(1);
+    });
+
+    test('the demo order never shows up in the admin order list', async () => {
+      await request(app).post('/api/auth/demo/shopper');
+      const admin = await request(app).post('/api/auth/demo/admin');
+      const res = await request(app).get('/api/admin/orders').set({ Authorization: `Bearer ${admin.body.token}` });
+      expect(res.status).toBe(200);
+      expect(res.body.some((o) => o.isDemo || o.orderId === 'VK-DEMO-DELIVERED')).toBe(false);
+    });
   });
 });
