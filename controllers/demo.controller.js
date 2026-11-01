@@ -56,31 +56,41 @@ async function ensureAccount(kind) {
 const DEMO_ORDER_ID = "VK-DEMO-DELIVERED";
 const DAY = 86400000;
 
-// Gives the demo shopper an already-delivered order for two popular products and clears any review a
-// previous visitor wrote, so "Write a review" can be tried on those products. The order is flagged
-// `isDemo`, which keeps it out of the admin order list and the dashboard figures.
-export async function prepareDemoShopper(userId) {
-  const picks = await CatalogProduct.find({ status: { $in: ["active", "draft"] }, "variants.0": { $exists: true } })
-    .sort({ "rating.count": -1 })
-    .limit(2)
-    .select("title slug variants priceRange media")
-    .lean();
-
-  const stale = await CatalogReview.find({ userId }).select("productId").lean();
-  if (stale.length) {
-    await CatalogReview.deleteMany({ userId });
-    const products = await CatalogProduct.find({ _id: { $in: stale.map((r) => r.productId) } }).select("slug priceRange").lean();
-    for (const p of products) await refreshRating(p);
+// Keeps the products of an existing demo order while they are still in the catalog, so reviews coming and
+// going (which move a product's rating count) never swap them. Otherwise picks the two most-rated.
+async function demoOrderLines() {
+  const existing = await Order.collection.findOne({ orderId: DEMO_ORDER_ID }, { projection: { products: 1 } });
+  const ids = (existing?.products || []).map((l) => l.productId);
+  if (ids.length) {
+    const found = await CatalogProduct.countDocuments({ _id: { $in: ids } });
+    if (found === ids.length) return existing.products;
   }
-  if (!picks.length) return;
-
-  const lines = picks.map((p) => {
+  const picks = await CatalogProduct.find({ status: { $in: ["active", "draft"] }, "variants.0": { $exists: true } })
+    .sort({ "rating.count": -1, slug: 1 })
+    .limit(2)
+    .select("title slug variants")
+    .lean();
+  return picks.map((p) => {
     const v = p.variants.find((x) => x.isDefault) || p.variants[0];
     return {
       productId: p._id, catalog: "v2", sku: v.sku, name: p.title, quantity: 1, price: v.price, lineTotal: v.price,
       selectedVariants: Object.entries(v.options || {}).map(([k, val]) => `${k}: ${val}`).join(", "),
     };
   });
+}
+
+// Gives the demo shopper an already-delivered order for two popular products and clears any review a
+// previous visitor wrote, so "Write a review" can be tried on those products. The order is flagged
+// `isDemo`, which keeps it out of the admin order list and the dashboard figures.
+export async function prepareDemoShopper(userId) {
+  const stale = await CatalogReview.find({ userId }).select("productId").lean();
+  if (stale.length) {
+    await CatalogReview.deleteMany({ userId });
+    const products = await CatalogProduct.find({ _id: { $in: stale.map((r) => r.productId) } }).select("slug priceRange").lean();
+    for (const p of products) await refreshRating(p);
+  }
+  const lines = await demoOrderLines();
+  if (!lines.length) return;
   const total = lines.reduce((n, l) => n + l.price, 0);
   const placed = new Date(Date.now() - 12 * DAY);
   const history = [["PLACED", 12], ["CONFIRMED", 12], ["PACKED", 11], ["SHIPPED", 10], ["OUT_FOR_DELIVERY", 8], ["DELIVERED", 8]]
