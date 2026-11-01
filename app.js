@@ -2,6 +2,7 @@ import express from 'express';
 import mongoose from 'mongoose';
 import cookieParser from 'cookie-parser';
 import { helmetMiddleware, corsMiddleware, commonSecurity, csrfMiddleware, csrfGuard, globalApiLimiter } from './middleware/security.js';
+import { demoGuard } from './middleware/demoGuard.js';
 import { notFound, errorHandler } from './middleware/errors.js';
 
 import authRoutes from './routes/auth.routes.js';
@@ -45,6 +46,7 @@ app.use(globalApiLimiter);
 app.use(csrfMiddleware);
 // Note: csrfGuard is now applied with exemptions for auth routes (see middleware/security.js)
 app.use(csrfGuard);
+app.use(demoGuard);
 
 // lightweight request timing
 app.use((req, res, next) => {
