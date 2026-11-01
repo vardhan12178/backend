@@ -297,7 +297,7 @@ export const getUserOrdersPaged = async (req, res) => {
 /* ADMIN - GET ALL ORDERS */
 export const getAllOrders = async (req, res) => {
   try {
-    const orders = await Order.find().sort({ createdAt: -1 }).lean();
+    const orders = await Order.find({ isDemo: { $ne: true } }).sort({ createdAt: -1 }).lean();
     res.json(orders);
   } catch (err) {
     console.error("getAllOrders error:", err);

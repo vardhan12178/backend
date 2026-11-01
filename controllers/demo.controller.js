@@ -2,6 +2,10 @@ import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
+import Order from "../models/Order.js";
+import CatalogProduct from "../models/CatalogProduct.js";
+import CatalogReview from "../models/CatalogReview.js";
+import { refreshRating } from "../services/catalog.userReviews.js";
 import { buildCookieOpts } from "../utils/cookies.js";
 import { buildSessionPayload } from "./auth.controller.js";
 
@@ -49,6 +53,63 @@ async function ensureAccount(kind) {
   return created._id;
 }
 
+const DEMO_ORDER_ID = "VK-DEMO-DELIVERED";
+const DAY = 86400000;
+
+// Keeps the products of an existing demo order while they are still in the catalog, so reviews coming and
+// going (which move a product's rating count) never swap them. Otherwise picks the two most-rated.
+async function demoOrderLines() {
+  const existing = await Order.collection.findOne({ orderId: DEMO_ORDER_ID }, { projection: { products: 1 } });
+  const ids = (existing?.products || []).map((l) => l.productId);
+  if (ids.length) {
+    const found = await CatalogProduct.countDocuments({ _id: { $in: ids } });
+    if (found === ids.length) return existing.products;
+  }
+  const picks = await CatalogProduct.find({ status: { $in: ["active", "draft"] }, "variants.0": { $exists: true } })
+    .sort({ "rating.count": -1, slug: 1 })
+    .limit(2)
+    .select("title slug variants")
+    .lean();
+  return picks.map((p) => {
+    const v = p.variants.find((x) => x.isDefault) || p.variants[0];
+    return {
+      productId: p._id, catalog: "v2", sku: v.sku, name: p.title, quantity: 1, price: v.price, lineTotal: v.price,
+      selectedVariants: Object.entries(v.options || {}).map(([k, val]) => `${k}: ${val}`).join(", "),
+    };
+  });
+}
+
+// Gives the demo shopper an already-delivered order for two popular products and clears any review a
+// previous visitor wrote, so "Write a review" can be tried on those products. The order is flagged
+// `isDemo`, which keeps it out of the admin order list and the dashboard figures.
+export async function prepareDemoShopper(userId) {
+  const stale = await CatalogReview.find({ userId }).select("productId").lean();
+  if (stale.length) {
+    await CatalogReview.deleteMany({ userId });
+    const products = await CatalogProduct.find({ _id: { $in: stale.map((r) => r.productId) } }).select("slug priceRange").lean();
+    for (const p of products) await refreshRating(p);
+  }
+  const lines = await demoOrderLines();
+  if (!lines.length) return;
+  const total = lines.reduce((n, l) => n + l.price, 0);
+  const placed = new Date(Date.now() - 12 * DAY);
+  const history = [["PLACED", 12], ["CONFIRMED", 12], ["PACKED", 11], ["SHIPPED", 10], ["OUT_FOR_DELIVERY", 8], ["DELIVERED", 8]]
+    .map(([stage, ago]) => ({ stage, date: new Date(Date.now() - ago * DAY) }));
+
+  await Order.collection.updateOne(
+    { orderId: DEMO_ORDER_ID },
+    {
+      $set: { userId, products: lines, subtotal: total, totalPrice: total, stage: "DELIVERED", statusHistory: history, isDemo: true },
+      $setOnInsert: {
+        orderId: DEMO_ORDER_ID, invoiceNumber: "VK-DEMO-INV", currency: "INR", paymentStatus: "PAID", paymentMethod: "UPI",
+        customer: { name: ACCOUNTS.shopper.name, email: ACCOUNTS.shopper.email }, shippingAddress: "221B Demo Street, Pune, Maharashtra 411001",
+        returnStatus: "NONE", returnHistory: [], createdAt: placed, updatedAt: new Date(),
+      },
+    },
+    { upsert: true }
+  );
+}
+
 const guard = (req, res) => {
   if (demoEnabled()) return false;
   res.status(404).json({ message: "Demo logins are turned off" });
@@ -59,6 +120,7 @@ export const demoShopper = async (req, res) => {
   try {
     if (guard(req, res)) return;
     const userId = await ensureAccount("shopper");
+    await prepareDemoShopper(userId);
     const token = jwt.sign({ userId, roles: ["user"], demo: "shopper" }, process.env.JWT_SECRET, { expiresIn: "12h" });
     res.cookie("jwt_token", token, buildCookieOpts(req, false));
     res.json({ ...(await buildSessionPayload(userId)), token, demo: true });

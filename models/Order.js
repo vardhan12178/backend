@@ -173,6 +173,9 @@ const orderSchema = new mongoose.Schema(
 
     cancelReason: { type: String, trim: true },
 
+    // Seeded for the demo shopper (controllers/demo.controller.js); kept out of admin lists and totals
+    isDemo: { type: Boolean, default: false },
+
     // FULL TIMELINE / HISTORY
     statusHistory: [
       {
