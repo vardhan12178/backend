@@ -1,4 +1,5 @@
 import CatalogProduct from "../models/CatalogProduct.js";
+import { notifyVariantChange } from "./alerts.service.js";
 import { CATEGORY_GROUPS, imagesFor, resolveImage, discountPercent, storefrontCategoryOf } from "./catalog.service.js";
 
 // Admin listing and edits for catalog: status, featured flag, and per-variant price, MRP and stock.
@@ -131,6 +132,7 @@ export async function updateVariant(id, sku, { price, mrp, stock }) {
   if (nextMrp < nextPrice) throw new AdminEditError("MRP can't be lower than the selling price");
   if (stock !== undefined && !(stock >= 0)) throw new AdminEditError("Stock can't be negative");
 
+  const before = { price: v.price, stock: v.stock || 0 };
   if (price !== undefined) v.price = price;
   if (mrp !== undefined) v.mrp = mrp;
   if (stock !== undefined) v.stock = stock;
@@ -138,5 +140,8 @@ export async function updateVariant(id, sku, { price, mrp, stock }) {
   p.priceRange = { min: Math.min(...prices), max: Math.max(...prices) };
   p.inStock = p.variants.some((x) => (x.stock || 0) > 0);
   await p.save();
+  // Shoppers watching this variant hear about a lower price or a restock; a failure here must not undo the edit
+  await notifyVariantChange(p._id, sku, before, { price: v.price, stock: v.stock || 0 })
+    .catch((err) => console.error("alerts after variant edit:", err.message));
   return toAdminRow(p.toObject());
 }

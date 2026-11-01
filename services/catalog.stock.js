@@ -1,4 +1,5 @@
 import CatalogProduct from "../models/CatalogProduct.js";
+import { notifyVariantChange } from "./alerts.service.js";
 import { imagesFor, resolveImage, saleFor, salePrice } from "./catalog.service.js";
 
 // Stock and pricing for catalog order lines (CATALOG_SCHEMA.md §9).
@@ -67,11 +68,17 @@ export async function reserveLine({ productId, sku, quantity }, session, { sale 
 /** Puts an order line's units back (cancellation, received return). */
 export async function restoreLine(line, session) {
   if (!line?.productId || !line.sku) return;
-  await CatalogProduct.updateOne(
+  const before = await CatalogProduct.findOneAndUpdate(
     { _id: line.productId, "variants.sku": line.sku },
     { $inc: { "variants.$.stock": line.quantity }, $set: { inStock: true } },
-    session ? { session } : undefined
-  );
+    { ...(session ? { session } : {}), new: false, projection: { variants: 1 } }
+  ).lean();
+  const was = before?.variants.find((v) => v.sku === line.sku);
+  // A cancelled order can bring an out-of-stock item back: tell the shoppers waiting for it
+  if (was && (was.stock || 0) <= 0) {
+    await notifyVariantChange(line.productId, line.sku, { price: was.price, stock: was.stock || 0 }, { price: was.price, stock: line.quantity })
+      .catch((err) => console.error("alerts after restock:", err.message));
+  }
 }
 
 /**
