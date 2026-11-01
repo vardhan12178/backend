@@ -106,6 +106,16 @@ describe('Demo logins', () => {
       expect(await Order.countDocuments({ orderId: 'VK-DEMO-DELIVERED' })).toBe(1);
     });
 
+    test('the demo order appears in the shopper\'s own orders list, once, however often they sign in', async () => {
+      await request(app).post('/api/auth/demo/shopper');
+      const login = await request(app).post('/api/auth/demo/shopper');
+      const res = await request(app).get('/api/profile/orders').set({ Authorization: `Bearer ${login.body.token}` });
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveLength(1);
+      expect(res.body[0].orderId).toBe('VK-DEMO-DELIVERED');
+      expect(res.body[0].stage).toBe('DELIVERED');
+    });
+
     test('the demo order never shows up in the admin order list', async () => {
       await request(app).post('/api/auth/demo/shopper');
       const admin = await request(app).post('/api/auth/demo/admin');

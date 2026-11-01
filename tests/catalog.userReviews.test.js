@@ -20,6 +20,7 @@ const { default: Order } = await import('../models/Order.js');
 const { default: User } = await import('../models/User.js');
 const { publicName, cleanText } = await import('../services/catalog.userReviews.js');
 const { syncRatings } = await import('../services/catalog.ratings.js');
+const { ratingFor } = await import('../services/catalog.reviews.js');
 
 const auth = (token) => ({ Authorization: `Bearer ${token}` });
 const goodReview = { stars: 5, title: 'Great', body: 'Battery easily lasts two days and the screen is lovely.' };
@@ -100,6 +101,27 @@ describe('Shopper reviews', () => {
         const stored = await CatalogProduct.findOne({ slug: 'rev-phone' }).lean();
         expect(stored.rating.count).toBe(1); // product has no sample reviews, so only the real one counts
         expect(stored.rating.average).toBe(5);
+    });
+
+    it('counts shopper reviews in the rating the product page and listing show, on top of the sample baseline', async () => {
+        // A product that has sample reviews, so its rating is baseline + real, not real alone
+        const slug = 'salty-royal-deepam-lantern-tassel-earrings';
+        const sampled = await CatalogProduct.create({
+            slug, title: 'Salty Royal Deepam Lantern Tassel Earrings', brand: 'Salty', category: 'fashion-women', categoryPath: ['fashion', 'fashion-women'],
+            status: 'draft', launchDate: '2026-01', priceRange: { min: 749, max: 749 }, inStock: true, searchText: slug,
+            variants: [{ sku: 'SLT-1', options: { Color: 'Gold' }, price: 749, mrp: 1339, stock: 5, isDefault: true }],
+        });
+        const base = ratingFor({ slug, priceRange: sampled.priceRange });
+        expect(base.count).toBeGreaterThan(1000);
+
+        const { token } = await shopperWithOrder(sampled);
+        expect((await request(app).post(`/api/v2/products/${slug}/reviews`).set(auth(token)).send({ ...goodReview, stars: 1 })).status).toBe(201);
+
+        const expected = Math.round(((base.average * base.count + 1) / (base.count + 1)) * 10) / 10;
+        const detail = await request(app).get(`/api/v2/products/${slug}`);
+        expect(detail.body.rating).toEqual({ average: expected, count: base.count + 1 });
+        const list = await request(app).get('/api/v2/products?limit=10');
+        expect(list.body.products.find((p) => p.slug === slug).rating).toEqual({ average: expected, count: base.count + 1 });
     });
 
     it('validates stars and length, and strips markup', async () => {

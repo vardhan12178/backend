@@ -108,6 +108,10 @@ export async function prepareDemoShopper(userId) {
     },
     { upsert: true }
   );
+
+  // Checkout links every order to the user's `orders` list, and the Orders page reads that list
+  const saved = await Order.collection.findOne({ orderId: DEMO_ORDER_ID }, { projection: { _id: 1 } });
+  await User.updateOne({ _id: userId }, { $addToSet: { orders: saved._id } });
 }
 
 const guard = (req, res) => {
