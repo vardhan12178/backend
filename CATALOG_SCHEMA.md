@@ -259,6 +259,8 @@ categories:
   { slug: 1 } unique, { parent: 1, sortOrder: 1 }
 product_reviews:
   { productId: 1, createdAt: -1 }, { productId: 1, rating: -1 }
+catalog_user_reviews:   # verified-buyer reviews (models/CatalogReview.js)
+  { productId: 1, userId: 1 } unique, { productId: 1, status: 1, createdAt: -1 }
 ```
 
 ---
