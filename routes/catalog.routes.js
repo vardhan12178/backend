@@ -1,7 +1,8 @@
 import express from "express";
 import { body, param, query } from "express-validator";
 import validate from "../middleware/validate.js";
-import { optionalAuth } from "../middleware/auth.js";
+import { optionalAuth, authenticateJWT } from "../middleware/auth.js";
+import * as reviews from "../controllers/catalogReviews.controller.js";
 import * as catalog from "../controllers/catalog.controller.js";
 import { SORT_KEYS, MAX_PAGE_SIZE } from "../services/catalog.service.js";
 
@@ -32,6 +33,19 @@ router.get(
 );
 
 router.get("/products/:slug", [slug], validate, catalog.getProduct);
+// Shopper reviews: anyone can read; only shoppers whose order was delivered can write
+const reviewBody = [
+  body("stars").isInt({ min: 1, max: 5 }).toInt(),
+  body("title").optional({ values: "falsy" }).isString().isLength({ max: 80 }),
+  body("body").isString().trim().isLength({ min: 10, max: 1500 }).withMessage("Write at least 10 characters"),
+];
+const reviewId = param("id").isMongoId();
+router.get("/products/:slug/reviews", optionalAuth, [slug, query("sort").optional().isIn(["recent", "helpful", "high", "low"]), query("page").optional().isInt({ min: 1, max: 500 }).toInt(), query("limit").optional().isInt({ min: 1, max: 30 }).toInt()], validate, reviews.list);
+router.post("/products/:slug/reviews", authenticateJWT, [slug, ...reviewBody], validate, reviews.create);
+router.put("/reviews/:id", authenticateJWT, [reviewId, body("stars").optional().isInt({ min: 1, max: 5 }).toInt(), body("title").optional().isString().isLength({ max: 80 }), body("body").optional().isString().trim().isLength({ min: 10, max: 1500 })], validate, reviews.update);
+router.delete("/reviews/:id", authenticateJWT, [reviewId], validate, reviews.remove);
+router.post("/reviews/:id/helpful", authenticateJWT, [reviewId], validate, reviews.helpful);
+
 router.get("/products/:slug/similar", [slug, query("limit").optional().isInt({ min: 1, max: 24 }).toInt()], validate, catalog.getSimilar);
 
 // Delivery estimate for a PIN code (and optionally the storefront category, for large items)
