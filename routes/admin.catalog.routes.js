@@ -3,6 +3,7 @@ import { body, param, query } from "express-validator";
 import validate from "../middleware/validate.js";
 import { authenticateJWT } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/permissions.js";
+import * as reviews from "../controllers/catalogReviews.controller.js";
 import * as admin from "../controllers/admin.catalog.controller.js";
 import { STATUSES } from "../services/catalog.admin.js";
 
@@ -67,5 +68,11 @@ router.patch(
   validate,
   admin.patchVariant
 );
+
+// Shopper review moderation uses the "reviews" admin permission
+const reviewsRead = [authenticateJWT, requirePermission("reviews", "read")];
+const reviewsWrite = [authenticateJWT, requirePermission("reviews", "write")];
+router.get("/reviews", reviewsRead, [query("status").optional().isIn(["published", "hidden"]), query("page").optional().isInt({ min: 1, max: 1000 }).toInt(), query("limit").optional().isInt({ min: 1, max: 50 }).toInt()], validate, reviews.adminList);
+router.patch("/reviews/:id", reviewsWrite, [param("id").isMongoId(), body("status").isIn(["published", "hidden"])], validate, reviews.adminSetStatus);
 
 export default router;
