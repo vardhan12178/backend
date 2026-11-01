@@ -8,6 +8,7 @@ import {
   googleLimiter,
 } from '../middleware/security.js';
 import * as authController from '../controllers/auth.controller.js';
+import * as demoController from '../controllers/demo.controller.js';
 import { authenticateJWT, optionalAuth } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -23,6 +24,8 @@ router.post(
 
 router.post('/login', authLimiter, authController.login);
 router.get('/auth/check', optionalAuth, authController.checkAuth);
+router.post('/auth/demo/shopper', authLimiter, demoController.demoShopper);
+router.post('/auth/demo/admin', authLimiter, demoController.demoAdmin);
 router.post('/auth/google', googleLimiter, authController.googleAuth);
 router.post('/forgot', forgotLimiter, authController.forgotPassword);
 router.post('/reset', resetLimiter, authController.resetPassword);

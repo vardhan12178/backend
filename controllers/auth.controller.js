@@ -24,7 +24,7 @@ const createEmailVerifyToken = () => {
     return { tokenRaw, tokenHash, expiresAt };
 };
 
-const buildSessionPayload = async (userId) => {
+export const buildSessionPayload = async (userId) => {
     const user = await User.findById(userId)
         .select(AUTH_USER_SELECT)
         .lean();

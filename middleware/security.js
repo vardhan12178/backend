@@ -81,6 +81,8 @@ export const csrfGuard = (req, res, next) => {
     '/api/register',
     '/api/auth/google',
     '/api/admin/login',
+    '/api/auth/demo/shopper',
+    '/api/auth/demo/admin',
     '/api/admin/google',
     '/api/logout',
     '/api/admin/logout',
