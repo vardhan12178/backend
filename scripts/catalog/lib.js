@@ -135,7 +135,7 @@ const CATEGORY_NOUN = {
   "air-conditioners": "air conditioner", "kitchen-appliances": "kitchen appliance",
 };
 
-// Short readable paragraph that gets embedded (CATALOG_SCHEMA.md §6). Filtering never relies on it.
+// Short readable paragraph that gets embedded (docs/CATALOG_SCHEMA.md §6). Filtering never relies on it.
 export function buildSearchText(doc) {
   const { min, max } = derive(doc).priceRange;
   const price = min === max ? `priced at ${rupees(min)}` : `priced from ${rupees(min)} to ${rupees(max)}`;

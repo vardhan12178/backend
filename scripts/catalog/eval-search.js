@@ -6,7 +6,7 @@ import dotenv from "dotenv";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { hybridSearch, sanitizeIntent, MAX_RESULTS } from "../../services/aiSearch.js";
 
-// Retrieval quality for the catalog Ask VKart search (AI_UPGRADE_PLAN.md, phase 0).
+// Retrieval quality for the catalog Ask VKart search (docs/AI_UPGRADE_PLAN.md, phase 0).
 //
 //   node scripts/catalog/eval-search.js [--mode=all|keyword|vector|hybrid] [--verbose]
 //

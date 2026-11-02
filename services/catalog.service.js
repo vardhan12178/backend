@@ -2,7 +2,7 @@ import CatalogProduct from "../models/CatalogProduct.js";
 import { ratingFor, reviewsFor } from "./catalog.reviews.js";
 import { filtersFor, parseSelections, matchFor, facetStages, shapeFacet } from "./catalog.filters.js";
 
-// Read side of the catalog API (CATALOG_SCHEMA.md §8).
+// Read side of the catalog API (docs/CATALOG_SCHEMA.md §8).
 // Controllers stay thin; everything that shapes queries or responses lives here.
 
 const BUCKET = process.env.S3_BUCKET || "vkart-assets-mumbai";

@@ -1,5 +1,7 @@
 # VKart Backend — Action Items
 
+> Status: notes from a July 2026 code review; not re-audited since. Some items (for example refunds and admin role checks) have been addressed in later work.
+
 Tracked from a code review (Jul 2026). Portfolio/demo context — not blocking, but do not lose track before going live with real money.
 
 ---

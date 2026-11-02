@@ -7,7 +7,7 @@ import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { s3 } from "../../utils/s3.js";
 import { DATA_DIR, loadProducts } from "./lib.js";
 
-// Moves catalog images from the brands' sites to S3 (CATALOG_SCHEMA.md §5).
+// Moves catalog images from the brands' sites to S3 (docs/CATALOG_SCHEMA.md §5).
 //
 //   node scripts/catalog/images.js [--dry-run] [--category=mobiles] [--limit=10] [--out=./tmp-images]
 //

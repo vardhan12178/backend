@@ -1,5 +1,5 @@
-# Use the official Node.js LTS image
-FROM node:18-alpine
+# Node 24 matches "engines" in package.json
+FROM node:24-alpine
 
 # Set working directory inside container
 WORKDIR /app
