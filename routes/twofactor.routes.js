@@ -8,15 +8,15 @@ const router = express.Router();
 
 // Strict rate limiter for 2FA verification (prevent brute-force)
 const twoFAVerifyLimiter = rateLimit({
-  windowMs: 60 * 1000,  // 1 minute
-  max: 5,               // 5 attempts per minute
+  windowMs: 60 * 1000, // 1 minute
+  max: 5, // 5 attempts per minute
   standardHeaders: true,
   message: { message: "Too many 2FA attempts. Please try again later." },
   // A single test file drives many login-verify attempts (valid/invalid/
   // expired/replay cases) against one shared app instance — not testing
   // rate-limiting itself, so skip enforcement under test like the other
   // limiters in middleware/security.js.
-  skip: () => process.env.NODE_ENV === 'test',
+  skip: () => process.env.NODE_ENV === "test",
 });
 
 // Middleware to fetch full user document (Used by 2FA setup/toggle routes)
@@ -44,6 +44,11 @@ router.post("/2fa/disable", authenticateJWT, requireUserDoc, twoFactorController
 router.post("/2fa/login-verify", twoFAVerifyLimiter, twoFactorController.verify2FA);
 
 // 5) suppress popup
-router.post("/2fa/suppress", authenticateJWT, requireUserDoc, twoFactorController.suppress2FAPrompt);
+router.post(
+  "/2fa/suppress",
+  authenticateJWT,
+  requireUserDoc,
+  twoFactorController.suppress2FAPrompt
+);
 
 export default router;

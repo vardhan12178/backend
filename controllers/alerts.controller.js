@@ -7,13 +7,26 @@ const fail = (res, err, where) => {
 };
 
 export const list = async (req, res) => {
-  try { res.json({ alerts: await listAlerts(req.user.userId) }); } catch (err) { fail(res, err, "list"); }
+  try {
+    res.json({ alerts: await listAlerts(req.user.userId) });
+  } catch (err) {
+    fail(res, err, "list");
+  }
 };
 
 export const create = async (req, res) => {
-  try { res.status(201).json(await createAlert(req.user.userId, req.body)); } catch (err) { fail(res, err, "create"); }
+  try {
+    res.status(201).json(await createAlert(req.user.userId, req.body));
+  } catch (err) {
+    fail(res, err, "create");
+  }
 };
 
 export const remove = async (req, res) => {
-  try { await removeAlert(req.user.userId, req.params.id); res.json({ ok: true }); } catch (err) { fail(res, err, "remove"); }
+  try {
+    await removeAlert(req.user.userId, req.params.id);
+    res.json({ ok: true });
+  } catch (err) {
+    fail(res, err, "remove");
+  }
 };

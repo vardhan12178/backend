@@ -18,7 +18,10 @@ router.get(
   read,
   [
     query("q").optional().isString().isLength({ max: 80 }),
-    query("category").optional().isString().matches(/^[a-z-]{1,40}$/),
+    query("category")
+      .optional()
+      .isString()
+      .matches(/^[a-z-]{1,40}$/),
     query("status").optional().isIn(STATUSES),
     query("stock").optional().isIn(["low", "out"]),
     query("sort").optional().isIn(["updated", "title", "stock"]),
@@ -39,7 +42,10 @@ router.post(
     body("ids.*").optional().isMongoId(),
     body("filter").optional().isObject(),
     body("filter.q").optional().isString().isLength({ max: 80 }),
-    body("filter.category").optional().isString().matches(/^[a-z-]{1,40}$/),
+    body("filter.category")
+      .optional()
+      .isString()
+      .matches(/^[a-z-]{1,40}$/),
     body("filter.status").optional().isIn(STATUSES),
     body("filter.stock").optional().isIn(["low", "out"]),
   ],
@@ -50,7 +56,11 @@ router.post(
 router.patch(
   "/products/:id",
   write,
-  [id, body("status").optional().isIn(STATUSES), body("isFeatured").optional().isBoolean().toBoolean()],
+  [
+    id,
+    body("status").optional().isIn(STATUSES),
+    body("isFeatured").optional().isBoolean().toBoolean(),
+  ],
   validate,
   admin.patchProduct
 );
@@ -72,7 +82,23 @@ router.patch(
 // Shopper review moderation uses the "reviews" admin permission
 const reviewsRead = [authenticateJWT, requirePermission("reviews", "read")];
 const reviewsWrite = [authenticateJWT, requirePermission("reviews", "write")];
-router.get("/reviews", reviewsRead, [query("status").optional().isIn(["published", "hidden"]), query("page").optional().isInt({ min: 1, max: 1000 }).toInt(), query("limit").optional().isInt({ min: 1, max: 50 }).toInt()], validate, reviews.adminList);
-router.patch("/reviews/:id", reviewsWrite, [param("id").isMongoId(), body("status").isIn(["published", "hidden"])], validate, reviews.adminSetStatus);
+router.get(
+  "/reviews",
+  reviewsRead,
+  [
+    query("status").optional().isIn(["published", "hidden"]),
+    query("page").optional().isInt({ min: 1, max: 1000 }).toInt(),
+    query("limit").optional().isInt({ min: 1, max: 50 }).toInt(),
+  ],
+  validate,
+  reviews.adminList
+);
+router.patch(
+  "/reviews/:id",
+  reviewsWrite,
+  [param("id").isMongoId(), body("status").isIn(["published", "hidden"])],
+  validate,
+  reviews.adminSetStatus
+);
 
 export default router;

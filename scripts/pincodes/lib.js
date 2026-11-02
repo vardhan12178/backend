@@ -13,7 +13,10 @@ const FIELDS = {
   lng: ["longitude", "long", "lng"],
 };
 
-const squash = (s) => String(s).toLowerCase().replace(/[^a-z]/g, "");
+const squash = (s) =>
+  String(s)
+    .toLowerCase()
+    .replace(/[^a-z]/g, "");
 
 // Minimal RFC 4180 parser: quoted fields, escaped quotes, commas and newlines inside quotes
 export function parseCsv(text) {
@@ -25,14 +28,19 @@ export function parseCsv(text) {
   for (let i = 0; i < src.length; i++) {
     const c = src[i];
     if (quoted) {
-      if (c === '"' && src[i + 1] === '"') { field += '"'; i++; }
-      else if (c === '"') quoted = false;
+      if (c === '"' && src[i + 1] === '"') {
+        field += '"';
+        i++;
+      } else if (c === '"') quoted = false;
       else field += c;
     } else if (c === '"') quoted = true;
-    else if (c === ",") { row.push(field); field = ""; }
-    else if (c === "\n" || c === "\r") {
+    else if (c === ",") {
+      row.push(field);
+      field = "";
+    } else if (c === "\n" || c === "\r") {
       if (c === "\r" && src[i + 1] === "\n") i++;
-      row.push(field); field = "";
+      row.push(field);
+      field = "";
       if (row.some((f) => f !== "")) rows.push(row);
       row = [];
     } else field += c;
@@ -45,25 +53,37 @@ export function parseCsv(text) {
 
 const SMALL = new Set(["and", "of", "the"]);
 export const titleCase = (s) =>
-  String(s || "").trim().toLowerCase().replace(/\s+/g, " ")
+  String(s || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ")
     .split(" ")
-    .map((w, i) => (i > 0 && SMALL.has(w) ? w : w.replace(/(^|[-(])([a-z])/g, (m, p, c) => p + c.toUpperCase())))
+    .map((w, i) =>
+      i > 0 && SMALL.has(w) ? w : w.replace(/(^|[-(])([a-z])/g, (m, p, c) => p + c.toUpperCase())
+    )
     .join(" ");
 
 // "INDIRANAGAR (BANGALORE) S.O" -> "Indiranagar"
 export const cleanOffice = (s) =>
-  titleCase(String(s || "").replace(/\s*\(.*?\)\s*/g, " ").trim().replace(/\s+(s\.?o|b\.?o|h\.?o|g\.?p\.?o|mdg)\.?$/i, ""));
+  titleCase(
+    String(s || "")
+      .replace(/\s*\(.*?\)\s*/g, " ")
+      .trim()
+      .replace(/\s+(s\.?o|b\.?o|h\.?o|g\.?p\.?o|mdg)\.?$/i, "")
+  );
 
 const num = (v) => {
   const n = Number.parseFloat(v);
   return Number.isFinite(n) ? n : null;
 };
-const inIndia = (lat, lng) => lat != null && lng != null && lat > 6 && lat < 38 && lng > 68 && lng < 98;
+const inIndia = (lat, lng) =>
+  lat != null && lng != null && lat > 6 && lat < 38 && lng > 68 && lng < 98;
 
 export function normalizeRecord(raw) {
   const byKey = new Map(Object.entries(raw).map(([k, v]) => [squash(k), v]));
   const get = (name) => {
-    for (const alias of FIELDS[name]) if (byKey.has(alias)) return String(byKey.get(alias) ?? "").trim();
+    for (const alias of FIELDS[name])
+      if (byKey.has(alias)) return String(byKey.get(alias) ?? "").trim();
     return "";
   };
   const pincode = get("pincode").replace(/\D/g, "");
@@ -101,7 +121,8 @@ export function aggregate(records) {
     if (!byPin.has(r.pincode)) byPin.set(r.pincode, []);
     byPin.get(r.pincode).push(r);
   }
-  const rank = (r) => (r.officeType === "HO" ? 0 : r.officeType === "SO" ? 1 : 2) + (r.delivery ? 0 : 3);
+  const rank = (r) =>
+    (r.officeType === "HO" ? 0 : r.officeType === "SO" ? 1 : 2) + (r.delivery ? 0 : 3);
   return [...byPin.entries()].map(([pin, offices]) => {
     const main = [...offices].sort((a, b) => rank(a) - rank(b))[0];
     const located = offices.map((o) => o.location).filter(Boolean);
@@ -112,7 +133,10 @@ export function aggregate(records) {
       state: mostCommon(offices.map((o) => o.state)),
       delivery: offices.some((o) => o.delivery),
       location: located.length
-        ? { lat: +median(located.map((l) => l.lat)).toFixed(4), lng: +median(located.map((l) => l.lng)).toFixed(4) }
+        ? {
+            lat: +median(located.map((l) => l.lat)).toFixed(4),
+            lng: +median(located.map((l) => l.lng)).toFixed(4),
+          }
         : undefined,
     };
   });

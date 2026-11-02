@@ -2,7 +2,12 @@ import jwt from "jsonwebtoken";
 
 const SAFE = new Set(["GET", "HEAD", "OPTIONS"]);
 // Signing out must always work, even for the read-only admin
-const ALWAYS_ALLOWED = new Set(["/api/logout", "/api/admin/logout", "/api/auth/demo/shopper", "/api/auth/demo/admin"]);
+const ALWAYS_ALLOWED = new Set([
+  "/api/logout",
+  "/api/admin/logout",
+  "/api/auth/demo/shopper",
+  "/api/auth/demo/admin",
+]);
 // The shared shopper can do everything a shopper does except lock other visitors out of the account
 const SHOPPER_BLOCKED = [/^\/api\/profile\/password/, /^\/api\/2fa\//, /^\/api\/profile\/email/];
 
@@ -23,10 +28,14 @@ export const demoGuard = (req, res, next) => {
     return next();
   }
   if (claim === "admin") {
-    return res.status(403).json({ message: "The demo admin is read-only. Sign in as a shopper to place orders." });
+    return res
+      .status(403)
+      .json({ message: "The demo admin is read-only. Sign in as a shopper to place orders." });
   }
   if (claim === "shopper" && SHOPPER_BLOCKED.some((re) => re.test(path))) {
-    return res.status(403).json({ message: "Credentials can't be changed on the shared demo account." });
+    return res
+      .status(403)
+      .json({ message: "Credentials can't be changed on the shared demo account." });
   }
   return next();
 };

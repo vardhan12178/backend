@@ -13,7 +13,10 @@ export class AlertError extends Error {
   }
 }
 
-const labelOf = (v) => Object.values(v?.options || {}).filter(Boolean).join(" · ");
+const labelOf = (v) =>
+  Object.values(v?.options || {})
+    .filter(Boolean)
+    .join(" · ");
 const inr = (n) => `₹${Number(n).toLocaleString("en-IN")}`;
 
 export async function listAlerts(userId) {
@@ -22,16 +25,27 @@ export async function listAlerts(userId) {
 
 /** Sets an alert. A price alert needs the variant to be in stock-agnostic; a stock alert only makes sense when it is out. */
 export async function createAlert(userId, { productId, sku, kind }) {
-  const product = await CatalogProduct.findOne({ _id: productId, status: { $in: ["active", "draft"] } })
-    .select("slug title variants").lean();
+  const product = await CatalogProduct.findOne({
+    _id: productId,
+    status: { $in: ["active", "draft"] },
+  })
+    .select("slug title variants")
+    .lean();
   const variant = product?.variants.find((v) => v.sku === sku);
   if (!variant) throw new AlertError("Product not found", 404);
-  if (kind === "stock" && (variant.stock || 0) > 0) throw new AlertError("This item is in stock right now");
+  if (kind === "stock" && (variant.stock || 0) > 0)
+    throw new AlertError("This item is in stock right now");
   if ((await ProductAlert.countDocuments({ userId })) >= MAX_ALERTS_PER_USER) {
     throw new AlertError(`You can have up to ${MAX_ALERTS_PER_USER} alerts`);
   }
   const doc = {
-    userId, productId, sku, kind, slug: product.slug, title: product.title, label: labelOf(variant),
+    userId,
+    productId,
+    sku,
+    kind,
+    slug: product.slug,
+    title: product.title,
+    label: labelOf(variant),
     ...(kind === "price" ? { basePrice: variant.price } : {}),
   };
   try {
@@ -63,9 +77,12 @@ export async function notifyVariantChange(productId, sku, before, after) {
     for (const a of alerts) {
       const name = a.label ? `${a.title} (${a.label})` : a.title;
       await createUserNotification(
-        a.userId, "alert",
+        a.userId,
+        "alert",
         kind === "price" ? "Price drop" : "Back in stock",
-        kind === "price" ? `${name} is now ${inr(after.price)}, down from ${inr(a.basePrice)}.` : `${name} is back in stock.`,
+        kind === "price"
+          ? `${name} is now ${inr(after.price)}, down from ${inr(a.basePrice)}.`
+          : `${name} is back in stock.`,
         `/products/${a.slug}?variant=${encodeURIComponent(sku)}`
       );
       await ProductAlert.deleteOne({ _id: a._id });

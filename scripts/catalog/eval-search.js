@@ -19,17 +19,25 @@ import { hybridSearch, sanitizeIntent, MAX_RESULTS } from "../../services/aiSear
 dotenv.config();
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const CASES = JSON.parse(fs.readFileSync(path.join(here, "../../tests/fixtures/catalog-search-eval.json"), "utf8"));
+const CASES = JSON.parse(
+  fs.readFileSync(path.join(here, "../../tests/fixtures/catalog-search-eval.json"), "utf8")
+);
 const args = process.argv.slice(2);
 const modeArg = args.find((a) => a.startsWith("--mode="))?.split("=")[1] || "all";
 const MODES = modeArg === "all" ? ["keyword", "vector", "hybrid"] : [modeArg];
 const verbose = args.includes("--verbose");
 
-const model = new GoogleGenerativeAI(process.env.GEMINI_API_KEY).getGenerativeModel({ model: process.env.GEMINI_EMBEDDING_MODEL || "gemini-embedding-001" });
+const model = new GoogleGenerativeAI(process.env.GEMINI_API_KEY).getGenerativeModel({
+  model: process.env.GEMINI_EMBEDDING_MODEL || "gemini-embedding-001",
+});
 const cache = new Map();
 async function embed(text) {
   if (!cache.has(text)) {
-    const r = await model.embedContent({ content: { parts: [{ text }] }, taskType: "RETRIEVAL_QUERY", outputDimensionality: Number(process.env.EMBEDDING_DIM || 768) });
+    const r = await model.embedContent({
+      content: { parts: [{ text }] },
+      taskType: "RETRIEVAL_QUERY",
+      outputDimensionality: Number(process.env.EMBEDDING_DIM || 768),
+    });
     cache.set(text, r.embedding.values);
   }
   return cache.get(text);
@@ -58,7 +66,10 @@ async function main() {
       byType[c.type] = byType[c.type] || { n: 0, hits: 0 };
       byType[c.type].n += 1;
       byType[c.type].hits += hit ? 1 : 0;
-      if (verbose) console.log(`${mode.padEnd(7)} ${hit ? "✓" : "✗"} rank ${rank || "-"}  ${c.query}  →  ${slugs.slice(0, 4).join(", ")}`);
+      if (verbose)
+        console.log(
+          `${mode.padEnd(7)} ${hit ? "✓" : "✗"} rank ${rank || "-"}  ${c.query}  →  ${slugs.slice(0, 4).join(", ")}`
+        );
     }
     rows.push({
       mode,

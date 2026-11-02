@@ -31,9 +31,7 @@ export const ADMIN_ROLES = [
 // Roles an employee-with-write-access-to-Employees is allowed to assign.
 // super_admin is deliberately excluded here — only an existing super_admin
 // can grant it (enforced in middleware/permissions.js, not just this list).
-export const ASSIGNABLE_ROLES_FOR_NON_SUPER_ADMIN = ADMIN_ROLES.filter(
-  (r) => r !== "super_admin"
-);
+export const ASSIGNABLE_ROLES_FOR_NON_SUPER_ADMIN = ADMIN_ROLES.filter((r) => r !== "super_admin");
 
 // Every non-super-admin role gets read access to its own notification feed
 // by default — otherwise the admin-header bell 403s for every employee, since
@@ -44,7 +42,13 @@ export const ROLE_PRESETS = {
   customer_service: { users: "write", notifications: "read" },
   reviewer: { reviews: "write", notifications: "read" },
   order_manager: { orders: "write", notifications: "read" },
-  sales_manager: { coupons: "write", sales: "write", membership: "write", marketing: "write", notifications: "read" },
+  sales_manager: {
+    coupons: "write",
+    sales: "write",
+    membership: "write",
+    marketing: "write",
+    notifications: "read",
+  },
   // Scoped to the support inbox plus read-only order context — distinct
   // from order_manager (which can write orders but has no support access)
   // and from customer_service (which is really account moderation:

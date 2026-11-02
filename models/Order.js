@@ -135,15 +135,7 @@ const orderSchema = new mongoose.Schema(
     // RETURNS / REFUNDS
     returnStatus: {
       type: String,
-      enum: [
-        "NONE",
-        "REQUESTED",
-        "APPROVED",
-        "PICKED",
-        "RECEIVED",
-        "REJECTED",
-        "CLOSED",
-      ],
+      enum: ["NONE", "REQUESTED", "APPROVED", "PICKED", "RECEIVED", "REJECTED", "CLOSED"],
       default: "NONE",
     },
     returnType: { type: String, enum: ["REFUND", "REPLACEMENT"], default: "REFUND" },

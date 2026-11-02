@@ -1,18 +1,30 @@
 import CatalogProduct from "../models/CatalogProduct.js";
 import { ratingFor, reviewsFor } from "./catalog.reviews.js";
-import { filtersFor, parseSelections, matchFor, facetStages, shapeFacet } from "./catalog.filters.js";
+import {
+  filtersFor,
+  parseSelections,
+  matchFor,
+  facetStages,
+  shapeFacet,
+} from "./catalog.filters.js";
 
 // Read side of the catalog API (docs/CATALOG_SCHEMA.md §8).
 // Controllers stay thin; everything that shapes queries or responses lives here.
 
 const BUCKET = process.env.S3_BUCKET || "vkart-assets-mumbai";
 const REGION = process.env.S3_REGION || "ap-south-1";
-const IMAGE_BASE = (process.env.S3_PUBLIC_BASE_URL || `https://${BUCKET}.s3.${REGION}.amazonaws.com`).replace(/\/$/, "") + "/catalog-v2";
+const IMAGE_BASE =
+  (process.env.S3_PUBLIC_BASE_URL || `https://${BUCKET}.s3.${REGION}.amazonaws.com`).replace(
+    /\/$/,
+    ""
+  ) + "/catalog-v2";
 
 // Until launch every imported product is "draft"; set CATALOG_V2_ACTIVE_ONLY=true to hide drafts.
 // CATALOG_ACTIVE_ONLY=true hides drafts (CATALOG_V2_ACTIVE_ONLY is the older name for the same switch)
 export const visibleStatuses = () =>
-  ((process.env.CATALOG_ACTIVE_ONLY ?? process.env.CATALOG_V2_ACTIVE_ONLY) === "true" ? ["active"] : ["active", "draft"]);
+  (process.env.CATALOG_ACTIVE_ONLY ?? process.env.CATALOG_V2_ACTIVE_ONLY) === "true"
+    ? ["active"]
+    : ["active", "draft"];
 
 export const PAGE_SIZE = 24;
 export const MAX_PAGE_SIZE = 60;
@@ -30,8 +42,16 @@ export const CATEGORY_GROUPS = [
   { slug: "audio", name: "Audio", match: { category: "audio" } },
   { slug: "wearables", name: "Watches", match: { category: "wearables" } },
   { slug: "skincare", name: "Skincare", match: { category: "skincare" } },
-  { slug: "fashion-men", name: "Men's Fashion", match: { category: "fashion", "keySpecs.gender": { $ne: "Women" } } },
-  { slug: "fashion-women", name: "Women's Fashion", match: { category: "fashion", "keySpecs.gender": "Women" } },
+  {
+    slug: "fashion-men",
+    name: "Men's Fashion",
+    match: { category: "fashion", "keySpecs.gender": { $ne: "Women" } },
+  },
+  {
+    slug: "fashion-women",
+    name: "Women's Fashion",
+    match: { category: "fashion", "keySpecs.gender": "Women" },
+  },
   { slug: "appliances", name: "Appliances", match: { "categoryPath.0": "home-appliances" } },
   { slug: "kitchen-appliances", name: "Kitchen", match: { category: "kitchen-appliances" } },
   { slug: "grooming", name: "Grooming", match: { category: "grooming" } },
@@ -41,10 +61,16 @@ const GROUP_BY_SLUG = new Map(CATEGORY_GROUPS.map((g) => [g.slug, g]));
 
 /** The storefront category a stored product belongs to (fashion split by gender, appliances grouped). */
 export function storefrontCategoryOf(p) {
-  const group = CATEGORY_GROUPS.find((g) => Object.entries(g.match).every(([path, want]) => {
-    const actual = path.split(".").reduce((o, part) => (Array.isArray(o) ? o[Number(part)] : o?.[part]), p);
-    return want && typeof want === "object" && "$ne" in want ? actual !== want.$ne : actual === want;
-  }));
+  const group = CATEGORY_GROUPS.find((g) =>
+    Object.entries(g.match).every(([path, want]) => {
+      const actual = path
+        .split(".")
+        .reduce((o, part) => (Array.isArray(o) ? o[Number(part)] : o?.[part]), p);
+      return want && typeof want === "object" && "$ne" in want
+        ? actual !== want.$ne
+        : actual === want;
+    })
+  );
   return group?.slug || p.category;
 }
 
@@ -53,13 +79,21 @@ export function resolveImage(item) {
   if (!item) return null;
   if (item.key) {
     const base = `${IMAGE_BASE}/${item.key}`;
-    return { alt: item.alt, thumb: `${base}-thumb.webp`, md: `${base}-md.webp`, lg: `${base}-lg.webp`, width: item.width, height: item.height };
+    return {
+      alt: item.alt,
+      thumb: `${base}-thumb.webp`,
+      md: `${base}-md.webp`,
+      lg: `${base}-lg.webp`,
+      width: item.width,
+      height: item.height,
+    };
   }
   // Not uploaded yet: fall back to the brand's own URL for every size
   return { alt: item.alt, thumb: item.src, md: item.src, lg: item.src };
 }
 
-export const discountPercent = (v) => (v && v.mrp > v.price ? Math.round(((v.mrp - v.price) / v.mrp) * 100) : 0);
+export const discountPercent = (v) =>
+  v && v.mrp > v.price ? Math.round(((v.mrp - v.price) / v.mrp) * 100) : 0;
 
 const defaultVariantOf = (p) => p.variants.find((v) => v.isDefault) || p.variants[0];
 
@@ -89,7 +123,9 @@ export function toCard(raw, sale = null) {
     variantCount: p.variants.length,
     // Default variant's options, so listing tiles can add it to the cart directly
     options: v?.options || {},
-    defaultInStock: Boolean(v && (v.stock == null || v.stock > 0) && v.keySpecs?.available !== false),
+    defaultInStock: Boolean(
+      v && (v.stock == null || v.stock > 0) && v.keySpecs?.available !== false
+    ),
     // The stored rating is the sample baseline plus published shopper reviews (see catalog.userReviews.js)
     rating: p.rating?.count ? p.rating : ratingFor(p),
     // Clothing with several sizes: tiles ask for a size instead of guessing one
@@ -112,10 +148,16 @@ export function toDetail(raw, sale = null) {
     contentHash: undefined,
     media: {
       groupBy: media.groupBy,
-      groups: Object.fromEntries(Object.entries(media.groups || {}).map(([k, list]) => [k, resolveList(list)])),
+      groups: Object.fromEntries(
+        Object.entries(media.groups || {}).map(([k, list]) => [k, resolveList(list)])
+      ),
       common: resolveList(media.common),
     },
-    variants: p.variants.map((v) => ({ ...v, discountPercent: discountPercent(v), inStock: (v.stock ?? 0) > 0 })),
+    variants: p.variants.map((v) => ({
+      ...v,
+      discountPercent: discountPercent(v),
+      inStock: (v.stock ?? 0) > 0,
+    })),
     id: String(p._id),
     rating: p.rating?.count ? p.rating : ratingFor(p),
     reviews: reviewsFor(p),
@@ -158,11 +200,15 @@ export function applySale(p, sale) {
   if (!terms) return { product: p, terms: null };
   const variants = p.variants.map((v) => ({ ...v, price: salePrice(v, terms) }));
   const prices = variants.map((v) => v.price);
-  return { product: { ...p, variants, priceRange: { min: Math.min(...prices), max: Math.max(...prices) } }, terms };
+  return {
+    product: { ...p, variants, priceRange: { min: Math.min(...prices), max: Math.max(...prices) } },
+    terms,
+  };
 }
 
 /** A cache-key fragment that changes whenever the active sale starts, ends or is edited. */
-export const saleKey = (sale) => (sale ? `s${sale._id}-${new Date(sale.updatedAt || 0).getTime()}` : "s0");
+export const saleKey = (sale) =>
+  sale ? `s${sale._id}-${new Date(sale.updatedAt || 0).getTime()}` : "s0";
 
 /* ------------ Listing ------------ */
 const SORTS = {
@@ -177,8 +223,10 @@ const SORTS = {
 };
 export const SORT_KEYS = Object.keys(SORTS);
 
-const toList = (v) => (Array.isArray(v) ? v : String(v || "").split(",")).map((s) => s.trim()).filter(Boolean);
-const toNumber = (v) => (v === undefined || v === "" || v === null || !Number.isFinite(Number(v)) ? null : Number(v));
+const toList = (v) =>
+  (Array.isArray(v) ? v : String(v || "").split(",")).map((s) => s.trim()).filter(Boolean);
+const toNumber = (v) =>
+  v === undefined || v === "" || v === null || !Number.isFinite(Number(v)) ? null : Number(v);
 
 /** Builds the base $match from query params (everything except brand, so brand facets stay complete). */
 export function buildMatch(query = {}) {
@@ -195,13 +243,17 @@ export function buildMatch(query = {}) {
     if (max !== null) match["priceRange.min"].$lte = max;
   }
   if (query.inStock === "true" || query.inStock === true) match.inStock = true;
-  if (query.q && String(query.q).trim().length >= 2) match.$text = { $search: String(query.q).trim().slice(0, 100) };
+  if (query.q && String(query.q).trim().length >= 2)
+    match.$text = { $search: String(query.q).trim().slice(0, 100) };
   return match;
 }
 
 export async function listProducts(query = {}, { sale = null } = {}) {
   const page = Math.max(1, Math.floor(toNumber(query.page) || 1));
-  const limit = Math.min(MAX_PAGE_SIZE, Math.max(1, Math.floor(toNumber(query.limit) || PAGE_SIZE)));
+  const limit = Math.min(
+    MAX_PAGE_SIZE,
+    Math.max(1, Math.floor(toNumber(query.limit) || PAGE_SIZE))
+  );
   const searching = Boolean(buildMatch(query).$text);
   const requested = SORTS[query.sort] ? query.sort : searching ? "relevance" : "featured";
   const sortKey = requested === "relevance" && !searching ? "featured" : requested;
@@ -214,14 +266,34 @@ export async function listProducts(query = {}, { sale = null } = {}) {
 
   const addDiscount = {
     $addFields: {
-      _default: { $ifNull: [{ $first: { $filter: { input: "$variants", cond: "$$this.isDefault" } } }, { $first: "$variants" }] },
+      _default: {
+        $ifNull: [
+          { $first: { $filter: { input: "$variants", cond: "$$this.isDefault" } } },
+          { $first: "$variants" },
+        ],
+      },
     },
   };
   const computeDiscount = {
     $addFields: {
       discountPercent: {
-        $cond: [{ $gt: ["$_default.mrp", "$_default.price"] },
-          { $round: [{ $multiply: [{ $divide: [{ $subtract: ["$_default.mrp", "$_default.price"] }, "$_default.mrp"] }, 100] }, 0] }, 0],
+        $cond: [
+          { $gt: ["$_default.mrp", "$_default.price"] },
+          {
+            $round: [
+              {
+                $multiply: [
+                  {
+                    $divide: [{ $subtract: ["$_default.mrp", "$_default.price"] }, "$_default.mrp"],
+                  },
+                  100,
+                ],
+              },
+              0,
+            ],
+          },
+          0,
+        ],
       },
     },
   };
@@ -230,7 +302,9 @@ export async function listProducts(query = {}, { sale = null } = {}) {
     ["brand", brands.length && { $match: { brand: { $in: brands } } }],
     ["discount", minDiscount && { $match: { discountPercent: { $gte: minDiscount } } }],
     ["rating", minRating && { $match: { "rating.average": { $gte: minRating } } }],
-    ...specFilters.filter((f) => selections[f.key]).map((f) => [`f_${f.key}`, { $match: matchFor(f, selections[f.key]) }]),
+    ...specFilters
+      .filter((f) => selections[f.key])
+      .map((f) => [`f_${f.key}`, { $match: matchFor(f, selections[f.key]) }]),
   ].filter(([, stage]) => stage);
   const narrow = narrowing.map(([, stage]) => stage);
   const except = (key) => narrowing.filter(([k]) => k !== key).map(([, stage]) => stage);
@@ -244,13 +318,35 @@ export async function listProducts(query = {}, { sale = null } = {}) {
     computeDiscount,
     {
       $facet: {
-        brands: [...except("brand"), { $group: { _id: "$brand", count: { $sum: 1 } } }, { $sort: { count: -1, _id: 1 } }],
-        priceBounds: [{ $group: { _id: null, min: { $min: "$priceRange.min" }, max: { $max: "$priceRange.min" } } }],
+        brands: [
+          ...except("brand"),
+          { $group: { _id: "$brand", count: { $sum: 1 } } },
+          { $sort: { count: -1, _id: 1 } },
+        ],
+        priceBounds: [
+          {
+            $group: {
+              _id: null,
+              min: { $min: "$priceRange.min" },
+              max: { $max: "$priceRange.min" },
+            },
+          },
+        ],
         unfiltered: [{ $count: "n" }],
-        ratings: [...except("rating"), { $group: { _id: null, r4: ratingCount(4), r3: ratingCount(3) } }],
-        ...Object.fromEntries(specFilters.map((f) => [`spec_${f.key}`, [...except(`f_${f.key}`), ...facetStages(f)]])),
+        ratings: [
+          ...except("rating"),
+          { $group: { _id: null, r4: ratingCount(4), r3: ratingCount(3) } },
+        ],
+        ...Object.fromEntries(
+          specFilters.map((f) => [`spec_${f.key}`, [...except(`f_${f.key}`), ...facetStages(f)]])
+        ),
         total: [...narrow, { $count: "n" }],
-        items: [...narrow, { $sort: SORTS[sortKey] }, { $skip: (page - 1) * limit }, { $limit: limit }],
+        items: [
+          ...narrow,
+          { $sort: SORTS[sortKey] },
+          { $skip: (page - 1) * limit },
+          { $limit: limit },
+        ],
       },
     },
   ]);
@@ -265,10 +361,14 @@ export async function listProducts(query = {}, { sale = null } = {}) {
     sort: sortKey,
     facets: {
       brands: result.brands.map((b) => ({ name: b._id, count: b.count })),
-      price: result.priceBounds[0] ? { min: result.priceBounds[0].min, max: result.priceBounds[0].max } : null,
+      price: result.priceBounds[0]
+        ? { min: result.priceBounds[0].min, max: result.priceBounds[0].max }
+        : null,
       ratings: [4, 3].map((min) => ({ min, count: result.ratings[0]?.[`r${min}`] || 0 })),
       specs: specFilters
-        .map((f) => shapeFacet(f, result[`spec_${f.key}`], result.unfiltered[0]?.n || 0, selections[f.key]))
+        .map((f) =>
+          shapeFacet(f, result[`spec_${f.key}`], result.unfiltered[0]?.n || 0, selections[f.key])
+        )
         .filter(Boolean),
     },
   };
@@ -278,14 +378,21 @@ export async function listProducts(query = {}, { sale = null } = {}) {
 export async function getCategories() {
   const statuses = visibleStatuses();
   const counts = await Promise.all(
-    CATEGORY_GROUPS.map((g) => CatalogProduct.countDocuments({ status: { $in: statuses }, ...g.match }))
+    CATEGORY_GROUPS.map((g) =>
+      CatalogProduct.countDocuments({ status: { $in: statuses }, ...g.match })
+    )
   );
-  return CATEGORY_GROUPS.map((g, i) => ({ slug: g.slug, name: g.name, count: counts[i] })).filter((c) => c.count > 0);
+  return CATEGORY_GROUPS.map((g, i) => ({ slug: g.slug, name: g.name, count: counts[i] })).filter(
+    (c) => c.count > 0
+  );
 }
 
 /* ------------ Detail ------------ */
 export async function getProduct(slug, { sale = null } = {}) {
-  const p = await CatalogProduct.findOne({ slug: String(slug), status: { $in: visibleStatuses() } }).lean();
+  const p = await CatalogProduct.findOne({
+    slug: String(slug),
+    status: { $in: visibleStatuses() },
+  }).lean();
   return p ? toDetail(p, sale) : null;
 }
 
@@ -296,13 +403,17 @@ export async function getProduct(slug, { sale = null } = {}) {
  */
 export async function getSimilar(slug, { limit = 12, sale = null } = {}) {
   const safeLimit = Math.min(24, Math.max(1, Number(limit) || 12));
-  const p = await CatalogProduct.findOne({ slug: String(slug) }).select("+embedding").lean();
+  const p = await CatalogProduct.findOne({ slug: String(slug) })
+    .select("+embedding")
+    .lean();
   if (!p) return null;
 
-  const group = CATEGORY_GROUPS.find((g) => Object.entries(g.match).every(([k, v]) => {
-    const actual = k.split(".").reduce((o, part) => (o == null ? o : o[part]), p);
-    return v && typeof v === "object" && "$ne" in v ? actual !== v.$ne : actual === v;
-  }));
+  const group = CATEGORY_GROUPS.find((g) =>
+    Object.entries(g.match).every(([k, v]) => {
+      const actual = k.split(".").reduce((o, part) => (o == null ? o : o[part]), p);
+      return v && typeof v === "object" && "$ne" in v ? actual !== v.$ne : actual === v;
+    })
+  );
   const sameGroup = group ? group.match : { category: p.category };
   const statuses = visibleStatuses();
 

@@ -11,29 +11,59 @@ router.get("/plans", memberCtrl.getPlans);
 
 router.get("/status", authenticateJWT, memberCtrl.getStatus);
 
-router.post("/purchase", authenticateJWT, [
-  body("planId").isMongoId().withMessage("Valid planId is required"),
-], validate, memberCtrl.purchasePlan);
+router.post(
+  "/purchase",
+  authenticateJWT,
+  [body("planId").isMongoId().withMessage("Valid planId is required")],
+  validate,
+  memberCtrl.purchasePlan
+);
 
+router.post(
+  "/verify",
+  authenticateJWT,
+  [
+    body("razorpay_order_id").isString().notEmpty(),
+    body("razorpay_payment_id").isString().notEmpty(),
+    body("razorpay_signature").isString().notEmpty(),
+    body("planId").optional().isMongoId(),
+  ],
+  validate,
+  memberCtrl.verifyAndActivate
+);
 
-router.post("/verify", authenticateJWT, [
-  body("razorpay_order_id").isString().notEmpty(),
-  body("razorpay_payment_id").isString().notEmpty(),
-  body("razorpay_signature").isString().notEmpty(),
-  body("planId").optional().isMongoId(),
-], validate, memberCtrl.verifyAndActivate);
+router.get(
+  "/admin/plans",
+  authenticateJWT,
+  requirePermission("membership", "read"),
+  memberCtrl.adminListPlans
+);
 
-router.get("/admin/plans", authenticateJWT, requirePermission("membership", "read"), memberCtrl.adminListPlans);
+router.post(
+  "/admin/plans",
+  authenticateJWT,
+  requirePermission("membership", "write"),
+  [
+    body("name").isString().trim().notEmpty(),
+    body("price").isFloat({ gt: 0 }),
+    body("durationDays").isInt({ gt: 0 }),
+  ],
+  validate,
+  memberCtrl.adminCreatePlan
+);
 
+router.put(
+  "/admin/plans/:id",
+  authenticateJWT,
+  requirePermission("membership", "write"),
+  memberCtrl.adminUpdatePlan
+);
 
-router.post("/admin/plans", authenticateJWT, requirePermission("membership", "write"), [
-  body("name").isString().trim().notEmpty(),
-  body("price").isFloat({ gt: 0 }),
-  body("durationDays").isInt({ gt: 0 }),
-], validate, memberCtrl.adminCreatePlan);
-
-router.put("/admin/plans/:id", authenticateJWT, requirePermission("membership", "write"), memberCtrl.adminUpdatePlan);
-
-router.delete("/admin/plans/:id", authenticateJWT, requirePermission("membership", "write"), memberCtrl.adminDeletePlan);
+router.delete(
+  "/admin/plans/:id",
+  authenticateJWT,
+  requirePermission("membership", "write"),
+  memberCtrl.adminDeletePlan
+);
 
 export default router;

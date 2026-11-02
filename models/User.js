@@ -189,7 +189,6 @@ const userSchema = new Schema(
   }
 );
 
-
 userSchema.virtual("isPrime").get(function () {
   if (!this.membership || !this.membership.endDate) return false;
   return new Date() < this.membership.endDate;
@@ -200,8 +199,7 @@ userSchema.index({ email: 1 }, { unique: true });
 userSchema.index({ createdAt: -1 });
 
 userSchema.pre("save", function (next) {
-  if (this.isModified("email") && this.email)
-    this.email = this.email.toLowerCase().trim();
+  if (this.isModified("email") && this.email) this.email = this.email.toLowerCase().trim();
   if (this.isModified("username") && this.username)
     this.username = this.username.toLowerCase().trim();
   next();
@@ -212,7 +210,9 @@ userSchema.methods.verifyPassword = function (plain) {
 };
 
 userSchema.statics.findForLogin = function (identifier) {
-  const id = String(identifier || "").trim().toLowerCase();
+  const id = String(identifier || "")
+    .trim()
+    .toLowerCase();
   return this.findOne({ $or: [{ username: id }, { email: id }] }).select("+password");
 };
 

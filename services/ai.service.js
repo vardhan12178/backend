@@ -30,7 +30,7 @@ const chatModel = genAI.getGenerativeModel({
   model: CHAT_MODEL,
   generationConfig: {
     responseMimeType: "application/json",
-  }
+  },
 });
 
 // --- Timeout helper ---
@@ -67,11 +67,11 @@ const FALLBACK_RESPONSE = {
   structured: {
     response: {
       summary: "AI assistant is temporarily unavailable. Please use the search bar instead.",
-      points: []
+      points: [],
     },
-    followUp: "Try again in a minute."
+    followUp: "Try again in a minute.",
   },
-  products: []
+  products: [],
 };
 
 async function embedText(text, taskType) {
@@ -127,9 +127,8 @@ export async function parseSearchQuery(nlQuery, categories) {
   const result = await withTimeout(chatModel.generateContent(prompt));
   const parsed = JSON.parse(result.response.text());
 
-  const category = typeof parsed.category === "string" && slugs.includes(parsed.category)
-    ? parsed.category
-    : null;
+  const category =
+    typeof parsed.category === "string" && slugs.includes(parsed.category) ? parsed.category : null;
   const sort = SORT_VALUES.has(parsed.sort) ? parsed.sort : null;
   const clampRating = (n) => (Number.isFinite(n) ? Math.min(5, Math.max(1, Math.round(n))) : null);
   const positiveOrNull = (n) => (Number.isFinite(n) && n >= 0 ? n : null);
@@ -154,14 +153,19 @@ const SEARCH_MODEL = process.env.AI_V2_MODEL || CHAT_MODEL;
 const SEARCH_TIMEOUT_MS = Number(process.env.AI_V2_TIMEOUT_MS || 7000);
 // AI_V2_THINKING_LEVEL ("minimal" | "low" | ...) sets thinkingConfig.thinkingLevel for Gemini 3 models.
 const SEARCH_THINKING_LEVEL = process.env.AI_V2_THINKING_LEVEL || "";
-const fastModel = (thinking) => genAI.getGenerativeModel({
-  model: SEARCH_MODEL,
-  generationConfig: {
-    responseMimeType: "application/json",
-    temperature: 0.2,
-    ...(!thinking ? { thinkingConfig: { thinkingBudget: 0 } } : SEARCH_THINKING_LEVEL ? { thinkingConfig: { thinkingLevel: SEARCH_THINKING_LEVEL } } : {}),
-  },
-});
+const fastModel = (thinking) =>
+  genAI.getGenerativeModel({
+    model: SEARCH_MODEL,
+    generationConfig: {
+      responseMimeType: "application/json",
+      temperature: 0.2,
+      ...(!thinking
+        ? { thinkingConfig: { thinkingBudget: 0 } }
+        : SEARCH_THINKING_LEVEL
+          ? { thinkingConfig: { thinkingLevel: SEARCH_THINKING_LEVEL } }
+          : {}),
+    },
+  });
 let thinkingOffSupported = /gemini-2\.5/.test(SEARCH_MODEL);
 let fast = fastModel(!thinkingOffSupported);
 
@@ -173,12 +177,21 @@ async function timedCall(prompt, label, timeoutMs = SEARCH_TIMEOUT_MS) {
   call
     .then((r) => {
       const u = r.response?.usageMetadata || {};
-      console.log(`[aiSearch] gemini ${label} ${SEARCH_MODEL} ${Date.now() - started}ms`, JSON.stringify({
-        prompt: u.promptTokenCount, output: u.candidatesTokenCount, thoughts: u.thoughtsTokenCount,
-        finish: r.response?.candidates?.[0]?.finishReason,
-      }));
+      console.log(
+        `[aiSearch] gemini ${label} ${SEARCH_MODEL} ${Date.now() - started}ms`,
+        JSON.stringify({
+          prompt: u.promptTokenCount,
+          output: u.candidatesTokenCount,
+          thoughts: u.thoughtsTokenCount,
+          finish: r.response?.candidates?.[0]?.finishReason,
+        })
+      );
     })
-    .catch((err) => console.warn(`[aiSearch] gemini ${label} ${SEARCH_MODEL} failed after ${Date.now() - started}ms: ${err.message}`));
+    .catch((err) =>
+      console.warn(
+        `[aiSearch] gemini ${label} ${SEARCH_MODEL} failed after ${Date.now() - started}ms: ${err.message}`
+      )
+    );
   return JSON.parse((await withTimeout(call, timeoutMs)).response.text());
 }
 
@@ -221,7 +234,10 @@ const rankStore = {
 
 /** Phase two of a two-phase answer: model picks and reasons, or null when the token is unknown. */
 export async function rankChat(token) {
-  return rankStoredTurn(token, searchAi, rankStore, { timeoutMs: RANK_TIMEOUT_MS, sale: await getActiveSale() });
+  return rankStoredTurn(token, searchAi, rankStore, {
+    timeoutMs: RANK_TIMEOUT_MS,
+    sale: await getActiveSale(),
+  });
 }
 
 /** Main chat handler with circuit breaker. `twoPhase` returns results first and the model's picks via rankChat. */
@@ -234,25 +250,36 @@ export async function handleChat(message, history = [], { twoPhase = false } = {
       return FALLBACK_RESPONSE;
     }
 
-    const greetingPatterns = /^(h+i+|hello|hey+|hola|greetings|namaste|sup|wassup|thanks|thank\s*you|ty|bye|good\s*(morning|afternoon|evening)|ok(?:ay)?|cool|awesome|nice|help)[\s.!?]*$/i;
+    const greetingPatterns =
+      /^(h+i+|hello|hey+|hola|greetings|namaste|sup|wassup|thanks|thank\s*you|ty|bye|good\s*(morning|afternoon|evening)|ok(?:ay)?|cool|awesome|nice|help)[\s.!?]*$/i;
 
     if (greetingPatterns.test(message.trim())) {
       return {
         structured: {
           response: {
-            summary: "Hello! Welcome to VKart. I'm your digital shopping assistant. I can help you find products, compare specs, and check prices.",
-            points: ["Try 'Best gaming laptop'", "Or 'Running shoes under 2000'"]
+            summary:
+              "Hello! Welcome to VKart. I'm your digital shopping assistant. I can help you find products, compare specs, and check prices.",
+            points: ["Try 'Best gaming laptop'", "Or 'Running shoes under 2000'"],
           },
-          followUp: "What are you looking for today?"
+          followUp: "What are you looking for today?",
         },
-        products: []
+        products: [],
       };
     }
 
     const sale = await getActiveSale();
-    const result = await chatTurn(message, history, searchAi, twoPhase ? { store: rankStore, sale } : { sale });
+    const result = await chatTurn(
+      message,
+      history,
+      searchAi,
+      twoPhase ? { store: rankStore, sale } : { sale }
+    );
     recordSuccess();
-    return { structured: result.structured, products: result.products, ...(result.rank ? { rank: result.rank } : {}) };
+    return {
+      structured: result.structured,
+      products: result.products,
+      ...(result.rank ? { rank: result.rank } : {}),
+    };
   } catch (error) {
     console.error("Chat error:", error.message);
     recordFailure();

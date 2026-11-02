@@ -33,7 +33,11 @@ export const getActiveSale = async () => {
 // Catalog responses are keyed by the active sale (see catalog.controller.js), so dropping the
 // cached sale is enough for prices to update; old catalog entries are cleared to free memory.
 export const clearSaleCache = async () => {
-  try { await redis.del(SALE_CACHE_KEY); } catch { /* ignore */ }
+  try {
+    await redis.del(SALE_CACHE_KEY);
+  } catch {
+    /* ignore */
+  }
   await invalidatePattern("catalog:*");
 };
 
@@ -79,8 +83,7 @@ export const createSale = async (req, res) => {
     clearSaleCache();
     res.status(201).json(sale);
   } catch (err) {
-    if (err.code === 11000)
-      return res.status(409).json({ message: "Sale slug already exists" });
+    if (err.code === 11000) return res.status(409).json({ message: "Sale slug already exists" });
     console.error("Create sale error:", err);
     res.status(500).json({ message: "Internal server error" });
   }

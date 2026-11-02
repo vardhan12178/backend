@@ -13,9 +13,7 @@ import { toIdString, secureEqual } from "../utils/helpers.js";
 
 export const getPlans = async (req, res) => {
   try {
-    const plans = await MembershipPlan.find({ isActive: true })
-      .sort({ sortOrder: 1 })
-      .lean();
+    const plans = await MembershipPlan.find({ isActive: true }).sort({ sortOrder: 1 }).lean();
     res.json(plans);
   } catch (err) {
     console.error("Get plans error:", err);
@@ -40,8 +38,7 @@ export const purchasePlan = async (req, res) => {
     if (!planId) return res.status(400).json({ message: "planId is required" });
 
     const plan = await MembershipPlan.findById(planId);
-    if (!plan || !plan.isActive)
-      return res.status(404).json({ message: "Plan not found" });
+    if (!plan || !plan.isActive) return res.status(404).json({ message: "Plan not found" });
 
     const order = await razorpay.orders.create({
       amount: Math.round(plan.price * 100),
@@ -78,18 +75,9 @@ export const purchasePlan = async (req, res) => {
 
 export const verifyAndActivate = async (req, res) => {
   try {
-    const {
-      razorpay_order_id,
-      razorpay_payment_id,
-      razorpay_signature,
-      planId,
-    } = req.body;
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, planId } = req.body;
 
-    if (
-      !razorpay_order_id ||
-      !razorpay_payment_id ||
-      !razorpay_signature
-    ) {
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
       return res.status(400).json({ message: "Missing payment fields" });
     }
 
@@ -119,7 +107,9 @@ export const verifyAndActivate = async (req, res) => {
     }
 
     if (toIdString(pending.userId) !== toIdString(req.user.userId)) {
-      return res.status(403).json({ message: "Membership payment session does not belong to user" });
+      return res
+        .status(403)
+        .json({ message: "Membership payment session does not belong to user" });
     }
 
     // Optional client field can be present for backward compatibility,
@@ -177,16 +167,13 @@ export const verifyAndActivate = async (req, res) => {
       user.membership?.endDate && new Date(user.membership.endDate) > now
         ? new Date(user.membership.endDate)
         : now;
-    const newEnd = new Date(
-      currentEnd.getTime() + plan.durationDays * 24 * 60 * 60 * 1000
-    );
+    const newEnd = new Date(currentEnd.getTime() + plan.durationDays * 24 * 60 * 60 * 1000);
 
     user.membership = {
       plan: plan.name,
       planId: plan._id,
       startDate:
-        user.membership?.startDate &&
-        new Date(user.membership.startDate) <= now
+        user.membership?.startDate && new Date(user.membership.startDate) <= now
           ? user.membership.startDate
           : now,
       endDate: newEnd,
@@ -238,8 +225,7 @@ export const adminCreatePlan = async (req, res) => {
     const plan = await MembershipPlan.create(req.body);
     res.status(201).json(plan);
   } catch (err) {
-    if (err.code === 11000)
-      return res.status(409).json({ message: "Plan slug already exists" });
+    if (err.code === 11000) return res.status(409).json({ message: "Plan slug already exists" });
     console.error("Create plan error:", err);
     res.status(500).json({ message: "Internal server error" });
   }
@@ -247,11 +233,10 @@ export const adminCreatePlan = async (req, res) => {
 
 export const adminUpdatePlan = async (req, res) => {
   try {
-    const plan = await MembershipPlan.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true, runValidators: true }
-    );
+    const plan = await MembershipPlan.findByIdAndUpdate(req.params.id, req.body, {
+      new: true,
+      runValidators: true,
+    });
     if (!plan) return res.status(404).json({ message: "Plan not found" });
     res.json(plan);
   } catch (err) {

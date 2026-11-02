@@ -1,37 +1,37 @@
-import express from 'express';
-import { profileUpload, uploadErrorHandler } from '../utils/upload.js';
+import express from "express";
+import { profileUpload, uploadErrorHandler } from "../utils/upload.js";
 import {
   authLimiter,
   registerLimiter,
   forgotLimiter,
   resetLimiter,
   googleLimiter,
-} from '../middleware/security.js';
-import * as authController from '../controllers/auth.controller.js';
-import * as demoController from '../controllers/demo.controller.js';
-import { authenticateJWT, optionalAuth } from '../middleware/auth.js';
+} from "../middleware/security.js";
+import * as authController from "../controllers/auth.controller.js";
+import * as demoController from "../controllers/demo.controller.js";
+import { authenticateJWT, optionalAuth } from "../middleware/auth.js";
 
 const router = express.Router();
 
 /* -------------------- User Auth -------------------- */
 router.post(
-  '/register',
+  "/register",
   registerLimiter,
-  profileUpload.single('profileImage'),
+  profileUpload.single("profileImage"),
   uploadErrorHandler,
   authController.register
 );
 
-router.post('/login', authLimiter, authController.login);
-router.get('/auth/check', optionalAuth, authController.checkAuth);
-router.post('/auth/demo/shopper', authLimiter, demoController.demoShopper);
-router.post('/auth/demo/admin', authLimiter, demoController.demoAdmin);
-router.post('/auth/google', googleLimiter, authController.googleAuth);
-router.post('/forgot', forgotLimiter, authController.forgotPassword);
-router.post('/reset', resetLimiter, authController.resetPassword);
-router.post('/logout', authController.logout);
-router.get('/verify-email', authController.verifyEmail);
-router.post('/resend-verify', authenticateJWT, authController.resendVerifyEmail);
+router.post("/login", authLimiter, authController.login);
+router.get("/auth/check", optionalAuth, authController.checkAuth);
+router.post("/auth/demo/shopper", authLimiter, demoController.demoShopper);
+router.post("/auth/demo/admin", authLimiter, demoController.demoAdmin);
+router.post("/auth/google", googleLimiter, authController.googleAuth);
+router.post("/forgot", forgotLimiter, authController.forgotPassword);
+router.post("/reset", resetLimiter, authController.resetPassword);
+router.post("/logout", authController.logout);
+router.get("/verify-email", authController.verifyEmail);
+router.post("/resend-verify", authenticateJWT, authController.resendVerifyEmail);
 
 /* -------------------- Admin Auth -------------------- */
 router.post("/admin/login", authLimiter, authController.adminLogin);

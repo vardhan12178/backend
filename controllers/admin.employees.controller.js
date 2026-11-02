@@ -1,9 +1,5 @@
 import User from "../models/User.js";
-import {
-  ADMIN_ROLES,
-  MODULES,
-  ROLE_PRESETS,
-} from "../config/permissions.js";
+import { ADMIN_ROLES, MODULES, ROLE_PRESETS } from "../config/permissions.js";
 
 const EMPLOYEE_SELECT =
   "name username email profileImage createdAt blocked roles adminRole permissions";
@@ -106,8 +102,7 @@ export const updateEmployee = async (req, res) => {
     const roles = Array.isArray(target.roles) ? target.roles : ["user"];
     target.roles = Array.from(new Set([...roles, "admin"]));
     target.adminRole = adminRole;
-    target.permissions =
-      adminRole === "super_admin" ? {} : sanitizePermissions(permissions ?? {});
+    target.permissions = adminRole === "super_admin" ? {} : sanitizePermissions(permissions ?? {});
 
     await target.save();
     res.json({ message: "Employee updated", employee: toEmployeeJSON(target) });

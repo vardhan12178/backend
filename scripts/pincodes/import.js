@@ -57,19 +57,27 @@ async function main() {
   const apiKey = value("api-key") || process.env.DATA_GOV_IN_API_KEY;
 
   if (!file && !apiKey) {
-    console.error("Pass --file=<directory.csv> or --api-key=<data.gov.in key> (see the header of this script).");
+    console.error(
+      "Pass --file=<directory.csv> or --api-key=<data.gov.in key> (see the header of this script)."
+    );
     process.exit(1);
   }
 
-  const raw = file ? fromFile(path.resolve(file)) : await fromApi(apiKey, value("resource") || RESOURCE);
+  const raw = file
+    ? fromFile(path.resolve(file))
+    : await fromApi(apiKey, value("resource") || RESOURCE);
   const records = raw.map(normalizeRecord).filter(Boolean);
   if (!records.length) {
-    console.error(`No PIN codes found in ${raw.length} rows. Columns seen: ${Object.keys(raw[0] || {}).join(", ")}`);
+    console.error(
+      `No PIN codes found in ${raw.length} rows. Columns seen: ${Object.keys(raw[0] || {}).join(", ")}`
+    );
     process.exit(1);
   }
   const docs = aggregate(records);
   const states = new Set(docs.map((d) => d.state));
-  console.log(`${raw.length} post offices -> ${docs.length} PIN codes in ${states.size} states/UTs, ${docs.filter((d) => d.location).length} with coordinates`);
+  console.log(
+    `${raw.length} post offices -> ${docs.length} PIN codes in ${states.size} states/UTs, ${docs.filter((d) => d.location).length} with coordinates`
+  );
   console.log("Sample:", JSON.stringify(docs.find((d) => d._id === "560038") || docs[0]));
   if (dryRun) return;
 
@@ -81,7 +89,9 @@ async function main() {
   try {
     for (let i = 0; i < docs.length; i += 1000) {
       await Pincode.bulkWrite(
-        docs.slice(i, i + 1000).map((d) => ({ replaceOne: { filter: { _id: d._id }, replacement: d, upsert: true } })),
+        docs
+          .slice(i, i + 1000)
+          .map((d) => ({ replaceOne: { filter: { _id: d._id }, replacement: d, upsert: true } })),
         { ordered: false }
       );
       process.stdout.write(`\rSaved ${Math.min(i + 1000, docs.length)} of ${docs.length}`);

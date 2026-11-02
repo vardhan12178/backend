@@ -7,7 +7,12 @@ import { fileURLToPath } from "url";
 // reviewer names, cities, dates, helpful votes and rating counts are derived here,
 // deterministically, so every product shows the same reviews on every request.
 
-const DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "data", "catalog-reviews");
+const DIR = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "data",
+  "catalog-reviews"
+);
 
 // FNV-1a: small, stable string hash
 function hash(str) {
@@ -23,45 +28,375 @@ const between = (min, max, key) => min + (hash(key) % (max - min + 1));
 
 // Names grouped by region so first name, surname and city fit together
 const REGIONS = [
-  { f: ["Ananya", "Sneha", "Pooja", "Rutuja", "Shruti", "Madhura", "Ketaki", "Gauri", "Prajakta", "Sayali", "Aditi", "Mrunal"],
-    m: ["Aniket", "Rohan", "Omkar", "Sagar", "Tejas", "Shantanu", "Nikhil", "Pranav", "Vaibhav", "Siddharth", "Ajinkya", "Akshay"],
-    s: ["Kulkarni", "Deshpande", "Joshi", "Patil", "Gokhale", "Bhosale", "Pawar", "Kale", "Jadhav", "Apte"],
-    c: ["Pune", "Mumbai", "Nagpur", "Nashik", "Thane", "Kolhapur", "Aurangabad"] },
-  { f: ["Lakshmi", "Divya", "Keerthana", "Meenakshi", "Harini", "Nivedha", "Janani", "Swathi", "Kavya", "Sowmya", "Revathi", "Aishwarya"],
-    m: ["Karthik", "Arun", "Vignesh", "Prakash", "Saravanan", "Dinesh", "Hari", "Bharath", "Senthil", "Gokul", "Ashwin", "Ramesh"],
-    s: ["Iyer", "Subramanian", "Krishnan", "Raman", "Natarajan", "Venkatesh", "Sundaram", "Balaji", "Murugan", "Rajendran"],
-    c: ["Chennai", "Coimbatore", "Madurai", "Trichy", "Salem", "Vellore"] },
-  { f: ["Priyanka", "Anusha", "Sravani", "Bhavana", "Sahithi", "Deepika", "Haritha", "Mounika", "Lavanya", "Navya", "Tejaswini", "Sindhu"],
-    m: ["Srinivas", "Venkat", "Sai Kiran", "Ravi Teja", "Praveen", "Chaitanya", "Naveen", "Mahesh", "Harsha", "Kiran", "Vamsi", "Anil"],
+  {
+    f: [
+      "Ananya",
+      "Sneha",
+      "Pooja",
+      "Rutuja",
+      "Shruti",
+      "Madhura",
+      "Ketaki",
+      "Gauri",
+      "Prajakta",
+      "Sayali",
+      "Aditi",
+      "Mrunal",
+    ],
+    m: [
+      "Aniket",
+      "Rohan",
+      "Omkar",
+      "Sagar",
+      "Tejas",
+      "Shantanu",
+      "Nikhil",
+      "Pranav",
+      "Vaibhav",
+      "Siddharth",
+      "Ajinkya",
+      "Akshay",
+    ],
+    s: [
+      "Kulkarni",
+      "Deshpande",
+      "Joshi",
+      "Patil",
+      "Gokhale",
+      "Bhosale",
+      "Pawar",
+      "Kale",
+      "Jadhav",
+      "Apte",
+    ],
+    c: ["Pune", "Mumbai", "Nagpur", "Nashik", "Thane", "Kolhapur", "Aurangabad"],
+  },
+  {
+    f: [
+      "Lakshmi",
+      "Divya",
+      "Keerthana",
+      "Meenakshi",
+      "Harini",
+      "Nivedha",
+      "Janani",
+      "Swathi",
+      "Kavya",
+      "Sowmya",
+      "Revathi",
+      "Aishwarya",
+    ],
+    m: [
+      "Karthik",
+      "Arun",
+      "Vignesh",
+      "Prakash",
+      "Saravanan",
+      "Dinesh",
+      "Hari",
+      "Bharath",
+      "Senthil",
+      "Gokul",
+      "Ashwin",
+      "Ramesh",
+    ],
+    s: [
+      "Iyer",
+      "Subramanian",
+      "Krishnan",
+      "Raman",
+      "Natarajan",
+      "Venkatesh",
+      "Sundaram",
+      "Balaji",
+      "Murugan",
+      "Rajendran",
+    ],
+    c: ["Chennai", "Coimbatore", "Madurai", "Trichy", "Salem", "Vellore"],
+  },
+  {
+    f: [
+      "Priyanka",
+      "Anusha",
+      "Sravani",
+      "Bhavana",
+      "Sahithi",
+      "Deepika",
+      "Haritha",
+      "Mounika",
+      "Lavanya",
+      "Navya",
+      "Tejaswini",
+      "Sindhu",
+    ],
+    m: [
+      "Srinivas",
+      "Venkat",
+      "Sai Kiran",
+      "Ravi Teja",
+      "Praveen",
+      "Chaitanya",
+      "Naveen",
+      "Mahesh",
+      "Harsha",
+      "Kiran",
+      "Vamsi",
+      "Anil",
+    ],
     s: ["Reddy", "Rao", "Naidu", "Chowdary", "Varma", "Goud", "Yadav", "Kumar", "Prasad", "Murthy"],
-    c: ["Hyderabad", "Vijayawada", "Visakhapatnam", "Warangal", "Guntur", "Tirupati"] },
-  { f: ["Ritika", "Neha", "Shalini", "Kritika", "Simran", "Megha", "Tanvi", "Nidhi", "Shreya", "Ankita", "Payal", "Ishita"],
-    m: ["Rahul", "Amit", "Vikas", "Saurabh", "Ankur", "Gaurav", "Abhishek", "Manish", "Rajat", "Varun", "Kunal", "Deepak"],
-    s: ["Sharma", "Verma", "Gupta", "Agarwal", "Srivastava", "Mishra", "Tiwari", "Saxena", "Pandey", "Chauhan"],
-    c: ["Delhi", "Lucknow", "Noida", "Gurugram", "Jaipur", "Kanpur", "Indore", "Bhopal"] },
-  { f: ["Harpreet", "Gurleen", "Jasleen", "Navneet", "Simranjeet", "Manpreet", "Amrit", "Kirandeep", "Rupinder", "Baljeet", "Parminder", "Sukhleen"],
-    m: ["Gurpreet", "Harjot", "Jaspreet", "Mandeep", "Arshdeep", "Karanveer", "Sukhdeep", "Navjot", "Inderpal", "Ravinder", "Tejinder", "Amandeep"],
-    s: ["Singh", "Bains", "Gill", "Sandhu", "Dhillon", "Sidhu", "Grewal", "Bajwa", "Randhawa", "Bedi"],
-    c: ["Ludhiana", "Amritsar", "Chandigarh", "Jalandhar", "Patiala", "Mohali"] },
-  { f: ["Moumita", "Ishani", "Riya", "Debolina", "Sohini", "Paromita", "Tanushree", "Srijita", "Ankana", "Rimjhim", "Mitali", "Sayantika"],
-    m: ["Arijit", "Sourav", "Debashish", "Abhijit", "Subhajit", "Anirban", "Ritam", "Sayan", "Indranil", "Partha", "Kaustav", "Tanmoy"],
-    s: ["Banerjee", "Chatterjee", "Mukherjee", "Das", "Ghosh", "Bose", "Sen", "Dutta", "Roy", "Sarkar"],
-    c: ["Kolkata", "Howrah", "Durgapur", "Siliguri", "Asansol", "Bhubaneswar"] },
-  { f: ["Anjali", "Athira", "Gopika", "Aparna", "Nimisha", "Reshma", "Sreelakshmi", "Anagha", "Devika", "Neethu", "Arya", "Malavika"],
-    m: ["Arjun", "Vishnu", "Akhil", "Sreejith", "Jithin", "Anoop", "Rahul", "Abhilash", "Nithin", "Sanjay", "Midhun", "Vivek"],
-    s: ["Nair", "Menon", "Pillai", "Kurup", "Nambiar", "Panicker", "Warrier", "Kartha", "Unnithan", "Varma"],
-    c: ["Kochi", "Thiruvananthapuram", "Kozhikode", "Thrissur", "Kottayam", "Kannur"] },
-  { f: ["Hetal", "Khushi", "Dhruvi", "Nirali", "Krupa", "Foram", "Bhoomi", "Riddhi", "Jinal", "Mansi", "Palak", "Vidhi"],
-    m: ["Harsh", "Jay", "Parth", "Chirag", "Dhaval", "Kalpesh", "Mehul", "Nirav", "Hardik", "Ketan", "Bhavin", "Darshan"],
+    c: ["Hyderabad", "Vijayawada", "Visakhapatnam", "Warangal", "Guntur", "Tirupati"],
+  },
+  {
+    f: [
+      "Ritika",
+      "Neha",
+      "Shalini",
+      "Kritika",
+      "Simran",
+      "Megha",
+      "Tanvi",
+      "Nidhi",
+      "Shreya",
+      "Ankita",
+      "Payal",
+      "Ishita",
+    ],
+    m: [
+      "Rahul",
+      "Amit",
+      "Vikas",
+      "Saurabh",
+      "Ankur",
+      "Gaurav",
+      "Abhishek",
+      "Manish",
+      "Rajat",
+      "Varun",
+      "Kunal",
+      "Deepak",
+    ],
+    s: [
+      "Sharma",
+      "Verma",
+      "Gupta",
+      "Agarwal",
+      "Srivastava",
+      "Mishra",
+      "Tiwari",
+      "Saxena",
+      "Pandey",
+      "Chauhan",
+    ],
+    c: ["Delhi", "Lucknow", "Noida", "Gurugram", "Jaipur", "Kanpur", "Indore", "Bhopal"],
+  },
+  {
+    f: [
+      "Harpreet",
+      "Gurleen",
+      "Jasleen",
+      "Navneet",
+      "Simranjeet",
+      "Manpreet",
+      "Amrit",
+      "Kirandeep",
+      "Rupinder",
+      "Baljeet",
+      "Parminder",
+      "Sukhleen",
+    ],
+    m: [
+      "Gurpreet",
+      "Harjot",
+      "Jaspreet",
+      "Mandeep",
+      "Arshdeep",
+      "Karanveer",
+      "Sukhdeep",
+      "Navjot",
+      "Inderpal",
+      "Ravinder",
+      "Tejinder",
+      "Amandeep",
+    ],
+    s: [
+      "Singh",
+      "Bains",
+      "Gill",
+      "Sandhu",
+      "Dhillon",
+      "Sidhu",
+      "Grewal",
+      "Bajwa",
+      "Randhawa",
+      "Bedi",
+    ],
+    c: ["Ludhiana", "Amritsar", "Chandigarh", "Jalandhar", "Patiala", "Mohali"],
+  },
+  {
+    f: [
+      "Moumita",
+      "Ishani",
+      "Riya",
+      "Debolina",
+      "Sohini",
+      "Paromita",
+      "Tanushree",
+      "Srijita",
+      "Ankana",
+      "Rimjhim",
+      "Mitali",
+      "Sayantika",
+    ],
+    m: [
+      "Arijit",
+      "Sourav",
+      "Debashish",
+      "Abhijit",
+      "Subhajit",
+      "Anirban",
+      "Ritam",
+      "Sayan",
+      "Indranil",
+      "Partha",
+      "Kaustav",
+      "Tanmoy",
+    ],
+    s: [
+      "Banerjee",
+      "Chatterjee",
+      "Mukherjee",
+      "Das",
+      "Ghosh",
+      "Bose",
+      "Sen",
+      "Dutta",
+      "Roy",
+      "Sarkar",
+    ],
+    c: ["Kolkata", "Howrah", "Durgapur", "Siliguri", "Asansol", "Bhubaneswar"],
+  },
+  {
+    f: [
+      "Anjali",
+      "Athira",
+      "Gopika",
+      "Aparna",
+      "Nimisha",
+      "Reshma",
+      "Sreelakshmi",
+      "Anagha",
+      "Devika",
+      "Neethu",
+      "Arya",
+      "Malavika",
+    ],
+    m: [
+      "Arjun",
+      "Vishnu",
+      "Akhil",
+      "Sreejith",
+      "Jithin",
+      "Anoop",
+      "Rahul",
+      "Abhilash",
+      "Nithin",
+      "Sanjay",
+      "Midhun",
+      "Vivek",
+    ],
+    s: [
+      "Nair",
+      "Menon",
+      "Pillai",
+      "Kurup",
+      "Nambiar",
+      "Panicker",
+      "Warrier",
+      "Kartha",
+      "Unnithan",
+      "Varma",
+    ],
+    c: ["Kochi", "Thiruvananthapuram", "Kozhikode", "Thrissur", "Kottayam", "Kannur"],
+  },
+  {
+    f: [
+      "Hetal",
+      "Khushi",
+      "Dhruvi",
+      "Nirali",
+      "Krupa",
+      "Foram",
+      "Bhoomi",
+      "Riddhi",
+      "Jinal",
+      "Mansi",
+      "Palak",
+      "Vidhi",
+    ],
+    m: [
+      "Harsh",
+      "Jay",
+      "Parth",
+      "Chirag",
+      "Dhaval",
+      "Kalpesh",
+      "Mehul",
+      "Nirav",
+      "Hardik",
+      "Ketan",
+      "Bhavin",
+      "Darshan",
+    ],
     s: ["Patel", "Shah", "Mehta", "Desai", "Trivedi", "Parikh", "Joshi", "Modi", "Thakkar", "Vyas"],
-    c: ["Ahmedabad", "Surat", "Vadodara", "Rajkot", "Gandhinagar", "Bhavnagar"] },
-  { f: ["Spoorthi", "Bhoomika", "Chaitra", "Rakshitha", "Pallavi", "Shwetha", "Apoorva", "Sinchana", "Deeksha", "Kavana", "Ramya", "Yashaswini"],
-    m: ["Manjunath", "Prajwal", "Raghavendra", "Darshan", "Kiran", "Sudeep", "Nagaraj", "Pavan", "Chethan", "Shashank", "Vinay", "Girish"],
-    s: ["Gowda", "Hegde", "Shetty", "Bhat", "Rao", "Kamath", "Shenoy", "Acharya", "Nayak", "Prabhu"],
-    c: ["Bengaluru", "Mysuru", "Mangaluru", "Hubballi", "Udupi", "Belagavi"] },
+    c: ["Ahmedabad", "Surat", "Vadodara", "Rajkot", "Gandhinagar", "Bhavnagar"],
+  },
+  {
+    f: [
+      "Spoorthi",
+      "Bhoomika",
+      "Chaitra",
+      "Rakshitha",
+      "Pallavi",
+      "Shwetha",
+      "Apoorva",
+      "Sinchana",
+      "Deeksha",
+      "Kavana",
+      "Ramya",
+      "Yashaswini",
+    ],
+    m: [
+      "Manjunath",
+      "Prajwal",
+      "Raghavendra",
+      "Darshan",
+      "Kiran",
+      "Sudeep",
+      "Nagaraj",
+      "Pavan",
+      "Chethan",
+      "Shashank",
+      "Vinay",
+      "Girish",
+    ],
+    s: [
+      "Gowda",
+      "Hegde",
+      "Shetty",
+      "Bhat",
+      "Rao",
+      "Kamath",
+      "Shenoy",
+      "Acharya",
+      "Nayak",
+      "Prabhu",
+    ],
+    c: ["Bengaluru", "Mysuru", "Mangaluru", "Hubballi", "Udupi", "Belagavi"],
+  },
 ];
 
-const FEMALE = /women|saree|kurti|dress|-top|earrings|necklace|bangle|ring|handbag|shoulder-bag|salwar|co-ord|tinted-sunscreen/;
+const FEMALE =
+  /women|saree|kurti|dress|-top|earrings|necklace|bangle|ring|handbag|shoulder-bag|salwar|co-ord|tinted-sunscreen/;
 const MALE = /beard|trimmer|razor|hair-wax|groomer|-polo|shirt|chinos|501|511|jeans/;
 
 // Every combination of first name + surname + city, shuffled once, handed out in order:
@@ -69,7 +404,9 @@ const MALE = /beard|trimmer|razor|hair-wax|groomer|-polo|shirt|chinos|501|511|je
 function namePool(gender) {
   const out = [];
   REGIONS.forEach((r, ri) => {
-    for (const first of r[gender]) for (const last of r.s) out.push({ name: `${first} ${last}`, city: r.c[hash(first + last) % r.c.length], ri });
+    for (const first of r[gender])
+      for (const last of r.s)
+        out.push({ name: `${first} ${last}`, city: r.c[hash(first + last) % r.c.length], ri });
   });
   return out.sort((a, b) => hash(`${gender}:${a.name}`) - hash(`${gender}:${b.name}`));
 }
@@ -78,7 +415,8 @@ function loadRaw() {
   const all = {};
   if (!fs.existsSync(DIR)) return all;
   for (const file of fs.readdirSync(DIR).sort()) {
-    if (file.endsWith(".json")) Object.assign(all, JSON.parse(fs.readFileSync(path.join(DIR, file), "utf8")));
+    if (file.endsWith(".json"))
+      Object.assign(all, JSON.parse(fs.readFileSync(path.join(DIR, file), "utf8")));
   }
   return all;
 }
@@ -98,7 +436,13 @@ function build(raw) {
   for (const slug of Object.keys(raw).sort()) {
     const [average, items] = raw[slug];
     const reviews = items.map(([stars, title, body], i) => {
-      const gender = FEMALE.test(slug) ? "f" : MALE.test(slug) ? "m" : (hash(`${slug}:${i}:g`) % 2 ? "f" : "m");
+      const gender = FEMALE.test(slug)
+        ? "f"
+        : MALE.test(slug)
+          ? "m"
+          : hash(`${slug}:${i}:g`) % 2
+            ? "f"
+            : "m";
       const { name, city } = take(gender);
       return { id: `${slug}-${i + 1}`, stars, title, body, name, city };
     });
@@ -165,10 +509,21 @@ export function reviewsFor(p) {
       return {
         ...r,
         date: new Date(start + (hash(`${r.id}:d`) % span)).toISOString().slice(0, 10),
-        variant: v ? Object.entries(v.options).map(([k, val]) => `${k}: ${val}`).join(", ") : null,
+        variant: v
+          ? Object.entries(v.options)
+              .map(([k, val]) => `${k}: ${val}`)
+              .join(", ")
+          : null,
         helpful: hash(`${r.id}:h`) % 5 === 0 ? 0 : between(1, 140, `${r.id}:hv`),
       };
     })
     .sort((a, b) => b.date.localeCompare(a.date));
-  return { average, count, reviewCount: Math.max(reviews.length, Math.round(count * 0.11)), stars, reviews, sample: true };
+  return {
+    average,
+    count,
+    reviewCount: Math.max(reviews.length, Math.round(count * 0.11)),
+    stars,
+    reviews,
+    sample: true,
+  };
 }

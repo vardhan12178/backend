@@ -11,7 +11,9 @@ const COLORS = {
 
 const number = (value) => Number(value) || 0;
 const clean = (value, fallback = "-") => {
-  const text = String(value ?? "").trim().replace(/[–—]/g, "-");
+  const text = String(value ?? "")
+    .trim()
+    .replace(/[–—]/g, "-");
   return text || fallback;
 };
 
@@ -37,24 +39,35 @@ const drawLabelValue = (doc, x, y, width, label, value) => {
     width,
     characterSpacing: 0.7,
   });
-  doc.font("Helvetica-Bold").fontSize(9.2).fillColor(COLORS.ink).text(clean(value), x, y + 12, {
-    width,
-    ellipsis: true,
-  });
+  doc
+    .font("Helvetica-Bold")
+    .fontSize(9.2)
+    .fillColor(COLORS.ink)
+    .text(clean(value), x, y + 12, {
+      width,
+      ellipsis: true,
+    });
 };
 
 const drawPartyCard = (doc, x, y, width, height, title, lines) => {
   doc.roundedRect(x, y, width, height, 8).fillAndStroke(COLORS.canvas, COLORS.line);
-  doc.font("Helvetica-Bold").fontSize(7).fillColor(COLORS.clay).text(title.toUpperCase(), x + 12, y + 12, {
-    width: width - 24,
-    characterSpacing: 0.8,
-  });
+  doc
+    .font("Helvetica-Bold")
+    .fontSize(7)
+    .fillColor(COLORS.clay)
+    .text(title.toUpperCase(), x + 12, y + 12, {
+      width: width - 24,
+      characterSpacing: 0.8,
+    });
 
   let textY = y + 30;
   lines.filter(Boolean).forEach((line, index) => {
     const font = index === 0 ? "Helvetica-Bold" : "Helvetica";
     const size = index === 0 ? 9.2 : 8.2;
-    doc.font(font).fontSize(size).fillColor(index === 0 ? COLORS.ink : COLORS.muted);
+    doc
+      .font(font)
+      .fontSize(size)
+      .fillColor(index === 0 ? COLORS.ink : COLORS.muted);
     const value = clean(line);
     const lineHeight = doc.heightOfString(value, { width: width - 24, lineGap: 1 });
     if (textY + lineHeight <= y + height - 10) {
@@ -67,13 +80,21 @@ const drawPartyCard = (doc, x, y, width, height, title, lines) => {
 const drawPageHeader = (doc, { storeName, invoiceNo, continuation = false }) => {
   const pageW = doc.page.width;
   doc.rect(0, 0, pageW, 5).fill(COLORS.clay);
-  doc.font("Helvetica-Bold").fontSize(continuation ? 14 : 25).fillColor(COLORS.ink).text(storeName, 42, continuation ? 24 : 34);
+  doc
+    .font("Helvetica-Bold")
+    .fontSize(continuation ? 14 : 25)
+    .fillColor(COLORS.ink)
+    .text(storeName, 42, continuation ? 24 : 34);
 
   if (continuation) {
-    doc.font("Helvetica").fontSize(8).fillColor(COLORS.muted).text(`Tax invoice ${invoiceNo} - continued`, 300, 28, {
-      width: 253,
-      align: "right",
-    });
+    doc
+      .font("Helvetica")
+      .fontSize(8)
+      .fillColor(COLORS.muted)
+      .text(`Tax invoice ${invoiceNo} - continued`, 300, 28, {
+        width: 253,
+        align: "right",
+      });
     drawRule(doc, 42, 52, 553);
   }
 };
@@ -92,17 +113,18 @@ const drawItemsHeader = (doc, y) => {
 const drawFooter = (doc, pageNumber, pageCount, settings) => {
   drawRule(doc, 42, 796, 553);
   const contact = [settings.supportEmail, settings.supportPhone].filter(Boolean).join("  |  ");
-  doc.font("Helvetica").fontSize(7.4).fillColor(COLORS.muted).text(
-    contact || "Thank you for shopping with VKart.",
-    42,
-    806,
-    { width: 360 }
-  );
+  doc
+    .font("Helvetica")
+    .fontSize(7.4)
+    .fillColor(COLORS.muted)
+    .text(contact || "Thank you for shopping with VKart.", 42, 806, { width: 360 });
   doc.text(`Page ${pageNumber} of ${pageCount}`, 445, 806, { width: 108, align: "right" });
-  doc.fontSize(6.8).text("Computer-generated tax invoice and payment record. No signature required.", 42, 820, {
-    width: 511,
-    align: "center",
-  });
+  doc
+    .fontSize(6.8)
+    .text("Computer-generated tax invoice and payment record. No signature required.", 42, 820, {
+      width: 511,
+      align: "center",
+    });
 };
 
 export const renderTaxInvoice = ({ doc, order, settings = {} }) => {
@@ -176,24 +198,34 @@ export const renderTaxInvoice = ({ doc, order, settings = {} }) => {
     }
 
     if (index % 2 === 1) doc.rect(42, cursorY, 511, rowHeight).fill(COLORS.canvas);
-    doc.font("Helvetica-Bold").fontSize(8.7).fillColor(COLORS.ink).text(description, 52, cursorY + 10, {
-      width: 225,
-      lineGap: 1,
-    });
-    if (variant) {
-      doc.font("Helvetica").fontSize(7.3).fillColor(COLORS.muted).text(variant, 52, cursorY + 12 + descriptionHeight, {
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(8.7)
+      .fillColor(COLORS.ink)
+      .text(description, 52, cursorY + 10, {
         width: 225,
+        lineGap: 1,
       });
+    if (variant) {
+      doc
+        .font("Helvetica")
+        .fontSize(7.3)
+        .fillColor(COLORS.muted)
+        .text(variant, 52, cursorY + 12 + descriptionHeight, {
+          width: 225,
+        });
     }
     doc.font("Helvetica").fontSize(8.5).fillColor(COLORS.ink);
     doc.text(String(number(product.quantity)), 292, cursorY + 12, { width: 40, align: "center" });
     doc.text(money(product.price), 337, cursorY + 12, { width: 90, align: "right" });
-    doc.font("Helvetica-Bold").text(
-      money(number(product.lineTotal) || number(product.price) * number(product.quantity)),
-      437,
-      cursorY + 12,
-      { width: 106, align: "right" }
-    );
+    doc
+      .font("Helvetica-Bold")
+      .text(
+        money(number(product.lineTotal) || number(product.price) * number(product.quantity)),
+        437,
+        cursorY + 12,
+        { width: 106, align: "right" }
+      );
     drawRule(doc, 42, cursorY + rowHeight, 553, COLORS.line, 0.45);
     cursorY += rowHeight;
   });
@@ -212,20 +244,31 @@ export const renderTaxInvoice = ({ doc, order, settings = {} }) => {
   const summaryW = 247;
   const panelHeight = 170;
 
-  doc.roundedRect(receiptX, cursorY, receiptW, panelHeight, 9).fillAndStroke(COLORS.canvas, COLORS.line);
-  doc.font("Helvetica-Bold").fontSize(7).fillColor(COLORS.clay).text("PAYMENT RECEIPT", receiptX + 14, cursorY + 14, {
-    characterSpacing: 0.8,
-  });
-  doc.font("Helvetica-Bold").fontSize(18).fillColor(COLORS.ink).text(
-    paymentStatus === "PAID" ? "Payment received" : "Payment pending",
-    receiptX + 14,
-    cursorY + 34,
-    { width: receiptW - 28 }
-  );
+  doc
+    .roundedRect(receiptX, cursorY, receiptW, panelHeight, 9)
+    .fillAndStroke(COLORS.canvas, COLORS.line);
+  doc
+    .font("Helvetica-Bold")
+    .fontSize(7)
+    .fillColor(COLORS.clay)
+    .text("PAYMENT RECEIPT", receiptX + 14, cursorY + 14, {
+      characterSpacing: 0.8,
+    });
+  doc
+    .font("Helvetica-Bold")
+    .fontSize(18)
+    .fillColor(COLORS.ink)
+    .text(
+      paymentStatus === "PAID" ? "Payment received" : "Payment pending",
+      receiptX + 14,
+      cursorY + 34,
+      { width: receiptW - 28 }
+    );
 
-  const receiptMethod = number(order.walletUsed) > 0
-    ? `${clean(order.paymentMethod)} + VKart Wallet`
-    : clean(order.paymentMethod);
+  const receiptMethod =
+    number(order.walletUsed) > 0
+      ? `${clean(order.paymentMethod)} + VKart Wallet`
+      : clean(order.paymentMethod);
   const receiptLines = [
     ["Method", receiptMethod],
     ["Reference", order.paymentId || order.paymentOrderId || orderNo],
@@ -233,54 +276,88 @@ export const renderTaxInvoice = ({ doc, order, settings = {} }) => {
   ];
   let receiptY = cursorY + 72;
   receiptLines.forEach(([label, value]) => {
-    doc.font("Helvetica").fontSize(7.5).fillColor(COLORS.muted).text(label, receiptX + 14, receiptY, { width: 78 });
-    doc.font("Helvetica-Bold").fillColor(COLORS.ink).text(clean(value), receiptX + 92, receiptY, {
-      width: receiptW - 106,
-      ellipsis: true,
-    });
+    doc
+      .font("Helvetica")
+      .fontSize(7.5)
+      .fillColor(COLORS.muted)
+      .text(label, receiptX + 14, receiptY, { width: 78 });
+    doc
+      .font("Helvetica-Bold")
+      .fillColor(COLORS.ink)
+      .text(clean(value), receiptX + 92, receiptY, {
+        width: receiptW - 106,
+        ellipsis: true,
+      });
     receiptY += 20;
   });
 
-  doc.roundedRect(summaryX, cursorY, summaryW, panelHeight, 9).fillAndStroke(COLORS.paper, COLORS.line);
-  doc.font("Helvetica-Bold").fontSize(7).fillColor(COLORS.clay).text("ORDER SUMMARY", summaryX + 14, cursorY + 14, {
-    characterSpacing: 0.8,
-  });
+  doc
+    .roundedRect(summaryX, cursorY, summaryW, panelHeight, 9)
+    .fillAndStroke(COLORS.paper, COLORS.line);
+  doc
+    .font("Helvetica-Bold")
+    .fontSize(7)
+    .fillColor(COLORS.clay)
+    .text("ORDER SUMMARY", summaryX + 14, cursorY + 14, {
+      characterSpacing: 0.8,
+    });
   let summaryY = cursorY + 36;
   const summaryLine = (label, value, options = {}) => {
     doc.font(options.bold ? "Helvetica-Bold" : "Helvetica").fontSize(options.bold ? 10 : 8.2);
-    doc.fillColor(options.color || COLORS.muted).text(label, summaryX + 14, summaryY, { width: 130 });
-    doc.fillColor(options.bold ? COLORS.ink : (options.color || COLORS.ink)).text(value, summaryX + 144, summaryY, {
-      width: summaryW - 158,
-      align: "right",
-    });
+    doc
+      .fillColor(options.color || COLORS.muted)
+      .text(label, summaryX + 14, summaryY, { width: 130 });
+    doc
+      .fillColor(options.bold ? COLORS.ink : options.color || COLORS.ink)
+      .text(value, summaryX + 144, summaryY, {
+        width: summaryW - 158,
+        align: "right",
+      });
     summaryY += options.bold ? 23 : 17;
   };
 
   summaryLine("Merchandise (GST incl.)", money(subtotal));
-  if (couponDiscount > 0) summaryLine(order.promo ? `Coupon: ${order.promo}` : "Coupon discount", `- ${money(couponDiscount)}`, { color: COLORS.olive });
-  if (saleDiscount > 0) summaryLine("Sale savings", `- ${money(saleDiscount)}`, { color: COLORS.olive });
-  if (membershipDiscount > 0) summaryLine("Prime savings", `- ${money(membershipDiscount)}`, { color: COLORS.olive });
+  if (couponDiscount > 0)
+    summaryLine(
+      order.promo ? `Coupon: ${order.promo}` : "Coupon discount",
+      `- ${money(couponDiscount)}`,
+      { color: COLORS.olive }
+    );
+  if (saleDiscount > 0)
+    summaryLine("Sale savings", `- ${money(saleDiscount)}`, { color: COLORS.olive });
+  if (membershipDiscount > 0)
+    summaryLine("Prime savings", `- ${money(membershipDiscount)}`, { color: COLORS.olive });
   summaryLine("Shipping", number(order.shipping) > 0 ? money(order.shipping) : "Free");
   drawRule(doc, summaryX + 14, summaryY - 3, summaryX + summaryW - 14);
   summaryY += 4;
   summaryLine("Grand total", money(total), { bold: true });
 
   const taxY = cursorY + panelHeight + 13;
-  doc.font("Helvetica").fontSize(7.3).fillColor(COLORS.muted).text(
-    `GST included in merchandise value: ${money(includedTax)} at 18% | Taxable value: ${money(taxableValue)}`,
-    42,
-    taxY,
-    { width: 511 }
-  );
-  doc.fontSize(7).text(
-    "Returns, refunds and warranty support are governed by the order terms shown in your VKart account.",
-    42,
-    taxY + 15,
-    { width: 511 }
-  );
+  doc
+    .font("Helvetica")
+    .fontSize(7.3)
+    .fillColor(COLORS.muted)
+    .text(
+      `GST included in merchandise value: ${money(includedTax)} at 18% | Taxable value: ${money(taxableValue)}`,
+      42,
+      taxY,
+      { width: 511 }
+    );
+  doc
+    .fontSize(7)
+    .text(
+      "Returns, refunds and warranty support are governed by the order terms shown in your VKart account.",
+      42,
+      taxY + 15,
+      { width: 511 }
+    );
 
   const pageRange = doc.bufferedPageRange();
-  for (let pageIndex = pageRange.start; pageIndex < pageRange.start + pageRange.count; pageIndex += 1) {
+  for (
+    let pageIndex = pageRange.start;
+    pageIndex < pageRange.start + pageRange.count;
+    pageIndex += 1
+  ) {
     doc.switchToPage(pageIndex);
     drawFooter(doc, pageIndex - pageRange.start + 1, pageRange.count, settings);
   }

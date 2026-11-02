@@ -17,7 +17,11 @@ dotenv.config();
 
 const OLD_LINE = { $elemMatch: { catalog: { $ne: "v2" } } };
 
-export async function cleanupOldCatalog({ apply = false, db = mongoose.connection.db, log = console.log } = {}) {
+export async function cleanupOldCatalog({
+  apply = false,
+  db = mongoose.connection.db,
+  log = console.log,
+} = {}) {
   const orders = await Order.countDocuments({ products: OLD_LINE });
   const carts = await User.countDocuments({ cart: OLD_LINE });
   const wishlists = await User.countDocuments({ wishlist: OLD_LINE });
@@ -33,11 +37,25 @@ export async function cleanupOldCatalog({ apply = false, db = mongoose.connectio
   }
 
   const deleted = await Order.deleteMany({ products: OLD_LINE });
-  const cartRes = await User.updateMany({ cart: OLD_LINE }, { $pull: { cart: { catalog: { $ne: "v2" } } } });
-  const wishRes = await User.updateMany({ wishlist: OLD_LINE }, { $pull: { wishlist: { catalog: { $ne: "v2" } } } });
+  const cartRes = await User.updateMany(
+    { cart: OLD_LINE },
+    { $pull: { cart: { catalog: { $ne: "v2" } } } }
+  );
+  const wishRes = await User.updateMany(
+    { wishlist: OLD_LINE },
+    { $pull: { wishlist: { catalog: { $ne: "v2" } } } }
+  );
   if (hasProducts) await db.dropCollection("products");
-  log(`Removed ${deleted.deletedCount} orders, cleaned ${cartRes.modifiedCount} carts and ${wishRes.modifiedCount} wishlists${hasProducts ? ", dropped the products collection" : ""}.`);
-  return { orders: deleted.deletedCount, carts: cartRes.modifiedCount, wishlists: wishRes.modifiedCount, products, applied: true };
+  log(
+    `Removed ${deleted.deletedCount} orders, cleaned ${cartRes.modifiedCount} carts and ${wishRes.modifiedCount} wishlists${hasProducts ? ", dropped the products collection" : ""}.`
+  );
+  return {
+    orders: deleted.deletedCount,
+    carts: cartRes.modifiedCount,
+    wishlists: wishRes.modifiedCount,
+    products,
+    applied: true,
+  };
 }
 
 async function main() {

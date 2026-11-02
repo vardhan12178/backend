@@ -52,8 +52,7 @@ export const createOrder = async (req, res) => {
     if (!user) return abortWith(404, { message: "User not found" });
 
     const activeSale = await getActiveSale();
-    const isPrime =
-      !!(user.membership?.endDate && new Date() < new Date(user.membership.endDate));
+    const isPrime = !!(user.membership?.endDate && new Date() < new Date(user.membership.endDate));
 
     // Inventory + canonical product prices come from DB.
     const normalizedProducts = [];
@@ -66,12 +65,18 @@ export const createOrder = async (req, res) => {
 
       // Only catalog lines can be ordered; anything else is a leftover from the retired catalog
       if (!isCatalogLine(p)) {
-        return abortWith(400, { message: "An item in your cart is no longer sold. Please remove it and try again." });
+        return abortWith(400, {
+          message: "An item in your cart is no longer sold. Please remove it and try again.",
+        });
       }
 
       // Price and stock come from the variant, with the active sale applied
       try {
-        const line = await reserveLine({ productId: p.productId, sku: p.sku, quantity: qty }, session, { sale: activeSale, isPrime });
+        const line = await reserveLine(
+          { productId: p.productId, sku: p.sku, quantity: qty },
+          session,
+          { sale: activeSale, isPrime }
+        );
         if (line.sale) {
           saleApplied = true;
           saleId = activeSale._id;
@@ -86,10 +91,7 @@ export const createOrder = async (req, res) => {
     }
 
     const lineSubtotal = round2(
-      normalizedProducts.reduce(
-        (sum, p) => sum + round2(Number(p.price) * Number(p.quantity)),
-        0
-      )
+      normalizedProducts.reduce((sum, p) => sum + round2(Number(p.price) * Number(p.quantity)), 0)
     );
 
     // Validate coupon server-side.
@@ -297,7 +299,9 @@ export const getUserOrdersPaged = async (req, res) => {
 /* ADMIN - GET ALL ORDERS */
 export const getAllOrders = async (req, res) => {
   try {
-    const orders = await Order.find({ isDemo: { $ne: true } }).sort({ createdAt: -1 }).lean();
+    const orders = await Order.find({ isDemo: { $ne: true } })
+      .sort({ createdAt: -1 })
+      .lean();
     res.json(orders);
   } catch (err) {
     console.error("getAllOrders error:", err);
@@ -522,10 +526,12 @@ export const initiateRefund = async (req, res) => {
   // already received). Without this, nothing stopped an admin from issuing
   // a refund on any order — including one that was never cancelled or
   // returned at all.
-  const eligible = order.stage === "CANCELLED" || ["APPROVED", "PICKED", "RECEIVED"].includes(order.returnStatus);
+  const eligible =
+    order.stage === "CANCELLED" || ["APPROVED", "PICKED", "RECEIVED"].includes(order.returnStatus);
   if (!eligible) {
     return res.status(400).json({
-      message: "This order isn't eligible for a refund yet — it must be cancelled, or have an approved return.",
+      message:
+        "This order isn't eligible for a refund yet — it must be cancelled, or have an approved return.",
     });
   }
 
@@ -564,7 +570,9 @@ export const initiateRefund = async (req, res) => {
     }
   } else if (order.paymentId) {
     try {
-      const refund = await refundPaymentViaRazorpay(order, { reason: order.returnReason || "Return refund" });
+      const refund = await refundPaymentViaRazorpay(order, {
+        reason: order.returnReason || "Return refund",
+      });
       order.refundId = refund.id;
       order.refundStatus = refund.status === "processed" ? "COMPLETED" : "INITIATED";
       if (order.refundStatus === "COMPLETED") order.returnStatus = "CLOSED";
@@ -583,9 +591,11 @@ export const initiateRefund = async (req, res) => {
   }
 
   const refundStatusCopy =
-    order.refundStatus === "COMPLETED" ? "completed"
-    : order.refundStatus === "FAILED" ? "could not be processed — our team will follow up"
-    : "initiated";
+    order.refundStatus === "COMPLETED"
+      ? "completed"
+      : order.refundStatus === "FAILED"
+        ? "could not be processed — our team will follow up"
+        : "initiated";
 
   createUserNotification(
     order.userId,
@@ -834,10 +844,16 @@ export const cancelOrder = async (req, res) => {
     session.endSession();
   }
 
-  if (order.paymentStatus === "PAID" && order.refundMethod === "ORIGINAL" && order.refundStatus !== "COMPLETED") {
+  if (
+    order.paymentStatus === "PAID" &&
+    order.refundMethod === "ORIGINAL" &&
+    order.refundStatus !== "COMPLETED"
+  ) {
     if (order.paymentId) {
       try {
-        const refund = await refundPaymentViaRazorpay(order, { reason: "Order cancellation refund" });
+        const refund = await refundPaymentViaRazorpay(order, {
+          reason: "Order cancellation refund",
+        });
         order.refundId = refund.id;
         order.refundStatus = refund.status === "processed" ? "COMPLETED" : "INITIATED";
         if (order.refundStatus === "COMPLETED") order.returnStatus = "CLOSED";

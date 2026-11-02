@@ -32,11 +32,18 @@ const SIZES = { thumb: 300, md: 800, lg: 1600 };
 const CONCURRENCY = 4;
 const TIMEOUT_MS = 30000;
 
-const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "x";
+const slug = (s) =>
+  String(s)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "") || "x";
 
 async function download(url) {
   const res = await fetch(url, {
-    headers: { "User-Agent": "Mozilla/5.0 (compatible; VKartCatalog/1.0)", Accept: "image/avif,image/webp,image/*,*/*" },
+    headers: {
+      "User-Agent": "Mozilla/5.0 (compatible; VKartCatalog/1.0)",
+      Accept: "image/avif,image/webp,image/*,*/*",
+    },
     signal: AbortSignal.timeout(TIMEOUT_MS),
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -64,10 +71,16 @@ async function store(key, files, { outDir, dryRun }) {
       fs.mkdirSync(path.dirname(path.join(outDir, name)), { recursive: true });
       fs.writeFileSync(path.join(outDir, name), body);
     } else {
-      await s3.send(new PutObjectCommand({
-        Bucket: BUCKET, Key: name, Body: body, ContentType: "image/webp",
-        CacheControl: "public, max-age=31536000, immutable", ServerSideEncryption: "AES256",
-      }));
+      await s3.send(
+        new PutObjectCommand({
+          Bucket: BUCKET,
+          Key: name,
+          Body: body,
+          ContentType: "image/webp",
+          CacheControl: "public, max-age=31536000, immutable",
+          ServerSideEncryption: "AES256",
+        })
+      );
     }
   }
 }
@@ -75,15 +88,22 @@ async function store(key, files, { outDir, dryRun }) {
 // Runs fn over items with a small worker pool.
 async function pool(items, fn) {
   let next = 0;
-  await Promise.all(Array.from({ length: CONCURRENCY }, async () => {
-    while (next < items.length) await fn(items[next++]);
-  }));
+  await Promise.all(
+    Array.from({ length: CONCURRENCY }, async () => {
+      while (next < items.length) await fn(items[next++]);
+    })
+  );
 }
 
 async function processProduct({ file, doc }, opts, stats) {
   const { media } = doc;
-  const lists = [...Object.entries(media.groups || {}).map(([g, list]) => [slug(g), list]), ["common", media.common || []]];
-  const pending = lists.flatMap(([group, list]) => list.map((item, i) => ({ group, list, i, item }))).filter((x) => x.item.src && !x.item.key);
+  const lists = [
+    ...Object.entries(media.groups || {}).map(([g, list]) => [slug(g), list]),
+    ["common", media.common || []],
+  ];
+  const pending = lists
+    .flatMap(([group, list]) => list.map((item, i) => ({ group, list, i, item })))
+    .filter((x) => x.item.src && !x.item.key);
   if (!pending.length) return false;
 
   const results = [];
@@ -122,18 +142,27 @@ async function main() {
   const opts = { dryRun: args.includes("--dry-run"), outDir: value("out") };
   const limit = Number(value("limit") || Infinity);
 
-  if (!opts.dryRun && !opts.outDir && (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY)) {
-    console.error("Error: Missing AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY (or pass --out=dir or --dry-run).");
+  if (
+    !opts.dryRun &&
+    !opts.outDir &&
+    (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY)
+  ) {
+    console.error(
+      "Error: Missing AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY (or pass --out=dir or --dry-run)."
+    );
     process.exit(1);
   }
 
   const entries = loadProducts(undefined, { category: value("category") }).slice(0, limit);
-  console.log(`[INFO] ${entries.length} products → ${opts.dryRun ? "dry run" : opts.outDir ? `local folder ${opts.outDir}` : `s3://${BUCKET}/${PREFIX}/`}`);
+  console.log(
+    `[INFO] ${entries.length} products → ${opts.dryRun ? "dry run" : opts.outDir ? `local folder ${opts.outDir}` : `s3://${BUCKET}/${PREFIX}/`}`
+  );
 
   const stats = { products: 0, uploaded: 0, tooSmall: 0, failed: 0 };
   for (const [n, entry] of entries.entries()) {
     const changed = await processProduct(entry, opts, stats);
-    if (changed && !opts.dryRun) fs.writeFileSync(path.join(DATA_DIR, entry.file), `${JSON.stringify(entry.doc, null, 2)}\n`);
+    if (changed && !opts.dryRun)
+      fs.writeFileSync(path.join(DATA_DIR, entry.file), `${JSON.stringify(entry.doc, null, 2)}\n`);
     if (changed) stats.products++;
     if ((n + 1) % 10 === 0) console.log(`   [${n + 1}/${entries.length}]`, stats);
   }
