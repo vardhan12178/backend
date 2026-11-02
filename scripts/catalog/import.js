@@ -5,7 +5,14 @@ import dotenv from "dotenv";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import CatalogProduct from "../../models/CatalogProduct.js";
 import { syncRatings } from "../../services/catalog.ratings.js";
-import { loadProducts, validateCatalog, withStock, derive, buildSearchText, contentHash } from "./lib.js";
+import {
+  loadProducts,
+  validateCatalog,
+  withStock,
+  derive,
+  buildSearchText,
+  contentHash,
+} from "./lib.js";
 
 // Imports data/catalog/*/*.json into the catalog_products collection.
 //
@@ -33,7 +40,8 @@ export function makeEmbedder(apiKey = process.env.GEMINI_API_KEY) {
   const model = new GoogleGenerativeAI(apiKey).getGenerativeModel({ model: EMBEDDING_MODEL });
   return async (text) => {
     const payload = { content: { parts: [{ text }] }, taskType: "RETRIEVAL_DOCUMENT" };
-    if (Number.isFinite(EMBEDDING_DIM) && EMBEDDING_DIM > 0) payload.outputDimensionality = EMBEDDING_DIM;
+    if (Number.isFinite(EMBEDDING_DIM) && EMBEDDING_DIM > 0)
+      payload.outputDimensionality = EMBEDDING_DIM;
     for (let attempt = 0; ; attempt++) {
       try {
         const vector = (await model.embedContent(payload))?.embedding?.values;
@@ -51,10 +59,22 @@ export function makeEmbedder(apiKey = process.env.GEMINI_API_KEY) {
  * Upserts every catalog file. `embed` is injected so tests can run without Gemini.
  * Returns counts: { created, updated, skipped, embedded, failed }.
  */
-export async function runImport({ entries, embed = null, dryRun = false, force = false, status = null, log = console.log }) {
+export async function runImport({
+  entries,
+  embed = null,
+  dryRun = false,
+  force = false,
+  status = null,
+  log = console.log,
+}) {
   const stats = { created: 0, updated: 0, skipped: 0, embedded: 0, failed: 0 };
   const existing = new Map(
-    (await CatalogProduct.find({}, { slug: 1, contentHash: 1, searchText: 1, embeddingUpdatedAt: 1 }).lean()).map((p) => [p.slug, p])
+    (
+      await CatalogProduct.find(
+        {},
+        { slug: 1, contentHash: 1, searchText: 1, embeddingUpdatedAt: 1 }
+      ).lean()
+    ).map((p) => [p.slug, p])
   );
 
   for (const { file, doc: raw } of entries) {
@@ -63,7 +83,8 @@ export async function runImport({ entries, embed = null, dryRun = false, force =
     const prev = existing.get(doc.slug);
     const searchText = buildSearchText(doc);
     // Only the search text is embedded, so image or stock changes don't cost a Gemini call.
-    const needsEmbed = embed && (force || !prev?.embeddingUpdatedAt || prev.searchText !== searchText);
+    const needsEmbed =
+      embed && (force || !prev?.embeddingUpdatedAt || prev.searchText !== searchText);
 
     if (prev && prev.contentHash === hash && !force && !needsEmbed) {
       stats.skipped++;
@@ -83,7 +104,11 @@ export async function runImport({ entries, embed = null, dryRun = false, force =
         stats.embedded++;
         await sleep(embed.delay ?? BATCH_DELAY);
       }
-      await CatalogProduct.updateOne({ slug: doc.slug }, { $set: update }, { upsert: true, runValidators: true });
+      await CatalogProduct.updateOne(
+        { slug: doc.slug },
+        { $set: update },
+        { upsert: true, runValidators: true }
+      );
       stats[prev ? "updated" : "created"]++;
     } catch (err) {
       stats.failed++;

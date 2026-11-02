@@ -22,11 +22,18 @@ const ROUNDS = 2;
 const SAMPLE_MESSAGE = "gaming phone under 40k with big battery";
 
 function withTimeout(promise, ms) {
-  return Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error(`timed out after ${ms}ms`)), ms))]);
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(`timed out after ${ms}ms`)), ms)),
+  ]);
 }
 
 async function samplePool() {
-  return CatalogProduct.find({ category: "mobiles", inStock: true, "priceRange.min": { $lte: 40000 } })
+  return CatalogProduct.find({
+    category: "mobiles",
+    inStock: true,
+    "priceRange.min": { $lte: 40000 },
+  })
     .select({ embedding: 0, specs: 0, description: 0, source: 0, variantOptions: 0 })
     .sort({ "keySpecs.batteryMah": -1 })
     .limit(10)
@@ -37,8 +44,14 @@ async function probeModel(genAI, model, pool) {
   const results = [];
   for (let round = 1; round <= ROUNDS; round++) {
     for (const task of ["intent", "answer"]) {
-      const prompt = task === "intent" ? intentPrompt(SAMPLE_MESSAGE, []) : answerPrompt(SAMPLE_MESSAGE, pool, []);
-      const m = genAI.getGenerativeModel({ model, generationConfig: { responseMimeType: "application/json" } });
+      const prompt =
+        task === "intent"
+          ? intentPrompt(SAMPLE_MESSAGE, [])
+          : answerPrompt(SAMPLE_MESSAGE, pool, []);
+      const m = genAI.getGenerativeModel({
+        model,
+        generationConfig: { responseMimeType: "application/json" },
+      });
       const started = Date.now();
       try {
         const r = await withTimeout(m.generateContent(prompt), CALL_TIMEOUT_MS);
@@ -58,12 +71,17 @@ async function probeModel(genAI, model, pool) {
           quality = "INVALID JSON";
         }
         results.push({ task, ms, ok: true });
-        console.log(`[modelProbe] ${model} ${task} round ${round}: ${ms}ms tokens in/out/thoughts ${u.promptTokenCount}/${u.candidatesTokenCount}/${u.thoughtsTokenCount ?? 0} ${quality}`);
+        console.log(
+          `[modelProbe] ${model} ${task} round ${round}: ${ms}ms tokens in/out/thoughts ${u.promptTokenCount}/${u.candidatesTokenCount}/${u.thoughtsTokenCount ?? 0} ${quality}`
+        );
       } catch (err) {
         const ms = Date.now() - started;
         results.push({ task, ms, ok: false });
-        console.log(`[modelProbe] ${model} ${task} round ${round}: FAILED after ${ms}ms: ${String(err.message).slice(0, 200)}`);
-        if (/404|not found|not supported/i.test(err.message)) return { model, results, missing: true };
+        console.log(
+          `[modelProbe] ${model} ${task} round ${round}: FAILED after ${ms}ms: ${String(err.message).slice(0, 200)}`
+        );
+        if (/404|not found|not supported/i.test(err.message))
+          return { model, results, missing: true };
       }
     }
   }
@@ -72,16 +90,31 @@ async function probeModel(genAI, model, pool) {
 
 export async function runModelProbe(setting) {
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-  const models = setting && setting !== "1" && setting !== "true"
-    ? setting.split(",").map((s) => s.trim()).filter(Boolean)
-    : DEFAULT_CANDIDATES;
+  const models =
+    setting && setting !== "1" && setting !== "true"
+      ? setting
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : DEFAULT_CANDIDATES;
   const pool = await samplePool();
-  console.log(`[modelProbe] starting: ${models.length} models, ${ROUNDS} rounds, ${pool.length} candidate products`);
+  console.log(
+    `[modelProbe] starting: ${models.length} models, ${ROUNDS} rounds, ${pool.length} candidate products`
+  );
 
-  const all = await Promise.all(models.map((m) => probeModel(genAI, m, pool).catch((err) => ({ model: m, results: [], error: err.message }))));
+  const all = await Promise.all(
+    models.map((m) =>
+      probeModel(genAI, m, pool).catch((err) => ({ model: m, results: [], error: err.message }))
+    )
+  );
   for (const r of all) {
-    const ok = r.results.filter((x) => x.ok).map((x) => x.ms).sort((a, b) => a - b);
+    const ok = r.results
+      .filter((x) => x.ok)
+      .map((x) => x.ms)
+      .sort((a, b) => a - b);
     const median = ok.length ? ok[Math.floor(ok.length / 2)] : null;
-    console.log(`[modelProbe] SUMMARY ${r.model}: ${r.missing ? "model not available" : `${ok.length}/${r.results.length} ok, median ${median ?? "-"}ms, max ${ok.length ? ok[ok.length - 1] : "-"}ms`}`);
+    console.log(
+      `[modelProbe] SUMMARY ${r.model}: ${r.missing ? "model not available" : `${ok.length}/${r.results.length} ok, median ${median ?? "-"}ms, max ${ok.length ? ok[ok.length - 1] : "-"}ms`}`
+    );
   }
 }

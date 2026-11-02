@@ -7,7 +7,9 @@ import { ratingFor } from "./catalog.reviews.js";
 export function combinedRating(product, real = { sum: 0, n: 0 }) {
   const base = ratingFor(product) || { average: 0, count: 0 };
   const count = base.count + real.n;
-  const average = count ? Math.round(((base.average * base.count + real.sum) / count) * 10) / 10 : 0;
+  const average = count
+    ? Math.round(((base.average * base.count + real.sum) / count) * 10) / 10
+    : 0;
   return { average, count };
 }
 

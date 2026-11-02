@@ -9,7 +9,11 @@ import { SORT_KEYS, MAX_PAGE_SIZE } from "../services/catalog.service.js";
 // Mounted at /api/v2 (docs/CATALOG_SCHEMA.md §8)
 const router = express.Router();
 
-const slug = param("slug").isString().trim().matches(/^[a-z0-9-]{1,160}$/).withMessage("Invalid slug");
+const slug = param("slug")
+  .isString()
+  .trim()
+  .matches(/^[a-z0-9-]{1,160}$/)
+  .withMessage("Invalid slug");
 
 router.get("/categories", catalog.getCategories);
 
@@ -37,23 +41,64 @@ router.get("/products/:slug", [slug], validate, catalog.getProduct);
 const reviewBody = [
   body("stars").isInt({ min: 1, max: 5 }).toInt(),
   body("title").optional({ values: "falsy" }).isString().isLength({ max: 80 }),
-  body("body").isString().trim().isLength({ min: 10, max: 1500 }).withMessage("Write at least 10 characters"),
+  body("body")
+    .isString()
+    .trim()
+    .isLength({ min: 10, max: 1500 })
+    .withMessage("Write at least 10 characters"),
 ];
 const reviewId = param("id").isMongoId();
-router.get("/products/:slug/reviews", optionalAuth, [slug, query("sort").optional().isIn(["recent", "helpful", "high", "low"]), query("page").optional().isInt({ min: 1, max: 500 }).toInt(), query("limit").optional().isInt({ min: 1, max: 30 }).toInt()], validate, reviews.list);
-router.post("/products/:slug/reviews", authenticateJWT, [slug, ...reviewBody], validate, reviews.create);
-router.put("/reviews/:id", authenticateJWT, [reviewId, body("stars").optional().isInt({ min: 1, max: 5 }).toInt(), body("title").optional().isString().isLength({ max: 80 }), body("body").optional().isString().trim().isLength({ min: 10, max: 1500 })], validate, reviews.update);
+router.get(
+  "/products/:slug/reviews",
+  optionalAuth,
+  [
+    slug,
+    query("sort").optional().isIn(["recent", "helpful", "high", "low"]),
+    query("page").optional().isInt({ min: 1, max: 500 }).toInt(),
+    query("limit").optional().isInt({ min: 1, max: 30 }).toInt(),
+  ],
+  validate,
+  reviews.list
+);
+router.post(
+  "/products/:slug/reviews",
+  authenticateJWT,
+  [slug, ...reviewBody],
+  validate,
+  reviews.create
+);
+router.put(
+  "/reviews/:id",
+  authenticateJWT,
+  [
+    reviewId,
+    body("stars").optional().isInt({ min: 1, max: 5 }).toInt(),
+    body("title").optional().isString().isLength({ max: 80 }),
+    body("body").optional().isString().trim().isLength({ min: 10, max: 1500 }),
+  ],
+  validate,
+  reviews.update
+);
 router.delete("/reviews/:id", authenticateJWT, [reviewId], validate, reviews.remove);
 router.post("/reviews/:id/helpful", authenticateJWT, [reviewId], validate, reviews.helpful);
 
-router.get("/products/:slug/similar", [slug, query("limit").optional().isInt({ min: 1, max: 24 }).toInt()], validate, catalog.getSimilar);
+router.get(
+  "/products/:slug/similar",
+  [slug, query("limit").optional().isInt({ min: 1, max: 24 }).toInt()],
+  validate,
+  catalog.getSimilar
+);
 
 // Delivery estimate for a PIN code (and optionally the storefront category, for large items)
 router.get(
   "/delivery/:pincode",
   [
     param("pincode").isString().trim().isLength({ min: 1, max: 12 }),
-    query("category").optional().isString().trim().matches(/^[a-z-]{1,40}$/),
+    query("category")
+      .optional()
+      .isString()
+      .trim()
+      .matches(/^[a-z-]{1,40}$/),
   ],
   validate,
   catalog.getDelivery

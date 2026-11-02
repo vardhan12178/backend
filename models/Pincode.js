@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+import mongoose from "mongoose";
 
 const { Schema } = mongoose;
 
@@ -7,13 +7,13 @@ const { Schema } = mongoose;
 const pincodeSchema = new Schema(
   {
     _id: { type: String, match: /^[1-9][0-9]{5}$/ }, // the 6-digit PIN code
-    area: { type: String, trim: true },              // main post office name, e.g. "Indiranagar"
+    area: { type: String, trim: true }, // main post office name, e.g. "Indiranagar"
     district: { type: String, trim: true },
     state: { type: String, trim: true },
-    delivery: { type: Boolean, default: true },      // at least one office here delivers mail
-    location: { lat: Number, lng: Number },          // average of the offices' coordinates, when published
+    delivery: { type: Boolean, default: true }, // at least one office here delivers mail
+    location: { lat: Number, lng: Number }, // average of the offices' coordinates, when published
   },
   { versionKey: false, timestamps: { createdAt: false, updatedAt: true } }
 );
 
-export default mongoose.models.Pincode || mongoose.model('Pincode', pincodeSchema, 'pincodes');
+export default mongoose.models.Pincode || mongoose.model("Pincode", pincodeSchema, "pincodes");

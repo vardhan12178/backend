@@ -24,8 +24,9 @@ export function emailTemplate({ title, body, ctaLabel, ctaUrl }) {
         <p style="color:#444;line-height:1.6;margin:0 0 16px">${body}</p>
         ${
           ctaUrl
-            ? `<a href="${ctaUrl}" style="background:#111;color:#fff;text-decoration:none;padding:10px 16px;border-radius:10px;display:inline-block;font-weight:600">${ctaLabel ||
-                "Open"}</a>`
+            ? `<a href="${ctaUrl}" style="background:#111;color:#fff;text-decoration:none;padding:10px 16px;border-radius:10px;display:inline-block;font-weight:600">${
+                ctaLabel || "Open"
+              }</a>`
             : ""
         }
       </div>

@@ -3,9 +3,7 @@ import { isTokenRevoked } from "../utils/tokenBlacklist.js";
 
 export const authenticateJWT = async (req, res, next) => {
   const bearer = req.headers.authorization;
-  const token =
-    req.cookies?.jwt_token ||
-    (bearer?.startsWith("Bearer ") ? bearer.slice(7) : null);
+  const token = req.cookies?.jwt_token || (bearer?.startsWith("Bearer ") ? bearer.slice(7) : null);
 
   if (!token) return res.status(401).json({ error: "unauthorized" });
 
@@ -38,9 +36,7 @@ export const requireAdmin = (req, res, next) => {
 
 export const optionalAuth = async (req, _res, next) => {
   const bearer = req.headers.authorization;
-  const token =
-    req.cookies?.jwt_token ||
-    (bearer?.startsWith("Bearer ") ? bearer.slice(7) : null);
+  const token = req.cookies?.jwt_token || (bearer?.startsWith("Bearer ") ? bearer.slice(7) : null);
 
   if (!token) return next();
 

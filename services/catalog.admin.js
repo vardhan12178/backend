@@ -1,6 +1,12 @@
 import CatalogProduct from "../models/CatalogProduct.js";
 import { notifyVariantChange } from "./alerts.service.js";
-import { CATEGORY_GROUPS, imagesFor, resolveImage, discountPercent, storefrontCategoryOf } from "./catalog.service.js";
+import {
+  CATEGORY_GROUPS,
+  imagesFor,
+  resolveImage,
+  discountPercent,
+  storefrontCategoryOf,
+} from "./catalog.service.js";
 
 // Admin listing and edits for catalog: status, featured flag, and per-variant price, MRP and stock.
 // Edits live in MongoDB; scripts/catalog/import.js only rewrites a product when its data file changes.
@@ -23,7 +29,9 @@ export function adminMatch({ q, category, status, stock } = {}) {
   const group = category ? groupOf(String(category)) : null;
   if (group) Object.assign(match, group.match);
   if (STOCK_FILTERS[stock]) Object.assign(match, STOCK_FILTERS[stock]);
-  const term = String(q || "").trim().slice(0, 80);
+  const term = String(q || "")
+    .trim()
+    .slice(0, 80);
   if (term) {
     const re = { $regex: escapeRegex(term), $options: "i" };
     match.$or = [{ title: re }, { brand: re }, { slug: re }, { "variants.sku": re }];
@@ -51,7 +59,10 @@ export function toAdminRow(p) {
     updatedAt: p.updatedAt,
     variants: p.variants.map((v) => ({
       sku: v.sku,
-      label: Object.values(v.options || {}).filter(Boolean).join(" · ") || "Standard",
+      label:
+        Object.values(v.options || {})
+          .filter(Boolean)
+          .join(" · ") || "Standard",
       price: v.price,
       mrp: v.mrp,
       stock: v.stock || 0,
@@ -65,29 +76,91 @@ export async function listAdminProducts(query = {}) {
   const page = Math.max(1, Number.parseInt(query.page, 10) || 1);
   const limit = Math.min(50, Math.max(1, Number.parseInt(query.limit, 10) || PAGE_SIZE));
   const match = adminMatch(query);
-  const sort = query.sort === "title" ? { title: 1 } : query.sort === "stock" ? { inStock: 1, "priceRange.min": 1 } : { updatedAt: -1, _id: 1 };
+  const sort =
+    query.sort === "title"
+      ? { title: 1 }
+      : query.sort === "stock"
+        ? { inStock: 1, "priceRange.min": 1 }
+        : { updatedAt: -1, _id: 1 };
 
   // Summary counts ignore the status/stock filters so the tabs always show their totals
   const scope = adminMatch({ q: query.q, category: query.category });
   const [docs, total, summary] = await Promise.all([
-    CatalogProduct.find(match, { embedding: 0, searchText: 0, specs: 0, description: 0, source: 0, highlights: 0 })
-      .sort(sort).skip((page - 1) * limit).limit(limit).lean(),
+    CatalogProduct.find(match, {
+      embedding: 0,
+      searchText: 0,
+      specs: 0,
+      description: 0,
+      source: 0,
+      highlights: 0,
+    })
+      .sort(sort)
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean(),
     CatalogProduct.countDocuments(match),
     CatalogProduct.aggregate([
       { $match: scope },
-      { $group: {
-        _id: null,
-        all: { $sum: 1 },
-        active: { $sum: { $cond: [{ $eq: ["$status", "active"] }, 1, 0] } },
-        draft: { $sum: { $cond: [{ $eq: ["$status", "draft"] }, 1, 0] } },
-        archived: { $sum: { $cond: [{ $eq: ["$status", "archived"] }, 1, 0] } },
-        out: { $sum: { $cond: [{ $anyElementTrue: [{ $map: { input: "$variants", as: "v", in: { $lte: ["$$v.stock", 0] } } }] }, 1, 0] } },
-        low: { $sum: { $cond: [{ $anyElementTrue: [{ $map: { input: "$variants", as: "v", in: { $and: [{ $gt: ["$$v.stock", 0] }, { $lte: ["$$v.stock", LOW_STOCK] }] } } }] }, 1, 0] } },
-      } },
+      {
+        $group: {
+          _id: null,
+          all: { $sum: 1 },
+          active: { $sum: { $cond: [{ $eq: ["$status", "active"] }, 1, 0] } },
+          draft: { $sum: { $cond: [{ $eq: ["$status", "draft"] }, 1, 0] } },
+          archived: { $sum: { $cond: [{ $eq: ["$status", "archived"] }, 1, 0] } },
+          out: {
+            $sum: {
+              $cond: [
+                {
+                  $anyElementTrue: [
+                    { $map: { input: "$variants", as: "v", in: { $lte: ["$$v.stock", 0] } } },
+                  ],
+                },
+                1,
+                0,
+              ],
+            },
+          },
+          low: {
+            $sum: {
+              $cond: [
+                {
+                  $anyElementTrue: [
+                    {
+                      $map: {
+                        input: "$variants",
+                        as: "v",
+                        in: {
+                          $and: [{ $gt: ["$$v.stock", 0] }, { $lte: ["$$v.stock", LOW_STOCK] }],
+                        },
+                      },
+                    },
+                  ],
+                },
+                1,
+                0,
+              ],
+            },
+          },
+        },
+      },
     ]),
   ]);
-  const { _id, ...counts } = summary[0] || { all: 0, active: 0, draft: 0, archived: 0, out: 0, low: 0 };
-  return { products: docs.map(toAdminRow), total, page, pages: Math.max(1, Math.ceil(total / limit)), counts };
+  const { _id, ...counts } = summary[0] || {
+    all: 0,
+    active: 0,
+    draft: 0,
+    archived: 0,
+    out: 0,
+    low: 0,
+  };
+  return {
+    products: docs.map(toAdminRow),
+    total,
+    page,
+    pages: Math.max(1, Math.ceil(total / limit)),
+    counts,
+  };
 }
 
 export class AdminEditError extends Error {
@@ -105,7 +178,11 @@ export async function updateProductMeta(id, { status, isFeatured }) {
   }
   if (isFeatured !== undefined) set.isFeatured = Boolean(isFeatured);
   if (!Object.keys(set).length) throw new AdminEditError("Nothing to update");
-  const p = await CatalogProduct.findByIdAndUpdate(id, { $set: set }, { new: true, projection: { embedding: 0 } }).lean();
+  const p = await CatalogProduct.findByIdAndUpdate(
+    id,
+    { $set: set },
+    { new: true, projection: { embedding: 0 } }
+  ).lean();
   if (!p) throw new AdminEditError("Product not found", 404);
   return toAdminRow(p);
 }
@@ -113,9 +190,13 @@ export async function updateProductMeta(id, { status, isFeatured }) {
 /** Sets the status of several products at once; ids may be "all" with a filter instead. */
 export async function bulkSetStatus({ ids, filter, status }) {
   if (!STATUSES.includes(status)) throw new AdminEditError("Unknown status");
-  const match = ids === "all" ? adminMatch(filter || {}) : { _id: { $in: Array.isArray(ids) ? ids : [] } };
-  if (ids !== "all" && !match._id.$in.length) throw new AdminEditError("Select at least one product");
-  const { modifiedCount, matchedCount } = await CatalogProduct.updateMany(match, { $set: { status } });
+  const match =
+    ids === "all" ? adminMatch(filter || {}) : { _id: { $in: Array.isArray(ids) ? ids : [] } };
+  if (ids !== "all" && !match._id.$in.length)
+    throw new AdminEditError("Select at least one product");
+  const { modifiedCount, matchedCount } = await CatalogProduct.updateMany(match, {
+    $set: { status },
+  });
   return { matched: matchedCount, updated: modifiedCount, status };
 }
 
@@ -141,7 +222,8 @@ export async function updateVariant(id, sku, { price, mrp, stock }) {
   p.inStock = p.variants.some((x) => (x.stock || 0) > 0);
   await p.save();
   // Shoppers watching this variant hear about a lower price or a restock; a failure here must not undo the edit
-  await notifyVariantChange(p._id, sku, before, { price: v.price, stock: v.stock || 0 })
-    .catch((err) => console.error("alerts after variant edit:", err.message));
+  await notifyVariantChange(p._id, sku, before, { price: v.price, stock: v.stock || 0 }).catch(
+    (err) => console.error("alerts after variant edit:", err.message)
+  );
   return toAdminRow(p.toObject());
 }

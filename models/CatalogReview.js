@@ -22,4 +22,5 @@ const catalogReviewSchema = new mongoose.Schema(
 catalogReviewSchema.index({ productId: 1, userId: 1 }, { unique: true });
 catalogReviewSchema.index({ productId: 1, status: 1, createdAt: -1 });
 
-export default mongoose.models.CatalogReview || mongoose.model("CatalogReview", catalogReviewSchema);
+export default mongoose.models.CatalogReview ||
+  mongoose.model("CatalogReview", catalogReviewSchema);

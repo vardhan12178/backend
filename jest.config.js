@@ -1,10 +1,10 @@
 export default {
-  testEnvironment: 'node',
+  testEnvironment: "node",
   transform: {},
   verbose: true,
-  roots: ['<rootDir>/tests'],
-  testMatch: ['**/*.test.js'],
-  coveragePathIgnorePatterns: ['/node_modules/'],
+  roots: ["<rootDir>/tests"],
+  testMatch: ["**/*.test.js"],
+  coveragePathIgnorePatterns: ["/node_modules/"],
   testTimeout: 30000,
-  setupFilesAfterEnv: ['<rootDir>/tests/setup.js']
+  setupFilesAfterEnv: ["<rootDir>/tests/setup.js"],
 };

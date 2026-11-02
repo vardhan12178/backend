@@ -18,7 +18,8 @@ export const createCoupon = async (req, res) => {
     } = req.body;
 
     // Backward compatible mapping for older payload contracts.
-    const type = req.body.type || (req.body.discountType === "percentage" ? "percent" : req.body.discountType);
+    const type =
+      req.body.type || (req.body.discountType === "percentage" ? "percent" : req.body.discountType);
     const value = req.body.value ?? req.body.discountValue;
 
     if (!code || !type || value == null || !validTo) {
@@ -82,7 +83,11 @@ export const updateCoupon = async (req, res) => {
     delete updates.discountType;
     delete updates.discountValue;
 
-    if (updates.type === "percent" && updates.value != null && (updates.value < 1 || updates.value > 100)) {
+    if (
+      updates.type === "percent" &&
+      updates.value != null &&
+      (updates.value < 1 || updates.value > 100)
+    ) {
       return res.status(400).json({ message: "Percent value must be between 1 and 100" });
     }
 

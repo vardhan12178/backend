@@ -15,7 +15,10 @@ export class LineError extends Error {
 
 export const isCatalogLine = (p) => p?.catalog === "v2";
 
-export const variantLabel = (variant) => Object.values(variant?.options || {}).filter(Boolean).join(" · ");
+export const variantLabel = (variant) =>
+  Object.values(variant?.options || {})
+    .filter(Boolean)
+    .join(" · ");
 
 function lineImage(product, variant) {
   const first = imagesFor(product, variant.options?.[product.media?.groupBy])[0];
@@ -28,19 +31,44 @@ const SELLABLE = ["active", "draft"];
  * Takes `qty` units of `sku` out of stock inside `session` and returns the priced line.
  * The decrement is a single conditional update, so two orders can't both take the last unit.
  */
-export async function reserveLine({ productId, sku, quantity }, session, { sale = null, isPrime = false } = {}) {
+export async function reserveLine(
+  { productId, sku, quantity },
+  session,
+  { sale = null, isPrime = false } = {}
+) {
   const qty = Math.max(1, Math.trunc(Number(quantity) || 0));
   if (!sku) throw new LineError("Missing variant for catalog item");
 
   const product = await CatalogProduct.findOneAndUpdate(
-    { _id: productId, status: { $in: SELLABLE }, variants: { $elemMatch: { sku, stock: { $gte: qty } } } },
+    {
+      _id: productId,
+      status: { $in: SELLABLE },
+      variants: { $elemMatch: { sku, stock: { $gte: qty } } },
+    },
     { $inc: { "variants.$.stock": -qty } },
-    { new: true, session, projection: { title: 1, media: 1, variants: 1, category: 1, categoryPath: 1, "keySpecs.gender": 1 } }
+    {
+      new: true,
+      session,
+      projection: {
+        title: 1,
+        media: 1,
+        variants: 1,
+        category: 1,
+        categoryPath: 1,
+        "keySpecs.gender": 1,
+      },
+    }
   ).lean();
 
   if (!product) {
-    const exists = await CatalogProduct.findOne({ _id: productId, status: { $in: SELLABLE }, "variants.sku": sku })
-      .select("title").session(session).lean();
+    const exists = await CatalogProduct.findOne({
+      _id: productId,
+      status: { $in: SELLABLE },
+      "variants.sku": sku,
+    })
+      .select("title")
+      .session(session)
+      .lean();
     if (!exists) throw new LineError("Product unavailable");
     throw new LineError(`Insufficient stock for ${exists.title}`);
   }
@@ -76,8 +104,12 @@ export async function restoreLine(line, session) {
   const was = before?.variants.find((v) => v.sku === line.sku);
   // A cancelled order can bring an out-of-stock item back: tell the shoppers waiting for it
   if (was && (was.stock || 0) <= 0) {
-    await notifyVariantChange(line.productId, line.sku, { price: was.price, stock: was.stock || 0 }, { price: was.price, stock: line.quantity })
-      .catch((err) => console.error("alerts after restock:", err.message));
+    await notifyVariantChange(
+      line.productId,
+      line.sku,
+      { price: was.price, stock: was.stock || 0 },
+      { price: was.price, stock: line.quantity }
+    ).catch((err) => console.error("alerts after restock:", err.message));
   }
 }
 
@@ -86,10 +118,13 @@ export async function restoreLine(line, session) {
  * Input: [{ productId, sku, quantity }]. Unknown lines come back with available: false.
  */
 export async function resolveCartLines(lines = [], { sale = null, isPrime = false } = {}) {
-  const valid = lines.filter((l) => l && l.productId && l.sku && /^[a-f0-9]{24}$/i.test(String(l.productId))).slice(0, 100);
+  const valid = lines
+    .filter((l) => l && l.productId && l.sku && /^[a-f0-9]{24}$/i.test(String(l.productId)))
+    .slice(0, 100);
   const ids = [...new Set(valid.map((l) => String(l.productId)))];
   const products = await CatalogProduct.find({ _id: { $in: ids }, status: { $in: SELLABLE } })
-    .select("slug title brand category categoryPath keySpecs.gender media variants").lean();
+    .select("slug title brand category categoryPath keySpecs.gender media variants")
+    .lean();
   const byId = new Map(products.map((p) => [String(p._id), p]));
 
   return valid.map((l) => {

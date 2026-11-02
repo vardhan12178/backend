@@ -6,7 +6,10 @@ import { fileURLToPath } from "url";
 // Pure helpers for the catalog import: load, validate, derive fields and build the embedding text.
 // Kept free of Mongo and Gemini so they can be unit tested and reused by admin save hooks.
 
-export const DATA_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../data/catalog");
+export const DATA_DIR = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../../data/catalog"
+);
 
 export function loadProducts(dir = DATA_DIR, { category } = {}) {
   const out = [];
@@ -28,13 +31,16 @@ const REQUIRED = ["slug", "title", "brand", "category", "variants", "media"];
 
 export function validateProduct(doc) {
   const errors = [];
-  for (const key of REQUIRED) if (doc[key] == null || doc[key] === "") errors.push(`missing ${key}`);
+  for (const key of REQUIRED)
+    if (doc[key] == null || doc[key] === "") errors.push(`missing ${key}`);
   const variants = Array.isArray(doc.variants) ? doc.variants : [];
   if (!variants.length) errors.push("no variants");
-  if (variants.filter((v) => v.isDefault).length !== 1) errors.push("needs exactly one default variant");
+  if (variants.filter((v) => v.isDefault).length !== 1)
+    errors.push("needs exactly one default variant");
   for (const v of variants) {
     if (!v.sku) errors.push("variant without sku");
-    if (!Number.isInteger(v.price) || !Number.isInteger(v.mrp)) errors.push(`${v.sku}: price/mrp must be integer rupees`);
+    if (!Number.isInteger(v.price) || !Number.isInteger(v.mrp))
+      errors.push(`${v.sku}: price/mrp must be integer rupees`);
     else if (v.mrp < v.price) errors.push(`${v.sku}: mrp below price`);
   }
   const media = doc.media || {};
@@ -65,7 +71,9 @@ export function validateCatalog(entries) {
 const rupees = (n) => `₹${Number(n).toLocaleString("en-IN")}`;
 
 const listJoin = (items) =>
-  items.length <= 1 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+  items.length <= 1
+    ? items.join("")
+    : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
 
 // Files carry stock: null until we have real numbers; fill those with a default so the item is sellable.
 export function withStock(doc, defaultStock) {
@@ -130,19 +138,32 @@ const KEYSPEC_TEXT = {
 };
 
 const CATEGORY_NOUN = {
-  mobiles: "smartphone", laptops: "laptop", tablets: "tablet", tvs: "TV", monitors: "monitor", audio: "audio",
-  wearables: "smartwatch", refrigerators: "refrigerator", "washing-machines": "washing machine",
-  "air-conditioners": "air conditioner", "kitchen-appliances": "kitchen appliance",
+  mobiles: "smartphone",
+  laptops: "laptop",
+  tablets: "tablet",
+  tvs: "TV",
+  monitors: "monitor",
+  audio: "audio",
+  wearables: "smartwatch",
+  refrigerators: "refrigerator",
+  "washing-machines": "washing machine",
+  "air-conditioners": "air conditioner",
+  "kitchen-appliances": "kitchen appliance",
 };
 
 // Short readable paragraph that gets embedded (docs/CATALOG_SCHEMA.md §6). Filtering never relies on it.
 export function buildSearchText(doc) {
   const { min, max } = derive(doc).priceRange;
-  const price = min === max ? `priced at ${rupees(min)}` : `priced from ${rupees(min)} to ${rupees(max)}`;
-  const kind = doc.keySpecs?.productType?.toLowerCase() || CATEGORY_NOUN[doc.category] || doc.category.replace(/-/g, " ");
+  const price =
+    min === max ? `priced at ${rupees(min)}` : `priced from ${rupees(min)} to ${rupees(max)}`;
+  const kind =
+    doc.keySpecs?.productType?.toLowerCase() ||
+    CATEGORY_NOUN[doc.category] ||
+    doc.category.replace(/-/g, " ");
   const parts = [`${doc.title}: ${kind} by ${doc.brand}, ${price}.`];
 
-  if (doc.shortDescription && doc.shortDescription !== doc.title) parts.push(doc.shortDescription.trim().replace(/\.?$/, "."));
+  if (doc.shortDescription && doc.shortDescription !== doc.title)
+    parts.push(doc.shortDescription.trim().replace(/\.?$/, "."));
 
   const specBits = Object.entries(doc.keySpecs || {})
     .filter(([k]) => k !== "productType")

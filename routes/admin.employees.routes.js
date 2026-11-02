@@ -1,6 +1,9 @@
 import express from "express";
 import { authenticateJWT } from "../middleware/auth.js";
-import { requirePermission, requireSuperAdminForRoleAssignment } from "../middleware/permissions.js";
+import {
+  requirePermission,
+  requireSuperAdminForRoleAssignment,
+} from "../middleware/permissions.js";
 import * as employeesController from "../controllers/admin.employees.controller.js";
 
 const router = express.Router();

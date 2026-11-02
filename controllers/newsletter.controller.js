@@ -37,10 +37,7 @@ export const unsubscribe = async (req, res) => {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: "Email required" });
 
-    await Newsletter.findOneAndUpdate(
-      { email: email.toLowerCase().trim() },
-      { active: false }
-    );
+    await Newsletter.findOneAndUpdate({ email: email.toLowerCase().trim() }, { active: false });
 
     res.json({ success: true, message: "Unsubscribed" });
   } catch (err) {

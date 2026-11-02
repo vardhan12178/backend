@@ -1,5 +1,11 @@
 import { invalidatePattern } from "../utils/redis.js";
-import { listAdminProducts, updateProductMeta, updateVariant, bulkSetStatus, AdminEditError } from "../services/catalog.admin.js";
+import {
+  listAdminProducts,
+  updateProductMeta,
+  updateVariant,
+  bulkSetStatus,
+  AdminEditError,
+} from "../services/catalog.admin.js";
 
 // Admin endpoints for the catalog (mounted at /api/admin/v2). Writes clear the cached
 // /api/v2 responses so the storefront shows the change straight away.
@@ -10,7 +16,10 @@ const fail = (res, err, where) => {
   return res.status(500).json({ message: "Server error" });
 };
 
-const clearStoreCache = () => invalidatePattern("catalog:*").catch((err) => console.error("catalog cache clear failed:", err.message));
+const clearStoreCache = () =>
+  invalidatePattern("catalog:*").catch((err) =>
+    console.error("catalog cache clear failed:", err.message)
+  );
 
 export const listProducts = async (req, res) => {
   try {

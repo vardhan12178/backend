@@ -27,9 +27,13 @@ const validateOrder = [
   body("products.*.selectedVariants").optional({ nullable: true }).isString(),
   body("products.*.catalog").optional({ nullable: true }).isIn(["v1", "v2"]),
   body("products.*.sku").optional({ nullable: true }).isString().isLength({ max: 80 }),
-  body("products").custom((items) =>
-    items.every((p) => p?.catalog !== "v2" || (typeof p.sku === "string" && p.sku.trim().length > 0))
-  ).withMessage("Catalog items need a sku"),
+  body("products")
+    .custom((items) =>
+      items.every(
+        (p) => p?.catalog !== "v2" || (typeof p.sku === "string" && p.sku.trim().length > 0)
+      )
+    )
+    .withMessage("Catalog items need a sku"),
 
   body("promo").optional({ nullable: true }).isString(),
   body("paymentVerificationToken").optional({ nullable: true }).isString(),
@@ -51,7 +55,11 @@ router.post("/orders", authenticateJWT, validateOrder, asyncHandler(orderControl
 router.get("/profile/orders", authenticateJWT, asyncHandler(orderController.getUserOrders));
 
 /* CUSTOMER — PAGINATED ORDERS */
-router.get("/profile/orders/paged", authenticateJWT, asyncHandler(orderController.getUserOrdersPaged));
+router.get(
+  "/profile/orders/paged",
+  authenticateJWT,
+  asyncHandler(orderController.getUserOrdersPaged)
+);
 
 /* CUSTOMER — REQUEST RETURN */
 router.post(
@@ -76,10 +84,20 @@ router.post(
 router.get("/orders/:id/invoice", authenticateJWT, asyncHandler(orderController.downloadInvoice));
 
 /* ADMIN — GET ALL ORDERS */
-router.get("/admin/orders", authenticateJWT, requirePermission("orders", "read"), asyncHandler(orderController.getAllOrders));
+router.get(
+  "/admin/orders",
+  authenticateJWT,
+  requirePermission("orders", "read"),
+  asyncHandler(orderController.getAllOrders)
+);
 
 /* ADMIN — GET ORDER BY ID */
-router.get("/admin/orders/:id", authenticateJWT, requirePermission("orders", "read"), asyncHandler(orderController.getOrderById));
+router.get(
+  "/admin/orders/:id",
+  authenticateJWT,
+  requirePermission("orders", "read"),
+  asyncHandler(orderController.getOrderById)
+);
 
 /* ADMIN — UPDATE ORDER STAGE */
 router.patch(

@@ -15,12 +15,12 @@ redis.on("error", (err) => {
 
 /* ── Centralised TTL constants (seconds) ── */
 export const CACHE_TTL = {
-  PRODUCTS_LIST: 300,   // 5 min  – default listing page
-  PRODUCT_DETAIL: 600,  // 10 min – single product
-  PROFILE: 3600,        // 1 hr   – user profile
-  SALE: 60,             // 1 min  – active sale
-  HOME: 300,            // 5 min  – home page data
-  TWO_FA: 300,          // 5 min  – 2FA challenge
+  PRODUCTS_LIST: 300, // 5 min  – default listing page
+  PRODUCT_DETAIL: 600, // 10 min – single product
+  PROFILE: 3600, // 1 hr   – user profile
+  SALE: 60, // 1 min  – active sale
+  HOME: 300, // 5 min  – home page data
+  TWO_FA: 300, // 5 min  – 2FA challenge
   REVIEW_SUMMARY: 3600, // 1 hr   – AI-generated review summary
   COMPARE_SUMMARY: 3600, // 1 hr  – AI-generated product comparison verdict
 };

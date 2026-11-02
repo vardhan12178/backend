@@ -56,9 +56,7 @@ export const getSitemap = async (_req, res) => {
 
     // Product pages
     for (const prod of products) {
-      const lastmod = prod.updatedAt
-        ? new Date(prod.updatedAt).toISOString().slice(0, 10)
-        : today;
+      const lastmod = prod.updatedAt ? new Date(prod.updatedAt).toISOString().slice(0, 10) : today;
       xml += `  <url>\n`;
       xml += `    <loc>${SITE}/products/${prod.slug}</loc>\n`;
       xml += `    <lastmod>${lastmod}</lastmod>\n`;

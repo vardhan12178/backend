@@ -7,6 +7,11 @@ const router = express.Router();
 
 router.post("/support/conversations", authenticateJWT, supportController.createConversation);
 router.get("/support/conversations/mine", authenticateJWT, supportController.getMyConversation);
-router.post("/support/conversations/:id/messages", authenticateJWT, supportMessageLimiter, supportController.sendMessage);
+router.post(
+  "/support/conversations/:id/messages",
+  authenticateJWT,
+  supportMessageLimiter,
+  supportController.sendMessage
+);
 
 export default router;

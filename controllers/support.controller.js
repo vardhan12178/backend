@@ -33,7 +33,9 @@ export const createConversation = async (req, res) => {
     });
 
     try {
-      getIO().to("support_agents").emit("support:new_conversation", { conversation: serialize(convo) });
+      getIO()
+        .to("support_agents")
+        .emit("support:new_conversation", { conversation: serialize(convo) });
     } catch {
       // Socket not initialized (e.g. in tests) — non-fatal, agents will still
       // see it next time they load the inbox.

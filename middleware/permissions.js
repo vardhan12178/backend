@@ -41,7 +41,9 @@ export function requirePermission(module, level = "read") {
         return next();
       }
 
-      const granted = user.permissions?.get ? user.permissions.get(module) : user.permissions?.[module];
+      const granted = user.permissions?.get
+        ? user.permissions.get(module)
+        : user.permissions?.[module];
       const allowed =
         level === "read" ? granted === "read" || granted === "write" : granted === "write";
 
@@ -82,7 +84,9 @@ export function requireSuperAdminForRoleAssignment(req, res, next) {
     return res.status(403).json({ message: "Only a super admin can grant super admin access" });
   }
   if (requestedEmployeesLevel && !isSuperAdmin) {
-    return res.status(403).json({ message: "Only a super admin can grant Employees module access" });
+    return res
+      .status(403)
+      .json({ message: "Only a super admin can grant Employees module access" });
   }
   next();
 }

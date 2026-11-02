@@ -13,7 +13,12 @@ export class ReviewError extends Error {
   }
 }
 
-export const SORTS = { recent: { createdAt: -1 }, helpful: { helpfulCount: -1, createdAt: -1 }, high: { stars: -1, createdAt: -1 }, low: { stars: 1, createdAt: -1 } };
+export const SORTS = {
+  recent: { createdAt: -1 },
+  helpful: { helpfulCount: -1, createdAt: -1 },
+  high: { stars: -1, createdAt: -1 },
+  low: { stars: 1, createdAt: -1 },
+};
 
 // Reviews are plain text: strip tags and control characters, collapse blank runs
 export const cleanText = (s) =>
@@ -25,15 +30,21 @@ export const cleanText = (s) =>
 
 // "Asha Rao" -> "Asha R."; one-word names stay as they are
 export function publicName(name, fallback = "VKart shopper") {
-  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+  const parts = String(name || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
   if (!parts.length) return fallback;
   return parts.length === 1 ? parts[0] : `${parts[0]} ${parts[parts.length - 1][0].toUpperCase()}.`;
 }
 
-const toId = (v) => (v instanceof mongoose.Types.ObjectId ? v : new mongoose.Types.ObjectId(String(v)));
+const toId = (v) =>
+  v instanceof mongoose.Types.ObjectId ? v : new mongoose.Types.ObjectId(String(v));
 
 async function findProduct(slug) {
-  const product = await CatalogProduct.findOne({ slug }).select("slug priceRange rating variants.sku variants.options").lean();
+  const product = await CatalogProduct.findOne({ slug })
+    .select("slug priceRange rating variants.sku variants.options")
+    .lean();
   if (!product) throw new ReviewError(404, "Product not found");
   return product;
 }
@@ -79,7 +90,10 @@ const shape = (r, viewerId) => ({
   voted: Boolean(viewerId) && (r.helpfulBy || []).some((u) => String(u) === String(viewerId)),
 });
 
-export async function listReviews(slug, { sort = "recent", page = 1, limit = 10, viewerId = null } = {}) {
+export async function listReviews(
+  slug,
+  { sort = "recent", page = 1, limit = 10, viewerId = null } = {}
+) {
   const product = await findProduct(slug);
   const filter = { productId: product._id, status: "published" };
   const order = SORTS[sort] || SORTS.recent;
@@ -92,7 +106,9 @@ export async function listReviews(slug, { sort = "recent", page = 1, limit = 10,
       { $limit: limit },
     ]),
     CatalogReview.countDocuments(filter),
-    viewerId ? CatalogReview.findOne({ productId: product._id, userId: toId(viewerId) }).lean() : null,
+    viewerId
+      ? CatalogReview.findOne({ productId: product._id, userId: toId(viewerId) }).lean()
+      : null,
     viewerId ? deliveredOrderFor(viewerId, product) : null,
   ]);
   return {
@@ -110,7 +126,8 @@ export async function listReviews(slug, { sort = "recent", page = 1, limit = 10,
 export async function createReview(userId, slug, { stars, title, body }) {
   const product = await findProduct(slug);
   const delivered = await deliveredOrderFor(userId, product);
-  if (!delivered) throw new ReviewError(403, "Only shoppers whose order was delivered can review this product");
+  if (!delivered)
+    throw new ReviewError(403, "Only shoppers whose order was delivered can review this product");
   const user = await User.findById(userId).select("name username").lean();
   try {
     const review = await CatalogReview.create({
@@ -136,7 +153,8 @@ async function ownReview(userId, id) {
   if (!mongoose.isValidObjectId(id)) throw new ReviewError(404, "Review not found");
   const review = await CatalogReview.findById(id);
   if (!review) throw new ReviewError(404, "Review not found");
-  if (String(review.userId) !== String(userId)) throw new ReviewError(403, "You can only change your own review");
+  if (String(review.userId) !== String(userId))
+    throw new ReviewError(403, "You can only change your own review");
   return review;
 }
 
@@ -146,24 +164,32 @@ export async function updateReview(userId, id, { stars, title, body }) {
   if (title !== undefined) review.title = cleanText(title);
   if (body !== undefined) review.body = cleanText(body);
   await review.save();
-  await refreshRating(await CatalogProduct.findById(review.productId).select("slug priceRange").lean());
+  await refreshRating(
+    await CatalogProduct.findById(review.productId).select("slug priceRange").lean()
+  );
   return shape(review.toObject(), userId);
 }
 
 export async function deleteReview(userId, id) {
   const review = await ownReview(userId, id);
   await review.deleteOne();
-  await refreshRating(await CatalogProduct.findById(review.productId).select("slug priceRange").lean());
+  await refreshRating(
+    await CatalogProduct.findById(review.productId).select("slug priceRange").lean()
+  );
 }
 
 export async function toggleHelpful(userId, id) {
   if (!mongoose.isValidObjectId(id)) throw new ReviewError(404, "Review not found");
   const review = await CatalogReview.findOne({ _id: id, status: "published" });
   if (!review) throw new ReviewError(404, "Review not found");
-  if (String(review.userId) === String(userId)) throw new ReviewError(400, "You can't vote on your own review");
+  if (String(review.userId) === String(userId))
+    throw new ReviewError(400, "You can't vote on your own review");
   const uid = toId(userId);
   const has = review.helpfulBy.some((u) => String(u) === String(uid));
-  await CatalogReview.updateOne({ _id: review._id }, has ? { $pull: { helpfulBy: uid } } : { $addToSet: { helpfulBy: uid } });
+  await CatalogReview.updateOne(
+    { _id: review._id },
+    has ? { $pull: { helpfulBy: uid } } : { $addToSet: { helpfulBy: uid } }
+  );
   const count = review.helpfulBy.length + (has ? -1 : 1);
   return { voted: !has, helpful: count };
 }
@@ -172,10 +198,16 @@ export async function toggleHelpful(userId, id) {
 export async function adminList({ status, page = 1, limit = 20 } = {}) {
   const filter = status ? { status } : {};
   const [rows, total] = await Promise.all([
-    CatalogReview.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
+    CatalogReview.find(filter)
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean(),
     CatalogReview.countDocuments(filter),
   ]);
-  const products = await CatalogProduct.find({ _id: { $in: rows.map((r) => r.productId) } }).select("title").lean();
+  const products = await CatalogProduct.find({ _id: { $in: rows.map((r) => r.productId) } })
+    .select("title")
+    .lean();
   const titles = new Map(products.map((p) => [String(p._id), p.title]));
   return {
     total,
