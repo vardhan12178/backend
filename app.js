@@ -51,10 +51,12 @@ app.use(demoGuard);
 // lightweight request timing
 app.use((req, res, next) => {
   const t0 = Date.now();
-  res.on('finish', () =>
-    // Keep logs useful without writing sensitive query params (reset/verify tokens, etc.).
-    console.log(`${req.method} ${req.baseUrl || ''}${req.path} ${res.statusCode} - ${Date.now() - t0}ms`)
-  );
+  if (process.env.NODE_ENV !== 'test') {
+    res.on('finish', () =>
+      // Keep logs useful without writing sensitive query params (reset/verify tokens, etc.).
+      console.log(`${req.method} ${req.baseUrl || ''}${req.path} ${res.statusCode} - ${Date.now() - t0}ms`)
+    );
+  }
   next();
 });
 

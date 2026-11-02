@@ -14,7 +14,7 @@ import { createNotification } from './admin.notifications.controller.js';
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null;
 
-const APP_URL = (process.env.APP_URL || 'https://vkartshop.netlify.app').replace(/\/+$/, '');
+const APP_URL = (process.env.APP_URL || 'https://vkart.balavardhan.dev').replace(/\/+$/, '');
 const AUTH_USER_SELECT = 'name username email profileImage createdAt twoFactorEnabled suppress2faPrompt membership blocked';
 
 const createEmailVerifyToken = () => {

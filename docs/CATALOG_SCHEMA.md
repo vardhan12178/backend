@@ -2,9 +2,9 @@
 
 Status: **Live.** This catalog is the only one the store uses; the old `products` collection, its endpoints and scripts were retired (see `scripts/cleanup-old-catalog.js`). The REST paths keep the `/api/v2` version prefix.
 
-Goal: a modern product catalog that works like a real Indian e-commerce site. It has real variants (storage × color), full spec sheets, multiple HD images per color and correct prices. It is also designed so the AI assistant (see `AI_UPGRADE_PLAN.md`) can filter and answer accurately.
+Goal: a modern product catalog that works like a real Indian e-commerce site. It has real variants (storage × color), full spec sheets, multiple HD images per color and correct prices. It is also designed so the AI assistant (see [`AI_UPGRADE_PLAN.md`](AI_UPGRADE_PLAN.md)) can filter and answer accurately.
 
-The current `Product` model stays untouched and keeps serving the live site. v2 lives in **new collections** behind **new `/api/v2` routes** until it's complete. Then we switch over and retire v1.
+The catalog lives in its own collections (`catalog_*`) behind the `/api/v2` routes. The old `Product` model was retired when the store switched over.
 
 ---
 

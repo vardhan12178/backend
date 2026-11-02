@@ -6,7 +6,7 @@ import * as reviews from "../controllers/catalogReviews.controller.js";
 import * as catalog from "../controllers/catalog.controller.js";
 import { SORT_KEYS, MAX_PAGE_SIZE } from "../services/catalog.service.js";
 
-// Mounted at /api/v2 (CATALOG_SCHEMA.md §8)
+// Mounted at /api/v2 (docs/CATALOG_SCHEMA.md §8)
 const router = express.Router();
 
 const slug = param("slug").isString().trim().matches(/^[a-z0-9-]{1,160}$/).withMessage("Invalid slug");

@@ -2,7 +2,7 @@ import CatalogProduct from "../models/CatalogProduct.js";
 import { notifyVariantChange } from "./alerts.service.js";
 import { imagesFor, resolveImage, saleFor, salePrice } from "./catalog.service.js";
 
-// Stock and pricing for catalog order lines (CATALOG_SCHEMA.md §9).
+// Stock and pricing for catalog order lines (docs/CATALOG_SCHEMA.md §9).
 // A v2 line is { catalog: "v2", productId, sku, quantity }; price, title and image
 // always come from the database, never from the client.
 

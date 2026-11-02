@@ -1,7 +1,7 @@
 {
-  "name": "vkart",
+  "name": "vkart-backend",
   "version": "1.0.0",
-  "description": "",
+  "description": "VKart API: catalog, orders, payments, AI search, admin RBAC (Express, MongoDB, Redis)",
   "type": "module",
   "main": "server.js",
   "engines": {
@@ -18,8 +18,8 @@
     "set-super-admin": "node ./scripts/set-super-admin.js"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": "Bala Vardhan Pula",
+  "license": "SEE LICENSE IN LICENSE",
   "dependencies": {
     "@aws-sdk/client-s3": "^3.623.0",
     "@aws-sdk/s3-request-presigner": "^3.623.0",
@@ -67,5 +67,10 @@
     "mongodb-memory-server": "^10.2.3",
     "nodemon": "^3.1.10",
     "supertest": "^7.1.4"
+  },
+  "homepage": "https://vkart.balavardhan.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vardhan12178/backend.git"
   }
 }

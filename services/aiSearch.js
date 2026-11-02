@@ -1,7 +1,7 @@
 import CatalogProduct from "../models/CatalogProduct.js";
 import { CATEGORY_GROUPS, toCard, visibleStatuses } from "./catalog.service.js";
 
-// Ask VKart retrieval for catalog (AI_UPGRADE_PLAN.md phases 1-2):
+// Ask VKart retrieval for catalog (docs/AI_UPGRADE_PLAN.md phases 1-2):
 //   intent (query rewrite + filters) → hybrid search (vector with pre-filters ∥ keyword)
 //   → Reciprocal Rank Fusion → model reranks the top results in the answer call.
 // Model calls are passed in (`ai`), so everything here runs in tests without Gemini.
