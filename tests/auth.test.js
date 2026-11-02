@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { jest } from '@jest/globals';
 import { createStatefulRedisMock, registerUser, loginUser, registerAndLogin } from './helpers.js';
 
@@ -140,8 +141,8 @@ describe('Auth: login', () => {
 
     it('rejects an unknown user', async () => {
         const res = await request(app).post('/api/login').send({
-            username: 'doesnotexist',
-            password: 'whatever123',
+            username: `nouser_${crypto.randomBytes(4).toString('hex')}`,
+            password: crypto.randomBytes(8).toString('hex'),
         });
         expect(res.statusCode).toBe(401);
     });
