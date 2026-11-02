@@ -216,6 +216,6 @@ describe("User notifications (own feed only)", () => {
     expect(res.statusCode).toBe(200);
 
     const n1After = await Notification.findById(n1._id);
-    expect(n1After.isRead).toBe(false); // untouched — the update filter scopes by req.user.userId
+    expect(n1After.isRead).toBe(false); // untouched: the update filter scopes by req.user.userId
   });
 });

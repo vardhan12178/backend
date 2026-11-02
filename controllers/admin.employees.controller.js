@@ -29,7 +29,7 @@ function toEmployeeJSON(user) {
   };
 }
 
-/* ---------------------- LIST EMPLOYEES ---------------------- */
+// List employees
 export const listEmployees = async (req, res) => {
   try {
     const employees = await User.find({ roles: "admin" }).select(EMPLOYEE_SELECT);
@@ -40,7 +40,7 @@ export const listEmployees = async (req, res) => {
   }
 };
 
-/* ---------------------- ADD EMPLOYEE ---------------------- */
+// Add employee
 export const addEmployee = async (req, res) => {
   try {
     const { email, adminRole, permissions } = req.body;
@@ -80,7 +80,7 @@ export const addEmployee = async (req, res) => {
   }
 };
 
-/* ---------------------- UPDATE EMPLOYEE ---------------------- */
+// Update employee
 export const updateEmployee = async (req, res) => {
   try {
     const { adminRole, permissions } = req.body;
@@ -112,7 +112,7 @@ export const updateEmployee = async (req, res) => {
   }
 };
 
-/* ---------------------- REVOKE EMPLOYEE ACCESS ---------------------- */
+// Revoke employee access
 export const revokeEmployee = async (req, res) => {
   try {
     if (req.params.id === req.user.userId) {

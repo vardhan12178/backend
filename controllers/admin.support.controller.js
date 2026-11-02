@@ -46,7 +46,7 @@ export const getConversation = async (req, res) => {
   }
 };
 
-/* POST /api/admin/support/conversations/:id/messages — agent replies */
+/* POST /api/admin/support/conversations/:id/messages - agent replies */
 export const sendAgentMessage = async (req, res) => {
   try {
     const { text } = req.body || {};
@@ -87,7 +87,7 @@ export const sendAgentMessage = async (req, res) => {
   }
 };
 
-/* PATCH /api/admin/support/conversations/:id — claim / resolve / close */
+/* PATCH /api/admin/support/conversations/:id - claim / resolve / close */
 export const updateConversation = async (req, res) => {
   try {
     const { action } = req.body || {};

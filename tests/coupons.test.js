@@ -40,7 +40,7 @@ describe("Coupons: admin CRUD (permission-gated)", () => {
       email: "couponadmin@test.com",
     });
     // requirePermission("coupons", "write") requires either super_admin or an
-    // explicit permissions.coupons="write" grant — plain roles:["admin"] is
+    // explicit permissions.coupons="write" grant, plain roles:["admin"] is
     // NOT enough. The previous test suite assumed otherwise and would have
     // silently 403'd here once permission enforcement was actually exercised.
     await makeSuperAdmin(User, admin.payload.username);

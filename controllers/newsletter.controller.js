@@ -11,7 +11,7 @@ export const subscribe = async (req, res) => {
       return res.status(400).json({ error: "Valid email is required" });
     }
 
-    // Upsert — re-activate if previously unsubscribed
+    // Upsert: re-activate if previously unsubscribed
     await Newsletter.findOneAndUpdate(
       { email: email.toLowerCase().trim() },
       { email: email.toLowerCase().trim(), active: true, subscribedAt: new Date() },

@@ -292,7 +292,7 @@ describe("Wallet: verify top-up (security-critical) + credit", () => {
   it("does not double-credit a payment id that has already been recorded", async () => {
     // Simulate a payment that was already credited once (e.g. via an
     // earlier verify call), then re-present a session for the SAME
-    // paymentId (e.g. a stray webhook-driven session) — the controller's
+    // paymentId (e.g. a stray webhook-driven session), the controller's
     // duplicate-paymentId guard must stop a second credit.
     await User.updateOne(
       { username },
@@ -382,7 +382,7 @@ describe("Wallet: debit via order checkout (walletUsed)", () => {
     ).toBe(true);
   });
 
-  // There is no dedicated wallet "debit" endpoint — debits only ever
+  // There is no dedicated wallet "debit" endpoint, debits only ever
   // happen as a side effect of order checkout (order.controller.js), which
   // is also where the "insufficient balance" rejection lives (walletUsed >
   // walletBalance -> 400 "Insufficient wallet balance"). That path is

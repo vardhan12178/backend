@@ -34,7 +34,7 @@ export async function revokeToken(token, expiresAt) {
 
 /**
  * Returns true if the token has been revoked.
- * Reads Redis first (the hot path — runs on every authenticated request), and
+ * Reads Redis first (the hot path: runs on every authenticated request), and
  * only falls back to Mongo when Redis itself is unavailable. Valid tokens
  * therefore no longer hit the database on every request.
  *

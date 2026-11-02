@@ -99,7 +99,7 @@ export const csrfGuard = (req, res, next) => {
     "/api/razorpay/verify",
     "/api/wallet/verify",
     "/api/membership/verify",
-    // Server-to-server call from Razorpay — no browser cookies/CSRF token to
+    // Server-to-server call from Razorpay: no browser cookies/CSRF token to
     // present. Authenticity is instead enforced by the webhook signature
     // check inside the controller.
     "/api/razorpay/webhook",
@@ -129,7 +129,7 @@ export const csrfGuard = (req, res, next) => {
   next();
 };
 
-// Rate limiters below intentionally skip enforcement under NODE_ENV=test —
+// Rate limiters below intentionally skip enforcement under NODE_ENV=test:
 // a single test file drives one shared Express app instance through dozens
 // of register/login/forgot/reset calls across many `it()` blocks, which
 // would otherwise trip these limiters well before the suite's window closes
@@ -167,7 +167,7 @@ export const googleLimiter = rateLimit({
   standardHeaders: true,
   skip: skipInTest,
 });
-// Also skipped in test — same rationale as above: a single test file can
+// Also skipped in test: same rationale as above: a single test file can
 // legitimately drive more calls through one of these routes than the real
 // per-minute cap within a shared app instance across many `it()` blocks.
 export const aiChatLimiter = rateLimit({
@@ -192,7 +192,7 @@ export const supportMessageLimiter = rateLimit({
   skip: skipInTest,
 });
 
-// Global API rate limiter — 200 requests per minute per IP
+// Global API rate limiter: 200 requests per minute per IP
 export const globalApiLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 200,

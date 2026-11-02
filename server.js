@@ -23,7 +23,7 @@ if (!process.env.AES_KEY || Buffer.from(process.env.AES_KEY, "utf8").length !== 
 }
 
 (async () => {
-  // ── MongoDB connection ──
+  // MongoDB connection
   try {
     await mongoose.connect(process.env.MONGO_URI, {
       maxPoolSize: 10,
@@ -36,7 +36,7 @@ if (!process.env.AES_KEY || Buffer.from(process.env.AES_KEY, "utf8").length !== 
     process.exit(1);
   }
 
-  // MongoDB connection resilience — log events for observability
+  // MongoDB connection resilience: log events for observability
   mongoose.connection.on("disconnected", () =>
     console.warn("[WARN] MongoDB disconnected — driver will auto-reconnect")
   );
@@ -45,10 +45,10 @@ if (!process.env.AES_KEY || Buffer.from(process.env.AES_KEY, "utf8").length !== 
     console.error("[ERROR] MongoDB connection error:", err.message)
   );
 
-  // ── HTTP Server ──
+  // HTTP Server
   const server = http.createServer(app);
 
-  // Request timeout — drop slow / idle connections after 30s
+  // Request timeout: drop slow / idle connections after 30s
   server.setTimeout(30_000);
 
   // Initialize Socket.io
@@ -75,7 +75,7 @@ if (!process.env.AES_KEY || Buffer.from(process.env.AES_KEY, "utf8").length !== 
       .catch((err) => console.error("[modelProbe] failed:", err.message));
   }
 
-  // ── Graceful Shutdown ──
+  // Graceful Shutdown
   const shutdown = async (signal) => {
     console.log(`\n[INFO] ${signal} received — starting graceful shutdown`);
 

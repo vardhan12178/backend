@@ -80,7 +80,7 @@ export const verifyPayment = async (req, res) => {
     // Fallback: the browser's own handler callback can miss (tab closed,
     // network drop right after a successful payment). If the webhook
     // already confirmed this same order independently, use that record
-    // instead of failing outright — this is the whole point of running
+    // instead of failing outright: this is the whole point of running
     // a webhook alongside the client-driven flow.
     let viaWebhookFallback = false;
     if (!pending) {
@@ -140,7 +140,7 @@ export const verifyPayment = async (req, res) => {
       amount: round2(expectedPaise / 100),
       currency: pending.currency || "INR",
       // Razorpay's own record of how this was actually paid (upi/card/
-      // netbanking/wallet/emi) — lets the order carry the real method
+      // netbanking/wallet/emi): lets the order carry the real method
       // instead of assuming CARD for every online payment.
       method: rzpPayment.method || null,
       verifiedAt: new Date().toISOString(),
@@ -157,7 +157,7 @@ export const verifyPayment = async (req, res) => {
   }
 };
 
-/* Razorpay Webhook — server-to-server confirmation, independent of the
+/* Razorpay Webhook: server-to-server confirmation, independent of the
    client's own handler callback. Razorpay retries on anything but a 2xx
    response, so once the signature checks out we always ack quickly and log
    problems rather than triggering a retry storm. */
@@ -183,7 +183,7 @@ export const handleWebhook = async (req, res) => {
     const entityId = payment?.id || refund?.id;
 
     // Razorpay resends the identical payload on retry with no dedicated
-    // event id of its own — dedupe on (event, entity id) for a window
+    // event id of its own: dedupe on (event, entity id) for a window
     // comfortably longer than its retry schedule.
     if (event && entityId) {
       const seenKey = `webhook:seen:${event}:${entityId}`;
@@ -278,7 +278,7 @@ export const handleWebhook = async (req, res) => {
     res.status(200).json({ received: true });
   } catch (err) {
     console.error("Razorpay webhook error:", err);
-    // Already signature-verified at this point — ack anyway so Razorpay
+    // Already signature-verified at this point: ack anyway so Razorpay
     // doesn't hammer retries for an error that's now logged for follow-up.
     res.status(200).json({ received: true });
   }

@@ -1,5 +1,5 @@
 // Single source of truth for admin RBAC: the module list and role presets.
-// Authorization itself never reads ROLE_PRESETS — it only reads a user's
+// Authorization itself never reads ROLE_PRESETS, it only reads a user's
 // stored `permissions` map. Presets exist purely to pre-fill the UI/API
 // payload when an employee is first assigned a role.
 
@@ -29,15 +29,15 @@ export const ADMIN_ROLES = [
 ];
 
 // Roles an employee-with-write-access-to-Employees is allowed to assign.
-// super_admin is deliberately excluded here — only an existing super_admin
+// super_admin is deliberately excluded here, only an existing super_admin
 // can grant it (enforced in middleware/permissions.js, not just this list).
 export const ASSIGNABLE_ROLES_FOR_NON_SUPER_ADMIN = ADMIN_ROLES.filter((r) => r !== "super_admin");
 
 // Every non-super-admin role gets read access to its own notification feed
-// by default — otherwise the admin-header bell 403s for every employee, since
+// by default: otherwise the admin-header bell 403s for every employee, since
 // nothing else grants the `notifications` module.
 export const ROLE_PRESETS = {
-  super_admin: {}, // irrelevant — super_admin bypasses the permissions map entirely
+  super_admin: {}, // irrelevant: super_admin bypasses the permissions map entirely
   product_manager: { products: "write", notifications: "read" },
   customer_service: { users: "write", notifications: "read" },
   reviewer: { reviews: "write", notifications: "read" },
@@ -49,7 +49,7 @@ export const ROLE_PRESETS = {
     marketing: "write",
     notifications: "read",
   },
-  // Scoped to the support inbox plus read-only order context — distinct
+  // Scoped to the support inbox plus read-only order context, distinct
   // from order_manager (which can write orders but has no support access)
   // and from customer_service (which is really account moderation:
   // users:write, not customer-facing support).

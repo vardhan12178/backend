@@ -4,7 +4,7 @@ import Settings from "../models/Settings.js";
 /**
  * Get global store settings.
  * Admin identity (name/email/avatar/role) lives on GET /api/admin/verify
- * instead — that endpoint is reachable by every admin regardless of module
+ * instead: that endpoint is reachable by every admin regardless of module
  * permissions, whereas this one is gated behind settings:read.
  */
 export const getSettings = async (req, res) => {
@@ -84,7 +84,7 @@ export const updateAnnouncements = async (req, res) => {
 /**
  * Update Admin Profile (Name, Avatar)
  *
- * Email is intentionally not editable here — it's the account's login
+ * Email is intentionally not editable here: it's the account's login
  * identifier (checked via $or on username/email at /admin/login), unique
  * and required on the User model, and changing it safely needs its own
  * verify-before-switch flow (confirm new address, handle collisions, etc.).

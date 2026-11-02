@@ -183,7 +183,7 @@ describe("Auth: login", () => {
     expect(res.statusCode).toBe(400);
   });
 
-  // The controller does not currently gate login on emailVerified — an
+  // The controller does not currently gate login on emailVerified, an
   // unverified user can still log in and gets a normal session token.
   // (Note: the session payload's user-select projection doesn't even
   // include emailVerified, so we assert against the DB directly.)

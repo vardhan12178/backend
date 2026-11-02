@@ -13,7 +13,7 @@ import { authenticateJWT, optionalAuth } from "../middleware/auth.js";
 
 const router = express.Router();
 
-/* -------------------- User Auth -------------------- */
+// User Auth
 router.post(
   "/register",
   registerLimiter,
@@ -33,7 +33,7 @@ router.post("/logout", authController.logout);
 router.get("/verify-email", authController.verifyEmail);
 router.post("/resend-verify", authenticateJWT, authController.resendVerifyEmail);
 
-/* -------------------- Admin Auth -------------------- */
+// Admin Auth
 router.post("/admin/login", authLimiter, authController.adminLogin);
 router.post("/admin/google", googleLimiter, authController.adminGoogleAuth);
 router.get("/admin/verify", authController.verifyAdmin);

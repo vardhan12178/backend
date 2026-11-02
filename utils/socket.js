@@ -35,7 +35,7 @@ export const initSocket = (httpServer) => {
       socket.handshake.auth?.token || getTokenFromCookie(socket.handshake.headers?.cookie);
 
     if (!token) {
-      socket.user = null; // unauthenticated — allowed to connect but restricted
+      socket.user = null; // unauthenticated: allowed to connect but restricted
       return next();
     }
 
@@ -65,21 +65,21 @@ export const initSocket = (httpServer) => {
       socket.join("support_agents");
     }
 
-    // Admin joins admin room — must be authenticated admin
+    // Admin joins admin room: must be authenticated admin
     socket.on("join_admin", () => {
       if (roles.includes("admin")) {
         socket.join("admin_notifications");
       }
     });
 
-    // User joins their personal room — must match their own userId
+    // User joins their personal room: must match their own userId
     socket.on("join_user", (userId) => {
       if (userId && socket.user?.userId && String(socket.user.userId) === String(userId)) {
         socket.join(`user_${userId}`);
       }
     });
 
-    // Support chat typing indicator — ephemeral, never persisted. A
+    // Support chat typing indicator: ephemeral, never persisted. A
     // customer's keystroke relays to every support agent (they'll only
     // show it if that conversation is the one currently open); an
     // agent's keystroke relays to that one customer's personal room.

@@ -47,7 +47,7 @@ export const optionalAuth = async (req, _res, next) => {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
     req.user = payload;
   } catch {
-    // invalid token — continue as unauthenticated
+    // invalid token: continue as unauthenticated
   }
   next();
 };

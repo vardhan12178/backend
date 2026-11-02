@@ -1,5 +1,5 @@
 /**
- * Blog controller — serves static blog data via API.
+ * Blog controller: serves static blog data via API.
  * In future this can be backed by a MongoDB Blog model.
  */
 
@@ -127,7 +127,7 @@ const POSTS = [
 ];
 
 /**
- * GET /api/blog — List all blog posts (summary only, no full content).
+ * GET /api/blog: List all blog posts (summary only, no full content).
  */
 export const listPosts = (_req, res) => {
   const { tag } = _req.query;
@@ -139,7 +139,7 @@ export const listPosts = (_req, res) => {
 };
 
 /**
- * GET /api/blog/:id — Get a single blog post by id.
+ * GET /api/blog/:id: Get a single blog post by id.
  * Full content is served from the frontend static data,
  * but the API provides meta needed for SEO / social crawlers.
  */
