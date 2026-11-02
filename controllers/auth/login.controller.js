@@ -29,7 +29,7 @@ export const login = async (req, res) => {
     if (user.twoFactorEnabled) {
       if (!token2fa) {
         // Return opaque challenge token instead of raw userId
-        const { create2FAChallenge } = await import("./twofactor.controller.js");
+        const { create2FAChallenge } = await import("../twofactor.controller.js");
         const challengeToken = await create2FAChallenge(user._id);
         return res.json({
           require2FA: true,

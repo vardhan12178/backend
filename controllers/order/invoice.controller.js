@@ -33,7 +33,7 @@ export const downloadInvoice = async (req, res) => {
       }
     }
 
-    const Settings = (await import("../models/Settings.js")).default;
+    const Settings = (await import("../../models/Settings.js")).default;
     const settings = (await Settings.findOne().lean()) || {};
     const invoiceNo = order.invoiceNumber || order.orderId || String(order._id);
     const safeFilename = String(invoiceNo).replace(/[^a-zA-Z0-9_-]/g, "-");
