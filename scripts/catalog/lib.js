@@ -26,7 +26,7 @@ export function loadProducts(dir = DATA_DIR, { category } = {}) {
   return out;
 }
 
-/* ------------ Validation ------------ */
+// Validation
 const REQUIRED = ["slug", "title", "brand", "category", "variants", "media"];
 
 export function validateProduct(doc) {
@@ -67,7 +67,7 @@ export function validateCatalog(entries) {
   return errors;
 }
 
-/* ------------ Derived fields ------------ */
+// Derived fields
 const rupees = (n) => `₹${Number(n).toLocaleString("en-IN")}`;
 
 const listJoin = (items) =>

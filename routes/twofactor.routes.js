@@ -13,7 +13,7 @@ const twoFAVerifyLimiter = rateLimit({
   standardHeaders: true,
   message: { message: "Too many 2FA attempts. Please try again later." },
   // A single test file drives many login-verify attempts (valid/invalid/
-  // expired/replay cases) against one shared app instance — not testing
+  // expired/replay cases) against one shared app instance, not testing
   // rate-limiting itself, so skip enforcement under test like the other
   // limiters in middleware/security.js.
   skip: () => process.env.NODE_ENV === "test",
@@ -40,7 +40,7 @@ router.post("/2fa/enable", authenticateJWT, requireUserDoc, twoFactorController.
 // 3) disable
 router.post("/2fa/disable", authenticateJWT, requireUserDoc, twoFactorController.disable2FA);
 
-// 4) verify (login) — rate limited to prevent brute-force
+// 4) verify (login): rate limited to prevent brute-force
 router.post("/2fa/login-verify", twoFAVerifyLimiter, twoFactorController.verify2FA);
 
 // 5) suppress popup

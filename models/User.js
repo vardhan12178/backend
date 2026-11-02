@@ -35,33 +35,33 @@ const userSchema = new Schema(
     resetPasswordTokenHash: { type: String, select: false },
     resetPasswordExpiresAt: { type: Date },
 
-    /* ---------- Email Verification ---------- */
+    // Email Verification
     emailVerified: { type: Boolean, default: false },
     emailVerifyTokenHash: { type: String, select: false },
     emailVerifyExpiresAt: { type: Date },
 
-    /* ---------- Two-Factor Authentication ---------- */
+    // Two-Factor Authentication
     twoFactorEnabled: { type: Boolean, default: false },
     twoFactorSecretEnc: { type: String, select: false },
     twoFactorSecret: { type: String, select: false },
     suppress2faPrompt: { type: Boolean, default: false },
     twoFactorBackupCodes: [{ type: String, select: false }],
 
-    /* ---------- Admin Block Feature (NEW) ---------- */
+    // Admin Block Feature (NEW)
     blocked: { type: Boolean, default: false },
 
-    /* ---------- Roles (User can be both) ---------- */
+    // Roles (User can be both)
     roles: {
       type: [String],
       enum: ["user", "admin"],
       default: ["user"],
     },
 
-    /* ---------- Admin RBAC (employee role + per-module permissions) ---------- */
+    // Admin RBAC (employee role + per-module permissions)
     adminRole: {
       type: String,
       // Sourced from config/permissions.js so a new role only needs to be
-      // added in one place — this previously duplicated the list by hand
+      // added in one place: this previously duplicated the list by hand
       // and silently fell out of sync (customer_support was addable via
       // ADMIN_ROLES but rejected here until this fix).
       enum: [...ADMIN_ROLES, null],
@@ -73,7 +73,7 @@ const userSchema = new Schema(
       default: {},
     },
 
-    /* ---------- Cart & Wishlist ---------- */
+    // Cart & Wishlist
     cart: [
       {
         productId: { type: Schema.Types.ObjectId, ref: "Product" },
@@ -108,7 +108,7 @@ const userSchema = new Schema(
       },
     ],
 
-    /* ---------- Addresses ---------- */
+    // Addresses
     addresses: [
       {
         label: { type: String, trim: true },
@@ -125,7 +125,7 @@ const userSchema = new Schema(
       },
     ],
 
-    /* ---------- Wallet ---------- */
+    // Wallet
     walletBalance: { type: Number, default: 0, min: 0 },
     walletTransactions: [
       {
@@ -138,7 +138,7 @@ const userSchema = new Schema(
       },
     ],
 
-    /* ---------- Prime Membership ---------- */
+    // Prime Membership
     membership: {
       plan: { type: String, trim: true },
       planId: { type: Schema.Types.ObjectId, ref: "MembershipPlan" },

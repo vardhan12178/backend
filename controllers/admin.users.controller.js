@@ -2,7 +2,7 @@ import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import User from "../models/User.js";
 
-/* ---------------------- GET ALL USERS ---------------------- */
+// GET all users
 export const getUsers = async (req, res) => {
   try {
     const users = await User.find({}).select(
@@ -16,7 +16,7 @@ export const getUsers = async (req, res) => {
   }
 };
 
-/* ---------------------- BLOCK / UNBLOCK USER ---------------------- */
+// Block / unblock user
 export const toggleBlockUser = async (req, res) => {
   try {
     if (req.params.id === req.user.userId)
@@ -39,7 +39,7 @@ export const toggleBlockUser = async (req, res) => {
   }
 };
 
-/* ---------------------- RESET USER PASSWORD ---------------------- */
+// Reset user password
 export const resetUserPassword = async (req, res) => {
   try {
     const user = await User.findById(req.params.id).select("+password");
@@ -59,7 +59,7 @@ export const resetUserPassword = async (req, res) => {
   }
 };
 
-/* ---------------------- DISABLE USER 2FA ---------------------- */
+// Disable user 2FA
 export const disableUser2FA = async (req, res) => {
   try {
     const user = await User.findById(req.params.id).select(
@@ -83,7 +83,7 @@ export const disableUser2FA = async (req, res) => {
   }
 };
 
-/* ---------------------- DELETE USER ---------------------- */
+// DELETE user
 export const deleteUser = async (req, res) => {
   try {
     if (req.params.id === req.user.userId)

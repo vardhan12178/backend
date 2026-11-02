@@ -194,7 +194,7 @@ export async function toggleHelpful(userId, id) {
   return { voted: !has, helpful: count };
 }
 
-/* ---------- Moderation (admin "reviews" module) ---------- */
+// Moderation (admin "reviews" module)
 export async function adminList({ status, page = 1, limit = 20 } = {}) {
   const filter = status ? { status } : {};
   const [rows, total] = await Promise.all([

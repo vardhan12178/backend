@@ -345,7 +345,7 @@ export const adminLogin = async (req, res) => {
       return res.status(403).json({ message: "Access denied: Not an admin" });
     }
 
-    // adminRole is carried in the token for display/UX only — every
+    // adminRole is carried in the token for display/UX only, every
     // permission-gated route re-checks the DB (see middleware/permissions.js),
     // so this never needs to be trusted for authorization.
     const token = jwt.sign(
@@ -427,7 +427,7 @@ export const verifyAdmin = async (req, res) => {
     // Always read fresh from the DB (not the token) so the header, sidebar
     // and route-guards reflect any access/profile change immediately.
     // This is the one endpoint every logged-in admin can hit regardless of
-    // their module permissions, so it also carries basic identity — pages
+    // their module permissions, so it also carries basic identity, pages
     // like "My Profile" shouldn't need a settings-gated call just to know
     // who's logged in.
     const permissions = user.permissions ? Object.fromEntries(user.permissions) : {};

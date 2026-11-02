@@ -8,7 +8,7 @@ const router = express.Router();
 // Health Check
 router.get("/health", aiController.getHealth);
 
-// Chat Endpoint — optionalAuth to identify user, rate limited
+// Chat Endpoint: optionalAuth to identify user, rate limited
 router.post("/chat", optionalAuth, aiChatLimiter, aiController.chat);
 
 // Phase two of a two-phase answer (model picks + reasons)

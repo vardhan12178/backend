@@ -29,8 +29,8 @@ export const visibleStatuses = () =>
 export const PAGE_SIZE = 24;
 export const MAX_PAGE_SIZE = 60;
 
-/* ------------ Storefront categories ------------
- * The shop groups some stored categories differently from how they are stored:
+/*
+ * Storefront categories. The shop groups some stored categories differently from how they are stored:
  * fashion is split by gender and the three large appliances share one tab.
  */
 export const CATEGORY_GROUPS = [
@@ -74,7 +74,7 @@ export function storefrontCategoryOf(p) {
   return group?.slug || p.category;
 }
 
-/* ------------ Response shaping ------------ */
+// Response shaping
 export function resolveImage(item) {
   if (!item) return null;
   if (item.key) {
@@ -165,7 +165,7 @@ export function toDetail(raw, sale = null) {
   };
 }
 
-/* ------------ Sale pricing ------------ */
+// Sale pricing
 // Sale pricing for catalog products. A sale lists storefront categories (mobiles, fashion-men, ...)
 // with a discount off MRP, and optionally a deeper one for Prime members. A sale never raises a
 // price: if the product is already cheaper than the sale price, its own price stands.
@@ -210,7 +210,7 @@ export function applySale(p, sale) {
 export const saleKey = (sale) =>
   sale ? `s${sale._id}-${new Date(sale.updatedAt || 0).getTime()}` : "s0";
 
-/* ------------ Listing ------------ */
+// Listing
 const SORTS = {
   featured: { isFeatured: -1, "priceRange.min": -1, _id: 1 },
   "price-asc": { "priceRange.min": 1, _id: 1 },
@@ -374,7 +374,7 @@ export async function listProducts(query = {}, { sale = null } = {}) {
   };
 }
 
-/* ------------ Categories ------------ */
+// Categories
 export async function getCategories() {
   const statuses = visibleStatuses();
   const counts = await Promise.all(
@@ -387,7 +387,7 @@ export async function getCategories() {
   );
 }
 
-/* ------------ Detail ------------ */
+// Detail
 export async function getProduct(slug, { sale = null } = {}) {
   const p = await CatalogProduct.findOne({
     slug: String(slug),
@@ -396,8 +396,8 @@ export async function getProduct(slug, { sale = null } = {}) {
   return p ? toDetail(p, sale) : null;
 }
 
-/* ------------ Similar ------------
- * Vector search on the product's own embedding (Atlas index `catalog_v2_vector`),
+/*
+ * Similar products. Vector search on the product's own embedding (Atlas index `catalog_v2_vector`),
  * limited to the same storefront category. Falls back to same category, closest price,
  * when the index or embedding is missing.
  */

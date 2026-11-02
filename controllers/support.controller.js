@@ -8,7 +8,7 @@ function serialize(convo) {
   return obj;
 }
 
-/* POST /api/support/conversations — customer starts (or reopens) a chat */
+/* POST /api/support/conversations: customer starts (or reopens) a chat */
 export const createConversation = async (req, res) => {
   try {
     const { category, orderId, contextSummary } = req.body || {};
@@ -37,7 +37,7 @@ export const createConversation = async (req, res) => {
         .to("support_agents")
         .emit("support:new_conversation", { conversation: serialize(convo) });
     } catch {
-      // Socket not initialized (e.g. in tests) — non-fatal, agents will still
+      // Socket not initialized (e.g. in tests): non-fatal, agents will still
       // see it next time they load the inbox.
     }
 
@@ -48,7 +48,7 @@ export const createConversation = async (req, res) => {
   }
 };
 
-/* GET /api/support/conversations/mine — resume the customer's own open thread */
+/* GET /api/support/conversations/mine: resume the customer's own open thread */
 export const getMyConversation = async (req, res) => {
   try {
     const convo = await SupportConversation.findOne({
@@ -63,7 +63,7 @@ export const getMyConversation = async (req, res) => {
   }
 };
 
-/* POST /api/support/conversations/:id/messages — customer sends a message */
+/* POST /api/support/conversations/:id/messages - customer sends a message */
 export const sendMessage = async (req, res) => {
   try {
     const { text } = req.body || {};

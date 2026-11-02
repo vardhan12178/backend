@@ -1,7 +1,7 @@
 import Coupon from "../models/Coupon.js";
 import { round2 } from "../utils/calc.js";
 
-// ── Admin CRUD ───────────────────────────────────────────────────────────────
+// Admin CRUD
 
 export const createCoupon = async (req, res) => {
   try {
@@ -112,7 +112,7 @@ export const deleteCoupon = async (req, res) => {
   }
 };
 
-// ── User-facing ──────────────────────────────────────────────────────────────
+// User-facing
 
 export const getPublicCoupons = async (_req, res) => {
   try {
@@ -158,7 +158,7 @@ export const validateCoupon = async (req, res) => {
   }
 };
 
-// ── Shared validation logic (used by order controller too) ───────────────────
+// Shared validation logic (used by order controller too)
 
 export async function applyCoupon(code, subtotal, userId) {
   const now = new Date();

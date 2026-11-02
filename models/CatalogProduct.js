@@ -4,7 +4,7 @@ const { Schema } = mongoose;
 // Catalog product: one document per model with its variants embedded.
 // See docs/CATALOG_SCHEMA.md §3 for the field reference.
 
-/* ------------ Variant ------------ */
+// Variant
 const variantSchema = new Schema(
   {
     sku: { type: String, required: true, trim: true },
@@ -19,7 +19,7 @@ const variantSchema = new Schema(
   { _id: false }
 );
 
-/* ------------ Main Catalog Product Schema ------------ */
+// Main Catalog Product Schema
 const catalogProductSchema = new Schema(
   {
     slug: { type: String, required: true, trim: true },
@@ -68,7 +68,7 @@ const catalogProductSchema = new Schema(
   { timestamps: true, collection: "catalog_products", minimize: false }
 );
 
-/* ------------ Indexes ------------ */
+// Indexes
 catalogProductSchema.index({ slug: 1 }, { unique: true });
 catalogProductSchema.index({ "variants.sku": 1 }, { unique: true });
 catalogProductSchema.index({ category: 1, status: 1, "priceRange.min": 1 });

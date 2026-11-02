@@ -25,7 +25,7 @@ jest.unstable_mockModule("resend", () => ({
 }));
 
 // Thin contract tests only, per explicit scope: mock the AI service entirely
-// (it wraps @google/generative-ai) — never assert on LLM output content,
+// (it wraps @google/generative-ai): never assert on LLM output content,
 // only request validation / auth / error-handling / response-shape contract.
 const handleChatMock = jest.fn();
 const parseSearchQueryMock = jest.fn();

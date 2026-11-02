@@ -1,7 +1,7 @@
 // Shared, mock-free helpers for backend tests.
 //
 // This file intentionally does NOT call jest.unstable_mockModule or import
-// app.js/any mocked module itself — each test file owns its own mocks
+// app.js/any mocked module itself: each test file owns its own mocks
 // (redis, resend, razorpay, ...) which must be registered before app.js is
 // imported in that file. These helpers just take the already-imported
 // `request`/`app`/`User` as parameters so they stay reusable across suites.

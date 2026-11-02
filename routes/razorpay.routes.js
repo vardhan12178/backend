@@ -29,7 +29,7 @@ router.post(
   paymentController.verifyPayment
 );
 
-// Server-to-server call from Razorpay itself — no user session, authenticity
+// Server-to-server call from Razorpay itself, no user session, authenticity
 // is enforced by the x-razorpay-signature check inside the controller.
 router.post("/razorpay/webhook", paymentController.handleWebhook);
 

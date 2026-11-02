@@ -51,7 +51,7 @@ describe("Newsletter subscribe/unsubscribe", () => {
 
   // The validation regex anchors on ^...$ with no leading trim, so
   // surrounding whitespace fails validation rather than being silently
-  // stripped first — documenting that behavior here.
+  // stripped first: documenting that behavior here.
   it("rejects an email with surrounding whitespace (validated before trimming)", async () => {
     const res = await request(app)
       .post("/api/newsletter/subscribe")

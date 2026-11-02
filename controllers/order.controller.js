@@ -174,7 +174,7 @@ export const createOrder = async (req, res) => {
 
       paymentStatus = "PAID";
       // Razorpay's own reported method (upi/card/netbanking/wallet/paylater/
-      // emi) — bucket the ones we don't have a distinct enum value for
+      // emi): bucket the ones we don't have a distinct enum value for
       // (wallet, emi) under CARD rather than losing the real method entirely.
       const rzpMethodMap = { upi: "UPI", netbanking: "NETBANKING", paylater: "PAYLATER" };
       paymentMethod = rzpMethodMap[verifiedPayment.method] || "CARD";
@@ -466,8 +466,8 @@ export const updateReturnStatus = async (req, res) => {
   const order = await Order.findById(req.params.id);
   if (!order) return res.status(404).json({ message: "Order not found" });
 
-  // Nothing to progress if the customer never actually requested a return —
-  // without this, an admin could e.g. click "Set RECEIVED" on an untouched
+  // Nothing to progress if the customer never actually requested a return.
+  // Without this, an admin could e.g. click "Set RECEIVED" on an untouched
   // order and have it restore stock for an item that was never returned.
   if (order.returnStatus === "NONE") {
     return res.status(400).json({ message: "No return has been requested for this order yet." });
@@ -524,7 +524,7 @@ export const initiateRefund = async (req, res) => {
   // A refund needs an actual reason on record: the order was cancelled, or
   // the customer's return has been approved and is on its way back (or
   // already received). Without this, nothing stopped an admin from issuing
-  // a refund on any order — including one that was never cancelled or
+  // a refund on any order: including one that was never cancelled or
   // returned at all.
   const eligible =
     order.stage === "CANCELLED" || ["APPROVED", "PICKED", "RECEIVED"].includes(order.returnStatus);
@@ -583,7 +583,7 @@ export const initiateRefund = async (req, res) => {
       await order.save();
     }
   } else {
-    // No real gateway payment on record (legacy/COD order) — fall back to
+    // No real gateway payment on record (legacy/COD order), fall back to
     // the manual placeholder the nightly scheduler resolves.
     order.refundStatus = "INITIATED";
     order.refundDueAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
@@ -720,7 +720,7 @@ export const downloadInvoice = async (req, res) => {
 
     const isOwner = String(order.userId) === String(req.user?.userId);
     if (!isOwner) {
-      // Not the customer themselves — re-check admin access fresh from the DB
+      // Not the customer themselves: re-check admin access fresh from the DB
       // (not the JWT's baked-in roles) and require actual orders:read/write,
       // matching requirePermission's behavior so revocation takes effect
       // immediately and access is scoped to the orders module specifically.
@@ -820,7 +820,7 @@ export const cancelOrder = async (req, res) => {
         order.refundStatus = "COMPLETED";
       }
       // ORIGINAL-method refund is deliberately NOT attempted inside this
-      // transaction — an external Razorpay API call has no place holding a
+      // transaction: an external Razorpay API call has no place holding a
       // DB transaction open. It's handled just below, after commit.
     }
 
@@ -830,7 +830,7 @@ export const cancelOrder = async (req, res) => {
     // Mirrors createOrder/createReplacementOrder: only abort if the session
     // is still in a transaction. Calling abortTransaction() unconditionally
     // is wrong when the error came from commitTransaction() itself (e.g. a
-    // transient commit failure) — the driver rejects an abort attempted
+    // transient commit failure): the driver rejects an abort attempted
     // after a commit was already attempted, which previously masked the
     // real error behind a confusing "Cannot call abortTransaction after
     // calling commitTransaction" crash that bypassed this handler's own
@@ -862,7 +862,7 @@ export const cancelOrder = async (req, res) => {
         order.refundStatus = "FAILED";
       }
     } else {
-      // No real gateway payment on record (legacy/COD order) — fall back to
+      // No real gateway payment on record (legacy/COD order), fall back to
       // the manual placeholder the nightly scheduler resolves.
       order.refundStatus = "INITIATED";
       order.refundDueAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);

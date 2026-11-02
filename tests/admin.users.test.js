@@ -29,7 +29,7 @@ const { default: User } = await import("../models/User.js");
 
 /**
  * Admin customer-account actions (list/block/reset-password/disable-2FA/delete).
- * Gated by requirePermission("users", <level>) — same RBAC rules as the
+ * Gated by requirePermission("users", <level>), same RBAC rules as the
  * employees module: roles:['admin'] alone is not enough.
  */
 

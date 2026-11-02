@@ -33,7 +33,7 @@ const run = async () => {
     const roles = Array.isArray(user.roles) ? user.roles : ["user"];
     user.roles = Array.from(new Set([...roles, "admin"]));
     user.adminRole = "super_admin";
-    user.permissions = {}; // irrelevant for super_admin — bypassed in middleware
+    user.permissions = {}; // irrelevant for super_admin, bypassed in middleware
 
     await user.save();
     console.log(`[INFO] ${email} is now super_admin.`);

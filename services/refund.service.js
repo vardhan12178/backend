@@ -3,7 +3,7 @@ import razorpay from "../utils/razorpay.js";
 /**
  * Initiates a REAL Razorpay refund against a captured payment (instead of
  * the old placeholder that just set a 7-day due date and never touched the
- * gateway). Throws if the order has no paymentId to refund — callers should
+ * gateway). Throws if the order has no paymentId to refund, callers should
  * catch that and fall back to the manual/placeholder path, which still
  * covers orders with no real gateway payment on record (legacy/COD data).
  */

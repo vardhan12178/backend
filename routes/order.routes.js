@@ -10,9 +10,7 @@ const router = express.Router();
 const asyncHandler = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
 //
-// ────────────────────────────────────────────────────────────
-//   VALIDATION CONFIG
-// ────────────────────────────────────────────────────────────
+// Validation config
 //
 
 const validateOrder = [
@@ -43,25 +41,23 @@ const validateOrder = [
 ];
 
 //
-// ────────────────────────────────────────────────────────────
 //   ROUTES
-// ────────────────────────────────────────────────────────────
 //
 
 /* CREATE ORDER (USER) */
 router.post("/orders", authenticateJWT, validateOrder, asyncHandler(orderController.createOrder));
 
-/* CUSTOMER — GET ALL ORDERS */
+/* CUSTOMER: GET ALL ORDERS */
 router.get("/profile/orders", authenticateJWT, asyncHandler(orderController.getUserOrders));
 
-/* CUSTOMER — PAGINATED ORDERS */
+/* CUSTOMER: PAGINATED ORDERS */
 router.get(
   "/profile/orders/paged",
   authenticateJWT,
   asyncHandler(orderController.getUserOrdersPaged)
 );
 
-/* CUSTOMER — REQUEST RETURN */
+/* CUSTOMER: REQUEST RETURN */
 router.post(
   "/orders/:id/return",
   authenticateJWT,
@@ -71,7 +67,7 @@ router.post(
   asyncHandler(orderController.requestReturn)
 );
 
-/* CUSTOMER — CANCEL ORDER */
+/* CUSTOMER: CANCEL ORDER */
 router.post(
   "/orders/:id/cancel",
   authenticateJWT,
@@ -80,10 +76,10 @@ router.post(
   asyncHandler(orderController.cancelOrder)
 );
 
-/* CUSTOMER/ADMIN — DOWNLOAD INVOICE */
+/* CUSTOMER/ADMIN: DOWNLOAD INVOICE */
 router.get("/orders/:id/invoice", authenticateJWT, asyncHandler(orderController.downloadInvoice));
 
-/* ADMIN — GET ALL ORDERS */
+/* ADMIN: GET ALL ORDERS */
 router.get(
   "/admin/orders",
   authenticateJWT,
@@ -91,7 +87,7 @@ router.get(
   asyncHandler(orderController.getAllOrders)
 );
 
-/* ADMIN — GET ORDER BY ID */
+/* ADMIN: GET ORDER BY ID */
 router.get(
   "/admin/orders/:id",
   authenticateJWT,
@@ -99,7 +95,7 @@ router.get(
   asyncHandler(orderController.getOrderById)
 );
 
-/* ADMIN — UPDATE ORDER STAGE */
+/* ADMIN: UPDATE ORDER STAGE */
 router.patch(
   "/admin/orders/:id/stage",
   authenticateJWT,
@@ -110,7 +106,7 @@ router.patch(
   asyncHandler(orderController.updateOrderStage)
 );
 
-/* ADMIN — UPDATE RETURN STATUS */
+/* ADMIN: UPDATE RETURN STATUS */
 router.patch(
   "/admin/orders/:id/return",
   authenticateJWT,
@@ -119,7 +115,7 @@ router.patch(
   asyncHandler(orderController.updateReturnStatus)
 );
 
-/* ADMIN — INITIATE REFUND */
+/* ADMIN: INITIATE REFUND */
 router.post(
   "/admin/orders/:id/refund",
   authenticateJWT,
@@ -128,7 +124,7 @@ router.post(
   asyncHandler(orderController.initiateRefund)
 );
 
-/* ADMIN — CREATE REPLACEMENT ORDER */
+/* ADMIN: CREATE REPLACEMENT ORDER */
 router.post(
   "/admin/orders/:id/replacement",
   authenticateJWT,

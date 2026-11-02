@@ -13,7 +13,7 @@ redis.on("error", (err) => {
   console.error("Redis Connection Error:", err);
 });
 
-/* ── Centralised TTL constants (seconds) ── */
+// Centralised TTL constants (seconds)
 export const CACHE_TTL = {
   PRODUCTS_LIST: 300, // 5 min  – default listing page
   PRODUCT_DETAIL: 600, // 10 min – single product

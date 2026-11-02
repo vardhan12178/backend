@@ -89,7 +89,6 @@ Deployed on Render (auto-deploys from `main`). `engines.node` is pinned to `24.x
 ## Docs
 
 - [`docs/CATALOG_SCHEMA.md`](docs/CATALOG_SCHEMA.md): collections, fields, image pipeline and REST API.
-- [`docs/AI_UPGRADE_PLAN.md`](docs/AI_UPGRADE_PLAN.md): how Ask VKart search was designed and evaluated.
 
 ## License
 

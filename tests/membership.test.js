@@ -449,8 +449,8 @@ describe("Membership: verify + activate (security-critical)", () => {
     expect(first.statusCode).toBe(200);
     const historyLenAfterFirst = first.body.membership.history.length;
 
-    // Session was consumed by the first call, so a naive replay now 400s —
-    // that's the primary defense. We separately assert the duplicate-
+    // Session was consumed by the first call, so a naive replay now 400s.
+    // That's the primary defense. We separately assert the duplicate-
     // paymentId short-circuit in the controller by re-purchasing the same
     // order id is not possible via the API, so this covers the realistic
     // replay path (re-submitting the exact same verify request twice).
@@ -569,7 +569,7 @@ describe("Membership: admin plan management", () => {
     expect(listRes.body.some((p) => p._id === id)).toBe(false);
   });
 
-  // The controller has no downgrade/cancel-membership endpoint — a user's
+  // The controller has no downgrade/cancel-membership endpoint, a user's
   // membership can only be extended (purchase/verify) or left to expire
   // naturally via endDate. Nothing to exercise here; documented for the
   // report rather than asserted.

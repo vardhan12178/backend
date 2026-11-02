@@ -1,7 +1,7 @@
 import CatalogProduct from "../models/CatalogProduct.js";
 import { CATEGORY_GROUPS, toCard, visibleStatuses } from "./catalog.service.js";
 
-// Ask VKart retrieval for catalog (docs/AI_UPGRADE_PLAN.md phases 1-2):
+// Ask VKart retrieval for the catalog:
 //   intent (query rewrite + filters) → hybrid search (vector with pre-filters ∥ keyword)
 //   → Reciprocal Rank Fusion → model reranks the top results in the answer call.
 // Model calls are passed in (`ai`), so everything here runs in tests without Gemini.
@@ -15,7 +15,7 @@ export const MAX_RESULTS = 4;
 
 const PROJECTION = { embedding: 0, specs: 0, description: 0, source: 0, variantOptions: 0 };
 
-/* ------------ Intent ------------ */
+// Intent
 const GROUPS = new Map(CATEGORY_GROUPS.map((g) => [g.slug, g]));
 export const INTENT_CATEGORIES = CATEGORY_GROUPS.map((g) => `${g.slug} (${g.name})`);
 
@@ -76,7 +76,7 @@ export function intentPrompt(message, history) {
   `;
 }
 
-/* ------------ Filters ------------ */
+// Filters
 // Storefront groups that aren't a plain stored category need a post-filter
 // (the vector index can only pre-filter on indexed fields).
 const APPLIANCES = ["refrigerators", "washing-machines", "air-conditioners"];
@@ -117,7 +117,7 @@ async function canonicalBrand(brand) {
   return brands.find((b) => b.toLowerCase() === brand.toLowerCase()) || null;
 }
 
-/* ------------ Retrieval ------------ */
+// Retrieval
 export async function vectorSearch(queryVector, { pre, post }, limit = LIST_SIZE) {
   const docs = await CatalogProduct.aggregate([
     {
@@ -204,7 +204,7 @@ export async function hybridSearch(intent, { embed, mode = "hybrid", limit = RER
   };
 }
 
-/* ------------ Rerank + answer ------------ */
+// Rerank + answer
 export function answerPrompt(message, products, history) {
   const recent = (history || [])
     .slice(-4)

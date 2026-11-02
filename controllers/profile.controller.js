@@ -59,7 +59,7 @@ export const getProfile = async (req, res) => {
         );
         return res.json(profile);
       }
-      // Stale cache — delete and fall through to DB
+      // Stale cache: delete and fall through to DB
       await redis.del(cacheKey);
     }
   } catch (err) {
@@ -93,7 +93,7 @@ export const getProfile = async (req, res) => {
   }
 };
 
-/* -------------------- UPDATE NAME -------------------- */
+// Update name
 export const updateName = async (req, res) => {
   try {
     const { name } = req.body;
@@ -114,7 +114,7 @@ export const updateName = async (req, res) => {
   }
 };
 
-/* -------------------- CART -------------------- */
+// Cart
 export const getCart = async (req, res) => {
   try {
     const user = await User.findById(req.user.userId).select("cart").lean();
@@ -145,7 +145,7 @@ export const updateCart = async (req, res) => {
   }
 };
 
-/* -------------------- WISHLIST -------------------- */
+// Wishlist
 export const getWishlist = async (req, res) => {
   try {
     const user = await User.findById(req.user.userId).select("wishlist").lean();
@@ -175,7 +175,7 @@ export const updateWishlist = async (req, res) => {
   }
 };
 
-/* -------------------- ADDRESSES -------------------- */
+// Addresses
 export const listAddresses = async (req, res) => {
   try {
     const user = await User.findById(req.user.userId).select("addresses").lean();
@@ -284,7 +284,7 @@ export const uploadProfileImage = async (req, res) => {
   }
 };
 
-/* -------------------- CHANGE PASSWORD -------------------- */
+// Change password
 export const changePassword = async (req, res) => {
   try {
     const { currentPassword, newPassword, confirmPassword } = req.body;

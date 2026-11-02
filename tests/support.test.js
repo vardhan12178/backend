@@ -24,7 +24,7 @@ jest.unstable_mockModule("resend", () => ({
 }));
 
 // getIO() throws "Socket.io not initialized!" when no server has called
-// initSocket() — every caller in support.controller.js/admin.support.controller.js
+// initSocket(): every caller in support.controller.js/admin.support.controller.js
 // wraps it in try/catch already, so no explicit mock is required, but we
 // confirm that assumption holds rather than risk a real socket.io server
 // spinning up during tests.

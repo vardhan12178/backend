@@ -33,7 +33,7 @@ const chatModel = genAI.getGenerativeModel({
   },
 });
 
-// --- Timeout helper ---
+// Timeout helper
 const AI_TIMEOUT_MS = 10000;
 
 function withTimeout(promise, ms = AI_TIMEOUT_MS) {
@@ -43,7 +43,7 @@ function withTimeout(promise, ms = AI_TIMEOUT_MS) {
   ]);
 }
 
-// --- Circuit breaker ---
+// Circuit breaker
 const circuit = { failures: 0, lastFailure: 0, threshold: 3, resetMs: 60000 };
 
 function isCircuitOpen() {

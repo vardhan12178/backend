@@ -9,7 +9,7 @@ import { isValidModule, isValidPermissionLevel } from "../config/permissions.js"
  * an employee's access takes effect immediately, without waiting for their
  * token to expire or requiring them to log out.
  *
- * super_admin bypasses this entirely — full access, no permissions lookup
+ * super_admin bypasses this entirely: full access, no permissions lookup
  * needed.
  */
 export function requirePermission(module, level = "read") {
@@ -66,14 +66,14 @@ export function requirePermission(module, level = "read") {
  * who isn't already super_admin from:
  *   - granting super_admin to someone else (or themselves), and
  *   - granting the `employees` module itself via the freeform permissions
- *     object — otherwise anyone holding Employees:write could hand a new
+ *     object: otherwise anyone holding Employees:write could hand a new
  *     hire the ability to manage employees under an unrelated role label,
  *     even though no role preset actually grants that module.
  * The rest of the permissions object is intentionally left uncapped: an
  * admin with Employees:write can still freely grant/adjust every other
- * module beyond a role's default preset — that flexibility is by design.
+ * module beyond a role's default preset: that flexibility is by design.
  *
- * Relies on req.adminUser, populated by requirePermission — must run after it.
+ * Relies on req.adminUser, populated by requirePermission, must run after it.
  */
 export function requireSuperAdminForRoleAssignment(req, res, next) {
   const requestedRole = req.body?.adminRole;

@@ -2,9 +2,7 @@ import mongoose from "mongoose";
 import mongooseSequence from "mongoose-sequence";
 import { round2 } from "../utils/calc.js";
 
-// -----------------------------------------------------------------------------
 // ORDER STAGES (Modern E-Commerce Pipeline)
-// -----------------------------------------------------------------------------
 export const STAGES = [
   "PLACED",
   "CONFIRMED",
@@ -20,9 +18,7 @@ const TAX_RATE = 0.18;
 const INCLUDED_TAX_RATE = TAX_RATE / (1 + TAX_RATE);
 const AutoIncrement = mongooseSequence(mongoose);
 
-// -----------------------------------------------------------------------------
-// PRODUCT LINE ITEM SCHEMA
-// -----------------------------------------------------------------------------
+// Product line item schema
 const productLineSchema = new mongoose.Schema(
   {
     productId: { type: mongoose.Schema.Types.ObjectId, ref: "Product" },
@@ -53,12 +49,10 @@ const productLineSchema = new mongoose.Schema(
   { _id: false }
 );
 
-// -----------------------------------------------------------------------------
-// ORDER SCHEMA
-// -----------------------------------------------------------------------------
+// Order schema
 const orderSchema = new mongoose.Schema(
   {
-    // USER METADATA
+    // User metadata
     userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -73,7 +67,7 @@ const orderSchema = new mongoose.Schema(
       phone: { type: String, trim: true },
     },
 
-    // ORDER ITEMS
+    // Order items
     products: {
       type: [productLineSchema],
       required: true,
@@ -94,12 +88,12 @@ const orderSchema = new mongoose.Schema(
     totalPrice: { type: Number, required: true, min: 0.01, set: round2 },
     currency: { type: String, default: "INR" },
 
-    // ORDER ID (HUMAN READABLE)
+    // Order ID (human readable)
     orderId: { type: String, unique: true, index: true },
     invoiceSeq: { type: Number, index: true },
     invoiceNumber: { type: String, unique: true, index: true },
 
-    // PAYMENT INFO
+    // Payment info
     paymentStatus: {
       type: String,
       enum: ["PAID", "PENDING", "FAILED"],
@@ -129,10 +123,10 @@ const orderSchema = new mongoose.Schema(
     saleDiscount: { type: Number, min: 0, default: 0, set: round2 },
     membershipDiscount: { type: Number, min: 0, default: 0, set: round2 },
 
-    // ORDER STAGE
+    // Order stage
     stage: { type: String, enum: STAGES, default: "PLACED", index: true },
 
-    // RETURNS / REFUNDS
+    // Returns / refunds
     returnStatus: {
       type: String,
       enum: ["NONE", "REQUESTED", "APPROVED", "PICKED", "RECEIVED", "REJECTED", "CLOSED"],
@@ -168,7 +162,7 @@ const orderSchema = new mongoose.Schema(
     // Seeded for the demo shopper (controllers/demo.controller.js); kept out of admin lists and totals
     isDemo: { type: Boolean, default: false },
 
-    // FULL TIMELINE / HISTORY
+    // Full timeline / history
     statusHistory: [
       {
         stage: { type: String, enum: STAGES },
@@ -180,16 +174,12 @@ const orderSchema = new mongoose.Schema(
   { timestamps: true, versionKey: false }
 );
 
-// -----------------------------------------------------------------------------
 // INDEXES
-// -----------------------------------------------------------------------------
 orderSchema.index({ userId: 1, createdAt: -1 });
 orderSchema.index({ stage: 1 });
 orderSchema.index({ createdAt: -1 });
 
-// -----------------------------------------------------------------------------
-// PRE-VALIDATION HOOK (AUTO-CALCULATIONS)
-// -----------------------------------------------------------------------------
+// Pre-validation hook (auto-calculations)
 orderSchema.pre("validate", function (next) {
   // Normalize stage
   if (typeof this.stage === "string") {
@@ -270,9 +260,7 @@ orderSchema.post("save", async function (doc) {
   }
 });
 
-// -----------------------------------------------------------------------------
 // EXPORT
-// -----------------------------------------------------------------------------
 const Order = mongoose.model("Order", orderSchema);
 Order.STAGES = STAGES;
 
