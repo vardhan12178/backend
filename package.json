@@ -15,7 +15,9 @@
     "catalog:eval": "node ./scripts/catalog/eval-search.js",
     "pincodes:import": "node ./scripts/pincodes/import.js",
     "cleanup:old-catalog": "node ./scripts/cleanup-old-catalog.js",
-    "set-super-admin": "node ./scripts/set-super-admin.js"
+    "set-super-admin": "node ./scripts/set-super-admin.js",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "keywords": [],
   "author": "Bala Vardhan Pula",
@@ -66,6 +68,7 @@
     "jest": "^29.7.0",
     "mongodb-memory-server": "^10.2.3",
     "nodemon": "^3.1.10",
+    "prettier": "3.3.3",
     "supertest": "^7.1.4"
   },
   "homepage": "https://vkart.balavardhan.dev",

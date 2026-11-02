@@ -14,8 +14,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
-          cache: 'npm'
+          node-version: "24"
+          cache: "npm"
 
       - name: Cache MongoDB memory-server binaries
         uses: actions/cache@v4
@@ -24,4 +24,5 @@ jobs:
           key: mongodb-binaries-${{ runner.os }}
 
       - run: npm ci
+      - run: npm run format:check
       - run: npm test
